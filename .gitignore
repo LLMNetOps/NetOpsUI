@@ -1,0 +1,6 @@
+# Abaikan file sensitif dan generated
+config.yaml
+output/
+.venv/
+__pycache__/
+*.pyc
