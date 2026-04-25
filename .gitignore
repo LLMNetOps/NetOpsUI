@@ -1,5 +1,6 @@
 # Abaikan file sensitif dan generated
 config.yaml
+.env
 output/
 .venv/
 __pycache__/

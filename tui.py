@@ -187,10 +187,10 @@ def build_data_context() -> str:
         latest_report = reports[0]
         try:
             content = latest_report.read_text(encoding="utf-8", errors="replace")
-            if len(content) > 4000:
+            if len(content) > 12000:
                 content = (
-                    content[:4000]
-                    + "\n...[laporan terpotong, tampilkan ringkasan saja]..."
+                    content[:12000]
+                    + "\n...[laporan terpotong, lihat tool read_report untuk konten lengkap]..."
                 )
             parts.append(f"=== LAPORAN TERBARU: {latest_report.name} ===\n{content}")
         except OSError:
@@ -1000,12 +1000,84 @@ class AIScreen(Screen):
             err_msg = str(exc)
             if "GraphRecursionError" in err_msg or "recursion" in err_msg.lower():
                 err_msg = "Terlalu banyak iterasi tool (max 15). Coba pertanyaan yang lebih spesifik."
-            with self._lock:
-                self.data["history"].append({
-                    "role": "assistant",
-                    "content": f"Agent error: {err_msg}",
-                })
-                self.data["state"] = "IDLE"
+                with self._lock:
+                    self.data["history"].append({
+                        "role": "assistant",
+                        "content": f"⚠ {err_msg}",
+                    })
+                    self.data["state"] = "IDLE"
+            elif "INVALIDCHATHISTORY" in err_msg or "do not have a corresponding ToolMessage" in err_msg:
+                # Auto-reset: create a new thread to clear corrupt history, then retry
+                reset_ok = False
+                if _HAS_AGENT and _agent_mod is not None:
+                    try:
+                        new_tid = f"{id(self)}-{int(time.time())}"
+                        self._langgraph_agent, self._langgraph_config = \
+                            _agent_mod.create_agent(thread_id=new_tid)
+                        reset_ok = True
+                    except Exception:
+                        pass
+
+                if reset_ok:
+                    with self._lock:
+                        self.data["history"].append({
+                            "role": "agent_event",
+                            "content": "[↺ Riwayat agent direset otomatis, mencoba ulang...]",
+                        })
+                        self.data["scroll"] = 999999
+
+                    app._wake.set()
+
+                    # Retry with fresh agent (no context injection on retry)
+                    retry_chunks: list[str] = []
+                    try:
+                        import agent as _am
+                        for event_type, content in _am.stream_agent_response(
+                            self._langgraph_agent, self._langgraph_config, user_msg
+                        ):
+                            with self._lock:
+                                if event_type == "tool_call":
+                                    self.data["history"].append({
+                                        "role": "agent_event",
+                                        "content": f"[🔧 {content}]",
+                                    })
+                                    self.data["scroll"] = 999999
+                                elif event_type == "tool_result":
+                                    self.data["history"].append({
+                                        "role": "agent_event",
+                                        "content": f"[✓ {content}]",
+                                    })
+                                    self.data["scroll"] = 999999
+                                elif event_type == "ai":
+                                    retry_chunks.append(content)
+                            app._wake.set()
+
+                        final = "\n".join(retry_chunks).strip() if retry_chunks else "(Tidak ada respons)"
+                        with self._lock:
+                            self.data["history"].append({"role": "assistant", "content": final})
+                            self.data["state"] = "IDLE"
+                            self.data["scroll"] = 999999
+                    except Exception as retry_exc:
+                        with self._lock:
+                            self.data["history"].append({
+                                "role": "assistant",
+                                "content": f"⚠ Gagal setelah reset: {retry_exc}",
+                            })
+                            self.data["state"] = "IDLE"
+                else:
+                    with self._lock:
+                        self.data["history"].append({
+                            "role": "assistant",
+                            "content": "⚠ Riwayat chat rusak dan reset gagal. Tekan [C] untuk hapus riwayat secara manual.",
+                        })
+                        self.data["state"] = "IDLE"
+            else:
+                with self._lock:
+                    self.data["history"].append({
+                        "role": "assistant",
+                        "content": f"⚠ Agent error: {err_msg}",
+                    })
+                    self.data["state"] = "IDLE"
         app._wake.set()
 
     def _call_ollama(

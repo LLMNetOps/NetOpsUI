@@ -1,0 +1,791 @@
+
+╔══════════════════════════════════════════════════════════╗
+║      MikroTik DHCP Lease Monitoring Agent                ║
+╚══════════════════════════════════════════════════════════╝
+
+Akan query 23 task dari 23 router...
+
+  ⟳ Menghubungi DTI (10.39.0.1) — DHCP server: dhcp-lab-tik [ROS v7] ...
+  ⟳ Menghubungi FIB (10.32.8.1) — DHCP server: server-lab [ROS v6] ...
+  ⟳ Menghubungi FH (10.1.1.21) — DHCP server: lab [ROS v6] ...
+  ⟳ Menghubungi FEB (10.0.20.64) — DHCP server: CBT [ROS v6] ...
+  ⟳ Menghubungi FIA (10.0.20.98) — DHCP server: dhcp-2380-lab [ROS v6] ...
+  ⟳ Menghubungi FP (10.0.20.11) — DHCP server: lab [ROS v6] ...
+  ⟳ Menghubungi FAPET (10.0.20.1) — DHCP server: network-Lab [ROS v6] ...
+  ⟳ Menghubungi FT-DEKANAT (10.0.20.36) — DHCP server: Lab-66-pimp [ROS v6] ...
+  ⟳ Menghubungi FT-GBE (10.0.20.22) — DHCP server: Lab-67-Admin [ROS v6] ...
+  ✗ FIB (10.32.8.1): Network error: [Errno 101] Network is unreachable
+  ✗ DTI (10.39.0.1): Network error: [Errno 101] Network is unreachable
+  ⟳ Menghubungi FPIK (10.0.20.4) — DHCP server: serverlabutbk [ROS v7] ...
+  ✗ FH (10.1.1.21): Network error: [Errno 101] Network is unreachable
+  ⟳ Menghubungi FTP (10.0.20.123) — DHCP server: dhcp7 [ROS v7] ...
+  ✗ FEB (10.0.20.64): Network error: [Errno 101] Network is unreachable
+  ✗ FTP (10.0.20.123): Network error: [Errno 101] Network is unreachable
+  ⟳ Menghubungi FISIP (10.0.20.51) — DHCP server: serverpoollab [ROS v7] ...
+  ⟳ Menghubungi FILKOM (10.34.0.53) — DHCP server: G1.3-vlan3495 [ROS v6] ...
+  ✗ FT-DEKANAT (10.0.20.36): Network error: [Errno 101] Network is unreachable
+  ⟳ Menghubungi FILKOM (10.34.0.53) — DHCP server: G1.4-vlan3496 [ROS v6] ...
+  ⟳ Menghubungi FILKOM (10.34.0.53) — DHCP server: G1.6-vlan3497 [ROS v6] ...
+  ✗ FPIK (10.0.20.4): Network error: [Errno 101] Network is unreachable
+  ⟳ Menghubungi FILKOM (10.34.0.53) — DHCP server: G1.2-vlan3498 [ROS v6] ...
+  ✗ FIA (10.0.20.98): Network error: [Errno 101] Network is unreachable
+  ⟳ Menghubungi FILKOM (10.34.0.53) — DHCP server: G1.5-vlan3499 [ROS v6] ...
+  ✗ FT-GBE (10.0.20.22): Network error: [Errno 101] Network is unreachable
+  ⟳ Menghubungi VOKASI (10.0.20.44) — DHCP server: 3508-serverpoollab [ROS v7] ...
+  ⟳ Menghubungi FKG (10.0.20.110) — DHCP server: dhcp2 [ROS v7] ...
+  ✗ FISIP (10.0.20.51): Network error: [Errno 101] Network is unreachable
+  ⟳ Menghubungi FK-8 (10.27.2.27) — DHCP server: dhcp_LabA [ROS v6] ...
+  ✗ FILKOM (10.34.0.53): Network error: [Errno 101] Network is unreachable
+  ⟳ Menghubungi FK-8 (10.27.2.27) — DHCP server: dhcp_LabB [ROS v6] ...
+  ✗ FK-8 (10.27.2.27): Network error: [Errno 101] Network is unreachable
+  ⟳ Menghubungi FK-8 (10.27.2.27) — DHCP server: dhcp_LabC [ROS v6] ...
+  ✗ FILKOM (10.34.0.53): Network error: [Errno 101] Network is unreachable
+  ⟳ Menghubungi FK-1 (10.27.2.28) — DHCP server: LAB_Lt.1 [ROS v6] ...
+  ✗ FP (10.0.20.11): Network error: [Errno 101] Network is unreachable
+  ✗ VOKASI (10.0.20.44): Network error: [Errno 101] Network is unreachable
+  ✗ FILKOM (10.34.0.53): Network error: [Errno 101] Network is unreachable
+  ✗ FILKOM (10.34.0.53): Network error: [Errno 101] Network is unreachable
+  ✗ FKG (10.0.20.110): Network error: [Errno 101] Network is unreachable
+  ✗ FAPET (10.0.20.1): Network error: [Errno 101] Network is unreachable
+  ✗ FILKOM (10.34.0.53): Network error: [Errno 101] Network is unreachable
+  ✗ FK-1 (10.27.2.28): Network error: [Errno 101] Network is unreachable
+  ✗ FK-8 (10.27.2.27): Network error: [Errno 101] Network is unreachable
+  ✗ FK-8 (10.27.2.27): Network error: [Errno 101] Network is unreachable
+
+=================================================================
+  LAPORAN DHCP LEASE — MONITORING PERANGKAT UTBK
+  Timestamp: 2026-04-25 07:21:39
+=================================================================
+
+╭────────────┬─────────────┬────────────────────┬─────────┬───────────┬─────────┬───────────┬────────────┬─────────┬────────────────────────────────╮
+│ Router     │ Host        │ DHCP Server        │ Bound   │ UTBK-OS   │ Other   │ Waiting   │ Disabled   │ Total   │ Status                         │
+├────────────┼─────────────┼────────────────────┼─────────┼───────────┼─────────┼───────────┼────────────┼─────────┼────────────────────────────────┤
+│ DTI        │ 10.39.0.1   │ dhcp-lab-tik       │ -       │ -         │ -       │ -         │ -          │ -       │ ✗ Network error: [Errno 101... │
+│ FIB        │ 10.32.8.1   │ server-lab         │ -       │ -         │ -       │ -         │ -          │ -       │ ✗ Network error: [Errno 101... │
+│ FH         │ 10.1.1.21   │ lab                │ -       │ -         │ -       │ -         │ -          │ -       │ ✗ Network error: [Errno 101... │
+│ FEB        │ 10.0.20.64  │ CBT                │ -       │ -         │ -       │ -         │ -          │ -       │ ✗ Network error: [Errno 101... │
+│ FIA        │ 10.0.20.98  │ dhcp-2380-lab      │ -       │ -         │ -       │ -         │ -          │ -       │ ✗ Network error: [Errno 101... │
+│ FP         │ 10.0.20.11  │ lab                │ -       │ -         │ -       │ -         │ -          │ -       │ ✗ Network error: [Errno 101... │
+│ FAPET      │ 10.0.20.1   │ network-Lab        │ -       │ -         │ -       │ -         │ -          │ -       │ ✗ Network error: [Errno 101... │
+│ FT-DEKANAT │ 10.0.20.36  │ Lab-66-pimp        │ -       │ -         │ -       │ -         │ -          │ -       │ ✗ Network error: [Errno 101... │
+│ FT-GBE     │ 10.0.20.22  │ Lab-67-Admin       │ -       │ -         │ -       │ -         │ -          │ -       │ ✗ Network error: [Errno 101... │
+│ FPIK       │ 10.0.20.4   │ serverlabutbk      │ -       │ -         │ -       │ -         │ -          │ -       │ ✗ Network error: [Errno 101... │
+│ FTP        │ 10.0.20.123 │ dhcp7              │ -       │ -         │ -       │ -         │ -          │ -       │ ✗ Network error: [Errno 101... │
+│ FISIP      │ 10.0.20.51  │ serverpoollab      │ -       │ -         │ -       │ -         │ -          │ -       │ ✗ Network error: [Errno 101... │
+│ FILKOM     │ 10.34.0.53  │ G1.3-vlan3495      │ -       │ -         │ -       │ -         │ -          │ -       │ ✗ Network error: [Errno 101... │
+│ FILKOM     │ 10.34.0.53  │ G1.4-vlan3496      │ -       │ -         │ -       │ -         │ -          │ -       │ ✗ Network error: [Errno 101... │
+│ FILKOM     │ 10.34.0.53  │ G1.6-vlan3497      │ -       │ -         │ -       │ -         │ -          │ -       │ ✗ Network error: [Errno 101... │
+│ FILKOM     │ 10.34.0.53  │ G1.2-vlan3498      │ -       │ -         │ -       │ -         │ -          │ -       │ ✗ Network error: [Errno 101... │
+│ FILKOM     │ 10.34.0.53  │ G1.5-vlan3499      │ -       │ -         │ -       │ -         │ -          │ -       │ ✗ Network error: [Errno 101... │
+│ VOKASI     │ 10.0.20.44  │ 3508-serverpoollab │ -       │ -         │ -       │ -         │ -          │ -       │ ✗ Network error: [Errno 101... │
+│ FKG        │ 10.0.20.110 │ dhcp2              │ -       │ -         │ -       │ -         │ -          │ -       │ ✗ Network error: [Errno 101... │
+│ FK-8       │ 10.27.2.27  │ dhcp_LabA          │ -       │ -         │ -       │ -         │ -          │ -       │ ✗ Network error: [Errno 101... │
+│ FK-8       │ 10.27.2.27  │ dhcp_LabB          │ -       │ -         │ -       │ -         │ -          │ -       │ ✗ Network error: [Errno 101... │
+│ FK-8       │ 10.27.2.27  │ dhcp_LabC          │ -       │ -         │ -       │ -         │ -          │ -       │ ✗ Network error: [Errno 101... │
+│ FK-1       │ 10.27.2.28  │ LAB_Lt.1           │ -       │ -         │ -       │ -         │ -          │ -       │ ✗ Network error: [Errno 101... │
+╰────────────┴─────────────┴────────────────────┴─────────┴───────────┴─────────┴───────────┴────────────┴─────────┴────────────────────────────────╯
+
+
+── Error Detail ──
+  ✗ DTI (10.39.0.1): Network error: [Errno 101] Network is unreachable
+  ✗ FIB (10.32.8.1): Network error: [Errno 101] Network is unreachable
+  ✗ FH (10.1.1.21): Network error: [Errno 101] Network is unreachable
+  ✗ FEB (10.0.20.64): Network error: [Errno 101] Network is unreachable
+  ✗ FIA (10.0.20.98): Network error: [Errno 101] Network is unreachable
+  ✗ FP (10.0.20.11): Network error: [Errno 101] Network is unreachable
+  ✗ FAPET (10.0.20.1): Network error: [Errno 101] Network is unreachable
+  ✗ FT-DEKANAT (10.0.20.36): Network error: [Errno 101] Network is unreachable
+  ✗ FT-GBE (10.0.20.22): Network error: [Errno 101] Network is unreachable
+  ✗ FPIK (10.0.20.4): Network error: [Errno 101] Network is unreachable
+  ✗ FTP (10.0.20.123): Network error: [Errno 101] Network is unreachable
+  ✗ FISIP (10.0.20.51): Network error: [Errno 101] Network is unreachable
+  ✗ FILKOM (10.34.0.53): Network error: [Errno 101] Network is unreachable
+  ✗ FILKOM (10.34.0.53): Network error: [Errno 101] Network is unreachable
+  ✗ FILKOM (10.34.0.53): Network error: [Errno 101] Network is unreachable
+  ✗ FILKOM (10.34.0.53): Network error: [Errno 101] Network is unreachable
+  ✗ FILKOM (10.34.0.53): Network error: [Errno 101] Network is unreachable
+  ✗ VOKASI (10.0.20.44): Network error: [Errno 101] Network is unreachable
+  ✗ FKG (10.0.20.110): Network error: [Errno 101] Network is unreachable
+  ✗ FK-8 (10.27.2.27): Network error: [Errno 101] Network is unreachable
+  ✗ FK-8 (10.27.2.27): Network error: [Errno 101] Network is unreachable
+  ✗ FK-8 (10.27.2.27): Network error: [Errno 101] Network is unreachable
+  ✗ FK-1 (10.27.2.28): Network error: [Errno 101] Network is unreachable
+
+=================================================================
+
+Menyimpan output ke file...
+  → output/summary-20260425_072139.txt (ringkasan)
+
+
+╔══════════════════════════════════════════════════════════╗
+║      MikroTik DHCP Lease Monitoring Agent                ║
+╚══════════════════════════════════════════════════════════╝
+
+Akan query 23 task dari 23 router...
+
+  ⟳ Menghubungi DTI (10.39.0.1) — DHCP server: dhcp-lab-tik [ROS v7] ...
+  ⟳ Menghubungi FIB (10.32.8.1) — DHCP server: server-lab [ROS v6] ...
+  ⟳ Menghubungi FH (10.1.1.21) — DHCP server: lab [ROS v6] ...
+  ⟳ Menghubungi FEB (10.0.20.64) — DHCP server: CBT [ROS v6] ...
+  ⟳ Menghubungi FIA (10.0.20.98) — DHCP server: dhcp-2380-lab [ROS v6] ...
+  ⟳ Menghubungi FP (10.0.20.11) — DHCP server: lab [ROS v6] ...
+  ⟳ Menghubungi FAPET (10.0.20.1) — DHCP server: network-Lab [ROS v6] ...
+  ⟳ Menghubungi FT-DEKANAT (10.0.20.36) — DHCP server: Lab-66-pimp [ROS v6] ...
+  ⟳ Menghubungi FT-GBE (10.0.20.22) — DHCP server: Lab-67-Admin [ROS v6] ...
+  ⟳ Menghubungi FPIK (10.0.20.4) — DHCP server: serverlabutbk [ROS v7] ...
+  ✓ FPIK: 58 aktif (UTBK-OS: 58, Other: 0) / 60 total lease
+  ⟳ Menghubungi FTP (10.0.20.123) — DHCP server: dhcp7 [ROS v7] ...
+  ✓ FT-DEKANAT: 57 aktif (UTBK-OS: 57, Other: 0) / 57 total lease
+  ⟳ Menghubungi FISIP (10.0.20.51) — DHCP server: serverpoollab [ROS v7] ...
+  ✓ FAPET: 22 aktif (UTBK-OS: 22, Other: 0) / 23 total lease
+  ⟳ Menghubungi FILKOM (10.34.0.53) — DHCP server: G1.3-vlan3495 [ROS v6] ...
+  ✓ FTP: 58 aktif (UTBK-OS: 58, Other: 0) / 59 total lease
+  ⟳ Menghubungi FILKOM (10.34.0.53) — DHCP server: G1.4-vlan3496 [ROS v6] ...
+  ✓ FIB: 47 aktif (UTBK-OS: 45, Other: 2) / 48 total lease
+  ⟳ Menghubungi FILKOM (10.34.0.53) — DHCP server: G1.6-vlan3497 [ROS v6] ...
+  ✓ FH: 68 aktif (UTBK-OS: 68, Other: 0) / 68 total lease
+  ⟳ Menghubungi FILKOM (10.34.0.53) — DHCP server: G1.2-vlan3498 [ROS v6] ...
+  ✓ FISIP: 46 aktif (UTBK-OS: 46, Other: 0) / 53 total lease
+  ⟳ Menghubungi FILKOM (10.34.0.53) — DHCP server: G1.5-vlan3499 [ROS v6] ...
+  ✓ FEB: 133 aktif (UTBK-OS: 133, Other: 0) / 134 total lease
+  ⟳ Menghubungi VOKASI (10.0.20.44) — DHCP server: 3508-serverpoollab [ROS v7] ...
+  ✓ FT-GBE: 29 aktif (UTBK-OS: 29, Other: 0) / 29 total lease
+  ⟳ Menghubungi FKG (10.0.20.110) — DHCP server: dhcp2 [ROS v7] ...
+  ✓ FP: 77 aktif (UTBK-OS: 77, Other: 0) / 82 total lease
+  ⟳ Menghubungi FK-8 (10.27.2.27) — DHCP server: dhcp_LabA [ROS v6] ...
+  ✓ FIA: 112 aktif (UTBK-OS: 105, Other: 7) / 137 total lease
+  ⟳ Menghubungi FK-8 (10.27.2.27) — DHCP server: dhcp_LabB [ROS v6] ...
+  ✓ FILKOM: 26 aktif (UTBK-OS: 26, Other: 0) / 26 total lease
+  ⟳ Menghubungi FK-8 (10.27.2.27) — DHCP server: dhcp_LabC [ROS v6] ...
+  ✓ FKG: 73 aktif (UTBK-OS: 67, Other: 6) / 84 total lease
+  ⟳ Menghubungi FK-1 (10.27.2.28) — DHCP server: LAB_Lt.1 [ROS v6] ...
+  ✓ FILKOM: 26 aktif (UTBK-OS: 26, Other: 0) / 26 total lease
+  ✓ FILKOM: 26 aktif (UTBK-OS: 26, Other: 0) / 26 total lease
+  ✓ FILKOM: 26 aktif (UTBK-OS: 26, Other: 0) / 26 total lease
+  ✓ FILKOM: 26 aktif (UTBK-OS: 26, Other: 0) / 26 total lease
+  ✓ VOKASI: 52 aktif (UTBK-OS: 52, Other: 0) / 55 total lease
+  ✓ DTI: 200 aktif (UTBK-OS: 197, Other: 3) / 273 total lease
+  ✓ FK-1: 168 aktif (UTBK-OS: 0, Other: 168) / 173 total lease
+  ✓ FK-8: 83 aktif (UTBK-OS: 68, Other: 15) / 84 total lease
+  ✓ FK-8: 116 aktif (UTBK-OS: 114, Other: 2) / 130 total lease
+  ✓ FK-8: 138 aktif (UTBK-OS: 137, Other: 1) / 143 total lease
+
+=================================================================
+  LAPORAN DHCP LEASE — MONITORING PERANGKAT UTBK
+  Timestamp: 2026-04-25 08:00:01
+=================================================================
+
+╭────────────┬─────────────┬────────────────────┬─────────┬───────────┬─────────┬───────────┬────────────┬─────────┬──────────╮
+│ Router     │ Host        │ DHCP Server        │   Bound │   UTBK-OS │   Other │   Waiting │   Disabled │   Total │ Status   │
+├────────────┼─────────────┼────────────────────┼─────────┼───────────┼─────────┼───────────┼────────────┼─────────┼──────────┤
+│ DTI        │ 10.39.0.1   │ dhcp-lab-tik       │     200 │       197 │       3 │        62 │         11 │     273 │ ✓ OK     │
+│ FIB        │ 10.32.8.1   │ server-lab         │      47 │        45 │       2 │         1 │          0 │      48 │ ✓ OK     │
+│ FH         │ 10.1.1.21   │ lab                │      68 │        68 │       0 │         0 │          0 │      68 │ ✓ OK     │
+│ FEB        │ 10.0.20.64  │ CBT                │     133 │       133 │       0 │         1 │          0 │     134 │ ✓ OK     │
+│ FIA        │ 10.0.20.98  │ dhcp-2380-lab      │     112 │       105 │       7 │        25 │          0 │     137 │ ✓ OK     │
+│ FP         │ 10.0.20.11  │ lab                │      77 │        77 │       0 │         5 │          0 │      82 │ ✓ OK     │
+│ FAPET      │ 10.0.20.1   │ network-Lab        │      22 │        22 │       0 │         1 │          0 │      23 │ ✓ OK     │
+│ FT-DEKANAT │ 10.0.20.36  │ Lab-66-pimp        │      57 │        57 │       0 │         0 │          0 │      57 │ ✓ OK     │
+│ FT-GBE     │ 10.0.20.22  │ Lab-67-Admin       │      29 │        29 │       0 │         0 │          0 │      29 │ ✓ OK     │
+│ FPIK       │ 10.0.20.4   │ serverlabutbk      │      58 │        58 │       0 │         2 │          0 │      60 │ ✓ OK     │
+│ FTP        │ 10.0.20.123 │ dhcp7              │      58 │        58 │       0 │         1 │          0 │      59 │ ✓ OK     │
+│ FISIP      │ 10.0.20.51  │ serverpoollab      │      46 │        46 │       0 │         7 │          0 │      53 │ ✓ OK     │
+│ FILKOM     │ 10.34.0.53  │ G1.3-vlan3495      │      26 │        26 │       0 │         0 │          0 │      26 │ ✓ OK     │
+│ FILKOM     │ 10.34.0.53  │ G1.4-vlan3496      │      26 │        26 │       0 │         0 │          0 │      26 │ ✓ OK     │
+│ FILKOM     │ 10.34.0.53  │ G1.6-vlan3497      │      26 │        26 │       0 │         0 │          0 │      26 │ ✓ OK     │
+│ FILKOM     │ 10.34.0.53  │ G1.2-vlan3498      │      26 │        26 │       0 │         0 │          0 │      26 │ ✓ OK     │
+│ FILKOM     │ 10.34.0.53  │ G1.5-vlan3499      │      26 │        26 │       0 │         0 │          0 │      26 │ ✓ OK     │
+│ VOKASI     │ 10.0.20.44  │ 3508-serverpoollab │      52 │        52 │       0 │         3 │          0 │      55 │ ✓ OK     │
+│ FKG        │ 10.0.20.110 │ dhcp2              │      73 │        67 │       6 │         0 │         11 │      84 │ ✓ OK     │
+│ FK-8       │ 10.27.2.27  │ dhcp_LabA          │     116 │       114 │       2 │        14 │          0 │     130 │ ✓ OK     │
+│ FK-8       │ 10.27.2.27  │ dhcp_LabB          │     138 │       137 │       1 │         5 │          0 │     143 │ ✓ OK     │
+│ FK-8       │ 10.27.2.27  │ dhcp_LabC          │      83 │        68 │      15 │         1 │          0 │      84 │ ✓ OK     │
+│ FK-1       │ 10.27.2.28  │ LAB_Lt.1           │     168 │         0 │     168 │         5 │          0 │     173 │ ✓ OK     │
+╰────────────┴─────────────┴────────────────────┴─────────┴───────────┴─────────┴───────────┴────────────┴─────────┴──────────╯
+
+  TOTAL PERANGKAT AKTIF (bound)   :  1667
+  - host-name=utbk-os             :  1463
+  - host-name lain                :   204
+  Total lease waiting              :   133
+  Total disabled (tidak dihitung)  :    22
+  Total seluruh lease              :  1822
+  Router berhasil diquery          : 23/23
+
+=================================================================
+
+Menyimpan output ke file...
+  → output/dhcp-lease-dti-dhcp-lab-tik-20260425_080001.txt
+  → output/dhcp-lease-fib-server-lab-20260425_080000.txt
+  → output/dhcp-lease-fh-lab-20260425_080000.txt
+  → output/dhcp-lease-feb-CBT-20260425_080000.txt
+  → output/dhcp-lease-fia-dhcp-2380-lab-20260425_080000.txt
+  → output/dhcp-lease-fp-lab-20260425_080000.txt
+  → output/dhcp-lease-fapet-network-Lab-20260425_080000.txt
+  → output/dhcp-lease-ft-dekanat-Lab-66-pimp-20260425_080000.txt
+  → output/dhcp-lease-ft-gbe-Lab-67-Admin-20260425_080000.txt
+  → output/dhcp-lease-fpik-serverlabutbk-20260425_080000.txt
+  → output/dhcp-lease-ftp-dhcp7-20260425_080000.txt
+  → output/dhcp-lease-fisip-serverpoollab-20260425_080000.txt
+  → output/dhcp-lease-filkom-G1.3-vlan3495-20260425_080000.txt
+  → output/dhcp-lease-filkom-G1.4-vlan3496-20260425_080000.txt
+  → output/dhcp-lease-filkom-G1.6-vlan3497-20260425_080000.txt
+  → output/dhcp-lease-filkom-G1.2-vlan3498-20260425_080000.txt
+  → output/dhcp-lease-filkom-G1.5-vlan3499-20260425_080000.txt
+  → output/dhcp-lease-vokasi-3508-serverpoollab-20260425_080001.txt
+  → output/dhcp-lease-fkg-dhcp2-20260425_080000.txt
+  → output/dhcp-lease-fk-8-dhcp_LabA-20260425_080001.txt
+  → output/dhcp-lease-fk-8-dhcp_LabB-20260425_080001.txt
+  → output/dhcp-lease-fk-8-dhcp_LabC-20260425_080001.txt
+  → output/dhcp-lease-fk-1-LAB_Lt.1-20260425_080001.txt
+  → output/summary-20260425_080001.txt (ringkasan)
+
+
+╔══════════════════════════════════════════════════════════╗
+║      MikroTik DHCP Lease Monitoring Agent                ║
+╚══════════════════════════════════════════════════════════╝
+
+Akan query 23 task dari 23 router...
+
+  ⟳ Menghubungi DTI (10.39.0.1) — DHCP server: dhcp-lab-tik [ROS v7] ...
+  ⟳ Menghubungi FIB (10.32.8.1) — DHCP server: server-lab [ROS v6] ...
+  ⟳ Menghubungi FH (10.1.1.21) — DHCP server: lab [ROS v6] ...
+  ⟳ Menghubungi FEB (10.0.20.64) — DHCP server: CBT [ROS v6] ...
+  ⟳ Menghubungi FIA (10.0.20.98) — DHCP server: dhcp-2380-lab [ROS v6] ...
+  ⟳ Menghubungi FP (10.0.20.11) — DHCP server: lab [ROS v6] ...
+  ⟳ Menghubungi FAPET (10.0.20.1) — DHCP server: network-Lab [ROS v6] ...
+  ⟳ Menghubungi FT-DEKANAT (10.0.20.36) — DHCP server: Lab-66-pimp [ROS v6] ...
+  ⟳ Menghubungi FT-GBE (10.0.20.22) — DHCP server: Lab-67-Admin [ROS v6] ...
+  ⟳ Menghubungi FPIK (10.0.20.4) — DHCP server: serverlabutbk [ROS v7] ...
+  ✓ FPIK: 58 aktif (UTBK-OS: 58, Other: 0) / 60 total lease
+  ⟳ Menghubungi FTP (10.0.20.123) — DHCP server: dhcp7 [ROS v7] ...
+  ✓ FT-DEKANAT: 57 aktif (UTBK-OS: 57, Other: 0) / 57 total lease
+  ⟳ Menghubungi FISIP (10.0.20.51) — DHCP server: serverpoollab [ROS v7] ...
+  ✓ FAPET: 22 aktif (UTBK-OS: 22, Other: 0) / 23 total lease
+  ⟳ Menghubungi FILKOM (10.34.0.53) — DHCP server: G1.3-vlan3495 [ROS v6] ...
+  ✓ FIB: 47 aktif (UTBK-OS: 45, Other: 2) / 48 total lease
+  ⟳ Menghubungi FILKOM (10.34.0.53) — DHCP server: G1.4-vlan3496 [ROS v6] ...
+  ✓ FTP: 58 aktif (UTBK-OS: 58, Other: 0) / 59 total lease
+  ⟳ Menghubungi FILKOM (10.34.0.53) — DHCP server: G1.6-vlan3497 [ROS v6] ...
+  ✓ FH: 68 aktif (UTBK-OS: 68, Other: 0) / 68 total lease
+  ⟳ Menghubungi FILKOM (10.34.0.53) — DHCP server: G1.2-vlan3498 [ROS v6] ...
+  ✓ FISIP: 46 aktif (UTBK-OS: 46, Other: 0) / 53 total lease
+  ⟳ Menghubungi FILKOM (10.34.0.53) — DHCP server: G1.5-vlan3499 [ROS v6] ...
+  ✓ FEB: 133 aktif (UTBK-OS: 133, Other: 0) / 134 total lease
+  ⟳ Menghubungi VOKASI (10.0.20.44) — DHCP server: 3508-serverpoollab [ROS v7] ...
+  ✓ FP: 77 aktif (UTBK-OS: 77, Other: 0) / 82 total lease
+  ⟳ Menghubungi FKG (10.0.20.110) — DHCP server: dhcp2 [ROS v7] ...
+  ✓ FT-GBE: 29 aktif (UTBK-OS: 29, Other: 0) / 29 total lease
+  ⟳ Menghubungi FK-8 (10.27.2.27) — DHCP server: dhcp_LabA [ROS v6] ...
+  ✓ FILKOM: 26 aktif (UTBK-OS: 26, Other: 0) / 26 total lease
+  ⟳ Menghubungi FK-8 (10.27.2.27) — DHCP server: dhcp_LabB [ROS v6] ...
+  ✓ FILKOM: 26 aktif (UTBK-OS: 26, Other: 0) / 26 total lease
+  ⟳ Menghubungi FK-8 (10.27.2.27) — DHCP server: dhcp_LabC [ROS v6] ...
+  ✓ FILKOM: 26 aktif (UTBK-OS: 26, Other: 0) / 26 total lease
+  ⟳ Menghubungi FK-1 (10.27.2.28) — DHCP server: LAB_Lt.1 [ROS v6] ...
+  ✓ FILKOM: 26 aktif (UTBK-OS: 26, Other: 0) / 26 total lease
+  ✓ FILKOM: 26 aktif (UTBK-OS: 26, Other: 0) / 26 total lease
+  ✓ FKG: 73 aktif (UTBK-OS: 67, Other: 6) / 84 total lease
+  ✓ FIA: 112 aktif (UTBK-OS: 105, Other: 7) / 137 total lease
+  ✓ FK-8: 98 aktif (UTBK-OS: 96, Other: 2) / 111 total lease
+  ✓ VOKASI: 52 aktif (UTBK-OS: 52, Other: 0) / 55 total lease
+  ✓ FK-1: 168 aktif (UTBK-OS: 0, Other: 168) / 173 total lease
+  ✓ FK-8: 83 aktif (UTBK-OS: 68, Other: 15) / 84 total lease
+  ✓ FK-8: 138 aktif (UTBK-OS: 137, Other: 1) / 143 total lease
+  ✓ DTI: 200 aktif (UTBK-OS: 197, Other: 3) / 273 total lease
+
+=================================================================
+  LAPORAN DHCP LEASE — MONITORING PERANGKAT UTBK
+  Timestamp: 2026-04-25 10:30:01
+=================================================================
+
+╭────────────┬─────────────┬────────────────────┬─────────┬───────────┬─────────┬───────────┬────────────┬─────────┬──────────╮
+│ Router     │ Host        │ DHCP Server        │   Bound │   UTBK-OS │   Other │   Waiting │   Disabled │   Total │ Status   │
+├────────────┼─────────────┼────────────────────┼─────────┼───────────┼─────────┼───────────┼────────────┼─────────┼──────────┤
+│ DTI        │ 10.39.0.1   │ dhcp-lab-tik       │     200 │       197 │       3 │        62 │         11 │     273 │ ✓ OK     │
+│ FIB        │ 10.32.8.1   │ server-lab         │      47 │        45 │       2 │         1 │          0 │      48 │ ✓ OK     │
+│ FH         │ 10.1.1.21   │ lab                │      68 │        68 │       0 │         0 │          0 │      68 │ ✓ OK     │
+│ FEB        │ 10.0.20.64  │ CBT                │     133 │       133 │       0 │         1 │          0 │     134 │ ✓ OK     │
+│ FIA        │ 10.0.20.98  │ dhcp-2380-lab      │     112 │       105 │       7 │        25 │          0 │     137 │ ✓ OK     │
+│ FP         │ 10.0.20.11  │ lab                │      77 │        77 │       0 │         5 │          0 │      82 │ ✓ OK     │
+│ FAPET      │ 10.0.20.1   │ network-Lab        │      22 │        22 │       0 │         1 │          0 │      23 │ ✓ OK     │
+│ FT-DEKANAT │ 10.0.20.36  │ Lab-66-pimp        │      57 │        57 │       0 │         0 │          0 │      57 │ ✓ OK     │
+│ FT-GBE     │ 10.0.20.22  │ Lab-67-Admin       │      29 │        29 │       0 │         0 │          0 │      29 │ ✓ OK     │
+│ FPIK       │ 10.0.20.4   │ serverlabutbk      │      58 │        58 │       0 │         2 │          0 │      60 │ ✓ OK     │
+│ FTP        │ 10.0.20.123 │ dhcp7              │      58 │        58 │       0 │         1 │          0 │      59 │ ✓ OK     │
+│ FISIP      │ 10.0.20.51  │ serverpoollab      │      46 │        46 │       0 │         7 │          0 │      53 │ ✓ OK     │
+│ FILKOM     │ 10.34.0.53  │ G1.3-vlan3495      │      26 │        26 │       0 │         0 │          0 │      26 │ ✓ OK     │
+│ FILKOM     │ 10.34.0.53  │ G1.4-vlan3496      │      26 │        26 │       0 │         0 │          0 │      26 │ ✓ OK     │
+│ FILKOM     │ 10.34.0.53  │ G1.6-vlan3497      │      26 │        26 │       0 │         0 │          0 │      26 │ ✓ OK     │
+│ FILKOM     │ 10.34.0.53  │ G1.2-vlan3498      │      26 │        26 │       0 │         0 │          0 │      26 │ ✓ OK     │
+│ FILKOM     │ 10.34.0.53  │ G1.5-vlan3499      │      26 │        26 │       0 │         0 │          0 │      26 │ ✓ OK     │
+│ VOKASI     │ 10.0.20.44  │ 3508-serverpoollab │      52 │        52 │       0 │         3 │          0 │      55 │ ✓ OK     │
+│ FKG        │ 10.0.20.110 │ dhcp2              │      73 │        67 │       6 │         0 │         11 │      84 │ ✓ OK     │
+│ FK-8       │ 10.27.2.27  │ dhcp_LabA          │      98 │        96 │       2 │        13 │          0 │     111 │ ✓ OK     │
+│ FK-8       │ 10.27.2.27  │ dhcp_LabB          │     138 │       137 │       1 │         5 │          0 │     143 │ ✓ OK     │
+│ FK-8       │ 10.27.2.27  │ dhcp_LabC          │      83 │        68 │      15 │         1 │          0 │      84 │ ✓ OK     │
+│ FK-1       │ 10.27.2.28  │ LAB_Lt.1           │     168 │         0 │     168 │         5 │          0 │     173 │ ✓ OK     │
+╰────────────┴─────────────┴────────────────────┴─────────┴───────────┴─────────┴───────────┴────────────┴─────────┴──────────╯
+
+  TOTAL PERANGKAT AKTIF (bound)   :  1649
+  - host-name=utbk-os             :  1445
+  - host-name lain                :   204
+  Total lease waiting              :   132
+  Total disabled (tidak dihitung)  :    22
+  Total seluruh lease              :  1803
+  Router berhasil diquery          : 23/23
+
+=================================================================
+
+Menyimpan output ke file...
+  → output/dhcp-lease-dti-dhcp-lab-tik-20260425_103001.txt
+  → output/dhcp-lease-fib-server-lab-20260425_103000.txt
+  → output/dhcp-lease-fh-lab-20260425_103000.txt
+  → output/dhcp-lease-feb-CBT-20260425_103000.txt
+  → output/dhcp-lease-fia-dhcp-2380-lab-20260425_103001.txt
+  → output/dhcp-lease-fp-lab-20260425_103000.txt
+  → output/dhcp-lease-fapet-network-Lab-20260425_103000.txt
+  → output/dhcp-lease-ft-dekanat-Lab-66-pimp-20260425_103000.txt
+  → output/dhcp-lease-ft-gbe-Lab-67-Admin-20260425_103000.txt
+  → output/dhcp-lease-fpik-serverlabutbk-20260425_103000.txt
+  → output/dhcp-lease-ftp-dhcp7-20260425_103000.txt
+  → output/dhcp-lease-fisip-serverpoollab-20260425_103000.txt
+  → output/dhcp-lease-filkom-G1.3-vlan3495-20260425_103000.txt
+  → output/dhcp-lease-filkom-G1.4-vlan3496-20260425_103000.txt
+  → output/dhcp-lease-filkom-G1.6-vlan3497-20260425_103000.txt
+  → output/dhcp-lease-filkom-G1.2-vlan3498-20260425_103000.txt
+  → output/dhcp-lease-filkom-G1.5-vlan3499-20260425_103000.txt
+  → output/dhcp-lease-vokasi-3508-serverpoollab-20260425_103001.txt
+  → output/dhcp-lease-fkg-dhcp2-20260425_103000.txt
+  → output/dhcp-lease-fk-8-dhcp_LabA-20260425_103001.txt
+  → output/dhcp-lease-fk-8-dhcp_LabB-20260425_103001.txt
+  → output/dhcp-lease-fk-8-dhcp_LabC-20260425_103001.txt
+  → output/dhcp-lease-fk-1-LAB_Lt.1-20260425_103001.txt
+  → output/summary-20260425_103001.txt (ringkasan)
+
+Found 4 day(s) of data:
+  - 20260421: 404 file(s)
+  - 20260422: 46 file(s)
+  - 20260424: 112 file(s)
+  - 20260425: 46 file(s)
+
+Processing 20260421 (404 files)...
+  -> Skipped (already exists): /home/alan/Documents/03Resource/mikrotik-cek-lease/laporan/dhcp-lease-20260421.md
+
+Processing 20260422 (46 files)...
+  -> Skipped (already exists): /home/alan/Documents/03Resource/mikrotik-cek-lease/laporan/dhcp-lease-20260422.md
+
+Processing 20260424 (112 files)...
+  -> Skipped (already exists): /home/alan/Documents/03Resource/mikrotik-cek-lease/laporan/dhcp-lease-20260424.md
+
+Processing 20260425 (46 files)...
+  [AI] Generating narratives for 25 April 2026...
+  [AI] Generating AI narratives in parallel...
+  [AI] ✓ Narrative ready: executive
+  [AI] ✓ Narrative ready: section1
+  [AI] ✓ Narrative ready: section2
+  [AI] ✓ Narrative ready: section3
+  [AI] ✓ Narrative ready: section5
+  [AI] ✓ Narrative ready: section7
+  [AI] ✓ Narrative ready: section8
+  [AI] ✓ Narrative ready: section9
+  -> Generated: /home/alan/Documents/03Resource/mikrotik-cek-lease/laporan/dhcp-lease-20260425.md
+
+Done! Reports saved to /home/alan/Documents/03Resource/mikrotik-cek-lease/laporan/
+
+╔══════════════════════════════════════════════════════════╗
+║      MikroTik DHCP Lease Monitoring Agent                ║
+╚══════════════════════════════════════════════════════════╝
+
+Akan query 23 task dari 23 router...
+
+  ⟳ Menghubungi DTI (10.39.0.1) — DHCP server: dhcp-lab-tik [ROS v7] ...
+  ⟳ Menghubungi FIB (10.32.8.1) — DHCP server: server-lab [ROS v6] ...
+  ⟳ Menghubungi FH (10.1.1.21) — DHCP server: lab [ROS v6] ...
+  ⟳ Menghubungi FEB (10.0.20.64) — DHCP server: CBT [ROS v6] ...
+  ⟳ Menghubungi FIA (10.0.20.98) — DHCP server: dhcp-2380-lab [ROS v6] ...
+  ⟳ Menghubungi FP (10.0.20.11) — DHCP server: lab [ROS v6] ...
+  ⟳ Menghubungi FAPET (10.0.20.1) — DHCP server: network-Lab [ROS v6] ...
+  ⟳ Menghubungi FT-DEKANAT (10.0.20.36) — DHCP server: Lab-66-pimp [ROS v6] ...
+  ⟳ Menghubungi FT-GBE (10.0.20.22) — DHCP server: Lab-67-Admin [ROS v6] ...
+  ⟳ Menghubungi FPIK (10.0.20.4) — DHCP server: serverlabutbk [ROS v7] ...
+  ✓ FT-DEKANAT: 57 aktif (UTBK-OS: 57, Other: 0) / 57 total lease
+  ⟳ Menghubungi FTP (10.0.20.123) — DHCP server: dhcp7 [ROS v7] ...
+  ✓ FPIK: 58 aktif (UTBK-OS: 58, Other: 0) / 60 total lease
+  ⟳ Menghubungi FISIP (10.0.20.51) — DHCP server: serverpoollab [ROS v7] ...
+  ✓ FIB: 46 aktif (UTBK-OS: 43, Other: 3) / 48 total lease
+  ⟳ Menghubungi FILKOM (10.34.0.53) — DHCP server: G1.3-vlan3495 [ROS v6] ...
+  ✓ FAPET: 22 aktif (UTBK-OS: 22, Other: 0) / 23 total lease
+  ⟳ Menghubungi FILKOM (10.34.0.53) — DHCP server: G1.4-vlan3496 [ROS v6] ...
+  ✓ FH: 68 aktif (UTBK-OS: 68, Other: 0) / 68 total lease
+  ⟳ Menghubungi FILKOM (10.34.0.53) — DHCP server: G1.6-vlan3497 [ROS v6] ...
+  ✓ FTP: 58 aktif (UTBK-OS: 58, Other: 0) / 59 total lease
+  ⟳ Menghubungi FILKOM (10.34.0.53) — DHCP server: G1.2-vlan3498 [ROS v6] ...
+  ✓ FISIP: 46 aktif (UTBK-OS: 46, Other: 0) / 53 total lease
+  ⟳ Menghubungi FILKOM (10.34.0.53) — DHCP server: G1.5-vlan3499 [ROS v6] ...
+  ✓ FEB: 133 aktif (UTBK-OS: 133, Other: 0) / 134 total lease
+  ⟳ Menghubungi VOKASI (10.0.20.44) — DHCP server: 3508-serverpoollab [ROS v7] ...
+  ✓ FP: 77 aktif (UTBK-OS: 77, Other: 0) / 82 total lease
+  ⟳ Menghubungi FKG (10.0.20.110) — DHCP server: dhcp2 [ROS v7] ...
+  ✓ FT-GBE: 29 aktif (UTBK-OS: 29, Other: 0) / 29 total lease
+  ⟳ Menghubungi FK-8 (10.27.2.27) — DHCP server: dhcp_LabA [ROS v6] ...
+  ✓ FIA: 112 aktif (UTBK-OS: 109, Other: 3) / 137 total lease
+  ⟳ Menghubungi FK-8 (10.27.2.27) — DHCP server: dhcp_LabB [ROS v6] ...
+  ✓ FILKOM: 26 aktif (UTBK-OS: 26, Other: 0) / 26 total lease
+  ⟳ Menghubungi FK-8 (10.27.2.27) — DHCP server: dhcp_LabC [ROS v6] ...
+  ✓ FILKOM: 26 aktif (UTBK-OS: 26, Other: 0) / 26 total lease
+  ⟳ Menghubungi FK-1 (10.27.2.28) — DHCP server: LAB_Lt.1 [ROS v6] ...
+  ✓ FILKOM: 26 aktif (UTBK-OS: 26, Other: 0) / 26 total lease
+  ✓ FILKOM: 26 aktif (UTBK-OS: 26, Other: 0) / 26 total lease
+  ✓ FILKOM: 26 aktif (UTBK-OS: 26, Other: 0) / 26 total lease
+  ✓ FKG: 73 aktif (UTBK-OS: 67, Other: 6) / 84 total lease
+  ✓ VOKASI: 54 aktif (UTBK-OS: 54, Other: 0) / 55 total lease
+  ✓ DTI: 199 aktif (UTBK-OS: 196, Other: 3) / 273 total lease
+  ✓ FK-1: 168 aktif (UTBK-OS: 0, Other: 168) / 173 total lease
+  ✓ FK-8: 83 aktif (UTBK-OS: 68, Other: 15) / 84 total lease
+  ✓ FK-8: 115 aktif (UTBK-OS: 114, Other: 1) / 130 total lease
+  ✓ FK-8: 138 aktif (UTBK-OS: 137, Other: 1) / 143 total lease
+
+=================================================================
+  LAPORAN DHCP LEASE — MONITORING PERANGKAT UTBK
+  Timestamp: 2026-04-25 12:00:01
+=================================================================
+
+╭────────────┬─────────────┬────────────────────┬─────────┬───────────┬─────────┬───────────┬────────────┬─────────┬──────────╮
+│ Router     │ Host        │ DHCP Server        │   Bound │   UTBK-OS │   Other │   Waiting │   Disabled │   Total │ Status   │
+├────────────┼─────────────┼────────────────────┼─────────┼───────────┼─────────┼───────────┼────────────┼─────────┼──────────┤
+│ DTI        │ 10.39.0.1   │ dhcp-lab-tik       │     199 │       196 │       3 │        63 │         11 │     273 │ ✓ OK     │
+│ FIB        │ 10.32.8.1   │ server-lab         │      46 │        43 │       3 │         2 │          0 │      48 │ ✓ OK     │
+│ FH         │ 10.1.1.21   │ lab                │      68 │        68 │       0 │         0 │          0 │      68 │ ✓ OK     │
+│ FEB        │ 10.0.20.64  │ CBT                │     133 │       133 │       0 │         1 │          0 │     134 │ ✓ OK     │
+│ FIA        │ 10.0.20.98  │ dhcp-2380-lab      │     112 │       109 │       3 │        25 │          0 │     137 │ ✓ OK     │
+│ FP         │ 10.0.20.11  │ lab                │      77 │        77 │       0 │         5 │          0 │      82 │ ✓ OK     │
+│ FAPET      │ 10.0.20.1   │ network-Lab        │      22 │        22 │       0 │         1 │          0 │      23 │ ✓ OK     │
+│ FT-DEKANAT │ 10.0.20.36  │ Lab-66-pimp        │      57 │        57 │       0 │         0 │          0 │      57 │ ✓ OK     │
+│ FT-GBE     │ 10.0.20.22  │ Lab-67-Admin       │      29 │        29 │       0 │         0 │          0 │      29 │ ✓ OK     │
+│ FPIK       │ 10.0.20.4   │ serverlabutbk      │      58 │        58 │       0 │         2 │          0 │      60 │ ✓ OK     │
+│ FTP        │ 10.0.20.123 │ dhcp7              │      58 │        58 │       0 │         1 │          0 │      59 │ ✓ OK     │
+│ FISIP      │ 10.0.20.51  │ serverpoollab      │      46 │        46 │       0 │         7 │          0 │      53 │ ✓ OK     │
+│ FILKOM     │ 10.34.0.53  │ G1.3-vlan3495      │      26 │        26 │       0 │         0 │          0 │      26 │ ✓ OK     │
+│ FILKOM     │ 10.34.0.53  │ G1.4-vlan3496      │      26 │        26 │       0 │         0 │          0 │      26 │ ✓ OK     │
+│ FILKOM     │ 10.34.0.53  │ G1.6-vlan3497      │      26 │        26 │       0 │         0 │          0 │      26 │ ✓ OK     │
+│ FILKOM     │ 10.34.0.53  │ G1.2-vlan3498      │      26 │        26 │       0 │         0 │          0 │      26 │ ✓ OK     │
+│ FILKOM     │ 10.34.0.53  │ G1.5-vlan3499      │      26 │        26 │       0 │         0 │          0 │      26 │ ✓ OK     │
+│ VOKASI     │ 10.0.20.44  │ 3508-serverpoollab │      54 │        54 │       0 │         1 │          0 │      55 │ ✓ OK     │
+│ FKG        │ 10.0.20.110 │ dhcp2              │      73 │        67 │       6 │         0 │         11 │      84 │ ✓ OK     │
+│ FK-8       │ 10.27.2.27  │ dhcp_LabA          │     115 │       114 │       1 │        15 │          0 │     130 │ ✓ OK     │
+│ FK-8       │ 10.27.2.27  │ dhcp_LabB          │     138 │       137 │       1 │         5 │          0 │     143 │ ✓ OK     │
+│ FK-8       │ 10.27.2.27  │ dhcp_LabC          │      83 │        68 │      15 │         1 │          0 │      84 │ ✓ OK     │
+│ FK-1       │ 10.27.2.28  │ LAB_Lt.1           │     168 │         0 │     168 │         5 │          0 │     173 │ ✓ OK     │
+╰────────────┴─────────────┴────────────────────┴─────────┴───────────┴─────────┴───────────┴────────────┴─────────┴──────────╯
+
+  TOTAL PERANGKAT AKTIF (bound)   :  1666
+  - host-name=utbk-os             :  1466
+  - host-name lain                :   200
+  Total lease waiting              :   134
+  Total disabled (tidak dihitung)  :    22
+  Total seluruh lease              :  1822
+  Router berhasil diquery          : 23/23
+
+=================================================================
+
+Menyimpan output ke file...
+  → output/dhcp-lease-dti-dhcp-lab-tik-20260425_120001.txt
+  → output/dhcp-lease-fib-server-lab-20260425_120000.txt
+  → output/dhcp-lease-fh-lab-20260425_120000.txt
+  → output/dhcp-lease-feb-CBT-20260425_120000.txt
+  → output/dhcp-lease-fia-dhcp-2380-lab-20260425_120000.txt
+  → output/dhcp-lease-fp-lab-20260425_120000.txt
+  → output/dhcp-lease-fapet-network-Lab-20260425_120000.txt
+  → output/dhcp-lease-ft-dekanat-Lab-66-pimp-20260425_120000.txt
+  → output/dhcp-lease-ft-gbe-Lab-67-Admin-20260425_120000.txt
+  → output/dhcp-lease-fpik-serverlabutbk-20260425_120000.txt
+  → output/dhcp-lease-ftp-dhcp7-20260425_120000.txt
+  → output/dhcp-lease-fisip-serverpoollab-20260425_120000.txt
+  → output/dhcp-lease-filkom-G1.3-vlan3495-20260425_120000.txt
+  → output/dhcp-lease-filkom-G1.4-vlan3496-20260425_120000.txt
+  → output/dhcp-lease-filkom-G1.6-vlan3497-20260425_120000.txt
+  → output/dhcp-lease-filkom-G1.2-vlan3498-20260425_120000.txt
+  → output/dhcp-lease-filkom-G1.5-vlan3499-20260425_120000.txt
+  → output/dhcp-lease-vokasi-3508-serverpoollab-20260425_120001.txt
+  → output/dhcp-lease-fkg-dhcp2-20260425_120000.txt
+  → output/dhcp-lease-fk-8-dhcp_LabA-20260425_120001.txt
+  → output/dhcp-lease-fk-8-dhcp_LabB-20260425_120001.txt
+  → output/dhcp-lease-fk-8-dhcp_LabC-20260425_120001.txt
+  → output/dhcp-lease-fk-1-LAB_Lt.1-20260425_120001.txt
+  → output/summary-20260425_120001.txt (ringkasan)
+
+
+╔══════════════════════════════════════════════════════════╗
+║      MikroTik DHCP Lease Monitoring Agent                ║
+╚══════════════════════════════════════════════════════════╝
+
+Akan query 23 task dari 23 router...
+
+  ⟳ Menghubungi DTI (10.39.0.1) — DHCP server: dhcp-lab-tik [ROS v7] ...
+  ⟳ Menghubungi FIB (10.32.8.1) — DHCP server: server-lab [ROS v6] ...
+  ⟳ Menghubungi FH (10.1.1.21) — DHCP server: lab [ROS v6] ...
+  ⟳ Menghubungi FEB (10.0.20.64) — DHCP server: CBT [ROS v6] ...
+  ⟳ Menghubungi FIA (10.0.20.98) — DHCP server: dhcp-2380-lab [ROS v6] ...
+  ⟳ Menghubungi FP (10.0.20.11) — DHCP server: lab [ROS v6] ...
+  ⟳ Menghubungi FAPET (10.0.20.1) — DHCP server: network-Lab [ROS v6] ...
+  ⟳ Menghubungi FT-DEKANAT (10.0.20.36) — DHCP server: Lab-66-pimp [ROS v6] ...
+  ⟳ Menghubungi FT-GBE (10.0.20.22) — DHCP server: Lab-67-Admin [ROS v6] ...
+  ⟳ Menghubungi FPIK (10.0.20.4) — DHCP server: serverlabutbk [ROS v7] ...
+  ✓ FPIK: 58 aktif (UTBK-OS: 58, Other: 0) / 60 total lease
+  ⟳ Menghubungi FTP (10.0.20.123) — DHCP server: dhcp7 [ROS v7] ...
+  ✓ FT-DEKANAT: 57 aktif (UTBK-OS: 57, Other: 0) / 57 total lease
+  ⟳ Menghubungi FISIP (10.0.20.51) — DHCP server: serverpoollab [ROS v7] ...
+  ✓ FAPET: 22 aktif (UTBK-OS: 22, Other: 0) / 23 total lease
+  ⟳ Menghubungi FILKOM (10.34.0.53) — DHCP server: G1.3-vlan3495 [ROS v6] ...
+  ✓ FH: 68 aktif (UTBK-OS: 68, Other: 0) / 68 total lease
+  ⟳ Menghubungi FILKOM (10.34.0.53) — DHCP server: G1.4-vlan3496 [ROS v6] ...
+  ✓ FTP: 58 aktif (UTBK-OS: 58, Other: 0) / 59 total lease
+  ⟳ Menghubungi FILKOM (10.34.0.53) — DHCP server: G1.6-vlan3497 [ROS v6] ...
+  ✓ FIB: 47 aktif (UTBK-OS: 45, Other: 2) / 48 total lease
+  ⟳ Menghubungi FILKOM (10.34.0.53) — DHCP server: G1.2-vlan3498 [ROS v6] ...
+  ✓ FISIP: 46 aktif (UTBK-OS: 46, Other: 0) / 53 total lease
+  ⟳ Menghubungi FILKOM (10.34.0.53) — DHCP server: G1.5-vlan3499 [ROS v6] ...
+  ✓ FEB: 132 aktif (UTBK-OS: 132, Other: 0) / 134 total lease
+  ⟳ Menghubungi VOKASI (10.0.20.44) — DHCP server: 3508-serverpoollab [ROS v7] ...
+  ✓ FT-GBE: 29 aktif (UTBK-OS: 29, Other: 0) / 29 total lease
+  ⟳ Menghubungi FKG (10.0.20.110) — DHCP server: dhcp2 [ROS v7] ...
+  ✓ FP: 75 aktif (UTBK-OS: 75, Other: 0) / 82 total lease
+  ⟳ Menghubungi FK-8 (10.27.2.27) — DHCP server: dhcp_LabA [ROS v6] ...
+  ✓ FIA: 112 aktif (UTBK-OS: 109, Other: 3) / 137 total lease
+  ⟳ Menghubungi FK-8 (10.27.2.27) — DHCP server: dhcp_LabB [ROS v6] ...
+  ✓ FILKOM: 26 aktif (UTBK-OS: 26, Other: 0) / 26 total lease
+  ⟳ Menghubungi FK-8 (10.27.2.27) — DHCP server: dhcp_LabC [ROS v6] ...
+  ✓ FILKOM: 26 aktif (UTBK-OS: 26, Other: 0) / 26 total lease
+  ⟳ Menghubungi FK-1 (10.27.2.28) — DHCP server: LAB_Lt.1 [ROS v6] ...
+  ✓ FILKOM: 26 aktif (UTBK-OS: 26, Other: 0) / 26 total lease
+  ✓ FILKOM: 26 aktif (UTBK-OS: 26, Other: 0) / 26 total lease
+  ✓ FILKOM: 26 aktif (UTBK-OS: 26, Other: 0) / 26 total lease
+  ✓ FKG: 73 aktif (UTBK-OS: 67, Other: 6) / 84 total lease
+  ✓ FK-8: 21 aktif (UTBK-OS: 20, Other: 1) / 32 total lease
+  ✓ VOKASI: 54 aktif (UTBK-OS: 54, Other: 0) / 55 total lease
+  ✓ FK-1: 168 aktif (UTBK-OS: 0, Other: 168) / 173 total lease
+  ✓ FK-8: 83 aktif (UTBK-OS: 68, Other: 15) / 84 total lease
+  ✓ FK-8: 138 aktif (UTBK-OS: 137, Other: 1) / 143 total lease
+  ✓ DTI: 199 aktif (UTBK-OS: 196, Other: 3) / 273 total lease
+
+=================================================================
+  LAPORAN DHCP LEASE — MONITORING PERANGKAT UTBK
+  Timestamp: 2026-04-25 14:00:01
+=================================================================
+
+╭────────────┬─────────────┬────────────────────┬─────────┬───────────┬─────────┬───────────┬────────────┬─────────┬──────────╮
+│ Router     │ Host        │ DHCP Server        │   Bound │   UTBK-OS │   Other │   Waiting │   Disabled │   Total │ Status   │
+├────────────┼─────────────┼────────────────────┼─────────┼───────────┼─────────┼───────────┼────────────┼─────────┼──────────┤
+│ DTI        │ 10.39.0.1   │ dhcp-lab-tik       │     199 │       196 │       3 │        63 │         11 │     273 │ ✓ OK     │
+│ FIB        │ 10.32.8.1   │ server-lab         │      47 │        45 │       2 │         1 │          0 │      48 │ ✓ OK     │
+│ FH         │ 10.1.1.21   │ lab                │      68 │        68 │       0 │         0 │          0 │      68 │ ✓ OK     │
+│ FEB        │ 10.0.20.64  │ CBT                │     132 │       132 │       0 │         2 │          0 │     134 │ ✓ OK     │
+│ FIA        │ 10.0.20.98  │ dhcp-2380-lab      │     112 │       109 │       3 │        25 │          0 │     137 │ ✓ OK     │
+│ FP         │ 10.0.20.11  │ lab                │      75 │        75 │       0 │         7 │          0 │      82 │ ✓ OK     │
+│ FAPET      │ 10.0.20.1   │ network-Lab        │      22 │        22 │       0 │         1 │          0 │      23 │ ✓ OK     │
+│ FT-DEKANAT │ 10.0.20.36  │ Lab-66-pimp        │      57 │        57 │       0 │         0 │          0 │      57 │ ✓ OK     │
+│ FT-GBE     │ 10.0.20.22  │ Lab-67-Admin       │      29 │        29 │       0 │         0 │          0 │      29 │ ✓ OK     │
+│ FPIK       │ 10.0.20.4   │ serverlabutbk      │      58 │        58 │       0 │         2 │          0 │      60 │ ✓ OK     │
+│ FTP        │ 10.0.20.123 │ dhcp7              │      58 │        58 │       0 │         1 │          0 │      59 │ ✓ OK     │
+│ FISIP      │ 10.0.20.51  │ serverpoollab      │      46 │        46 │       0 │         7 │          0 │      53 │ ✓ OK     │
+│ FILKOM     │ 10.34.0.53  │ G1.3-vlan3495      │      26 │        26 │       0 │         0 │          0 │      26 │ ✓ OK     │
+│ FILKOM     │ 10.34.0.53  │ G1.4-vlan3496      │      26 │        26 │       0 │         0 │          0 │      26 │ ✓ OK     │
+│ FILKOM     │ 10.34.0.53  │ G1.6-vlan3497      │      26 │        26 │       0 │         0 │          0 │      26 │ ✓ OK     │
+│ FILKOM     │ 10.34.0.53  │ G1.2-vlan3498      │      26 │        26 │       0 │         0 │          0 │      26 │ ✓ OK     │
+│ FILKOM     │ 10.34.0.53  │ G1.5-vlan3499      │      26 │        26 │       0 │         0 │          0 │      26 │ ✓ OK     │
+│ VOKASI     │ 10.0.20.44  │ 3508-serverpoollab │      54 │        54 │       0 │         1 │          0 │      55 │ ✓ OK     │
+│ FKG        │ 10.0.20.110 │ dhcp2              │      73 │        67 │       6 │         0 │         11 │      84 │ ✓ OK     │
+│ FK-8       │ 10.27.2.27  │ dhcp_LabA          │      21 │        20 │       1 │        11 │          0 │      32 │ ✓ OK     │
+│ FK-8       │ 10.27.2.27  │ dhcp_LabB          │     138 │       137 │       1 │         5 │          0 │     143 │ ✓ OK     │
+│ FK-8       │ 10.27.2.27  │ dhcp_LabC          │      83 │        68 │      15 │         1 │          0 │      84 │ ✓ OK     │
+│ FK-1       │ 10.27.2.28  │ LAB_Lt.1           │     168 │         0 │     168 │         5 │          0 │     173 │ ✓ OK     │
+╰────────────┴─────────────┴────────────────────┴─────────┴───────────┴─────────┴───────────┴────────────┴─────────┴──────────╯
+
+  TOTAL PERANGKAT AKTIF (bound)   :  1570
+  - host-name=utbk-os             :  1371
+  - host-name lain                :   199
+  Total lease waiting              :   132
+  Total disabled (tidak dihitung)  :    22
+  Total seluruh lease              :  1724
+  Router berhasil diquery          : 23/23
+
+=================================================================
+
+Menyimpan output ke file...
+  → output/dhcp-lease-dti-dhcp-lab-tik-20260425_140001.txt
+  → output/dhcp-lease-fib-server-lab-20260425_140000.txt
+  → output/dhcp-lease-fh-lab-20260425_140000.txt
+  → output/dhcp-lease-feb-CBT-20260425_140000.txt
+  → output/dhcp-lease-fia-dhcp-2380-lab-20260425_140000.txt
+  → output/dhcp-lease-fp-lab-20260425_140000.txt
+  → output/dhcp-lease-fapet-network-Lab-20260425_140000.txt
+  → output/dhcp-lease-ft-dekanat-Lab-66-pimp-20260425_140000.txt
+  → output/dhcp-lease-ft-gbe-Lab-67-Admin-20260425_140000.txt
+  → output/dhcp-lease-fpik-serverlabutbk-20260425_140000.txt
+  → output/dhcp-lease-ftp-dhcp7-20260425_140000.txt
+  → output/dhcp-lease-fisip-serverpoollab-20260425_140000.txt
+  → output/dhcp-lease-filkom-G1.3-vlan3495-20260425_140000.txt
+  → output/dhcp-lease-filkom-G1.4-vlan3496-20260425_140000.txt
+  → output/dhcp-lease-filkom-G1.6-vlan3497-20260425_140000.txt
+  → output/dhcp-lease-filkom-G1.2-vlan3498-20260425_140000.txt
+  → output/dhcp-lease-filkom-G1.5-vlan3499-20260425_140000.txt
+  → output/dhcp-lease-vokasi-3508-serverpoollab-20260425_140001.txt
+  → output/dhcp-lease-fkg-dhcp2-20260425_140000.txt
+  → output/dhcp-lease-fk-8-dhcp_LabA-20260425_140001.txt
+  → output/dhcp-lease-fk-8-dhcp_LabB-20260425_140001.txt
+  → output/dhcp-lease-fk-8-dhcp_LabC-20260425_140001.txt
+  → output/dhcp-lease-fk-1-LAB_Lt.1-20260425_140001.txt
+  → output/summary-20260425_140001.txt (ringkasan)
+
+
+╔══════════════════════════════════════════════════════════╗
+║      MikroTik DHCP Lease Monitoring Agent                ║
+╚══════════════════════════════════════════════════════════╝
+
+Akan query 23 task dari 23 router...
+
+  ⟳ Menghubungi DTI (10.39.0.1) — DHCP server: dhcp-lab-tik [ROS v7] ...
+  ⟳ Menghubungi FIB (10.32.8.1) — DHCP server: server-lab [ROS v6] ...
+  ⟳ Menghubungi FH (10.1.1.21) — DHCP server: lab [ROS v6] ...
+  ⟳ Menghubungi FEB (10.0.20.64) — DHCP server: CBT [ROS v6] ...
+  ⟳ Menghubungi FIA (10.0.20.98) — DHCP server: dhcp-2380-lab [ROS v6] ...
+  ⟳ Menghubungi FP (10.0.20.11) — DHCP server: lab [ROS v6] ...
+  ⟳ Menghubungi FAPET (10.0.20.1) — DHCP server: network-Lab [ROS v6] ...
+  ⟳ Menghubungi FT-DEKANAT (10.0.20.36) — DHCP server: Lab-66-pimp [ROS v6] ...
+  ⟳ Menghubungi FT-GBE (10.0.20.22) — DHCP server: Lab-67-Admin [ROS v6] ...
+  ⟳ Menghubungi FPIK (10.0.20.4) — DHCP server: serverlabutbk [ROS v7] ...
+  ✓ FPIK: 0 aktif (UTBK-OS: 0, Other: 0) / 60 total lease
+  ⟳ Menghubungi FTP (10.0.20.123) — DHCP server: dhcp7 [ROS v7] ...
+  ✓ FT-DEKANAT: 0 aktif (UTBK-OS: 0, Other: 0) / 57 total lease
+  ⟳ Menghubungi FISIP (10.0.20.51) — DHCP server: serverpoollab [ROS v7] ...
+  ✓ FAPET: 18 aktif (UTBK-OS: 18, Other: 0) / 23 total lease
+  ⟳ Menghubungi FILKOM (10.34.0.53) — DHCP server: G1.3-vlan3495 [ROS v6] ...
+  ✓ FIB: 15 aktif (UTBK-OS: 13, Other: 2) / 48 total lease
+  ⟳ Menghubungi FILKOM (10.34.0.53) — DHCP server: G1.4-vlan3496 [ROS v6] ...
+  ✓ FH: 4 aktif (UTBK-OS: 4, Other: 0) / 68 total lease
+  ⟳ Menghubungi FILKOM (10.34.0.53) — DHCP server: G1.6-vlan3497 [ROS v6] ...
+  ✓ FTP: 41 aktif (UTBK-OS: 41, Other: 0) / 59 total lease
+  ⟳ Menghubungi FILKOM (10.34.0.53) — DHCP server: G1.2-vlan3498 [ROS v6] ...
+  ✓ FISIP: 0 aktif (UTBK-OS: 0, Other: 0) / 53 total lease
+  ⟳ Menghubungi FILKOM (10.34.0.53) — DHCP server: G1.5-vlan3499 [ROS v6] ...
+  ✓ FEB: 74 aktif (UTBK-OS: 74, Other: 0) / 134 total lease
+  ⟳ Menghubungi VOKASI (10.0.20.44) — DHCP server: 3508-serverpoollab [ROS v7] ...
+  ✓ FP: 0 aktif (UTBK-OS: 0, Other: 0) / 82 total lease
+  ⟳ Menghubungi FKG (10.0.20.110) — DHCP server: dhcp2 [ROS v7] ...
+  ✓ FT-GBE: 0 aktif (UTBK-OS: 0, Other: 0) / 29 total lease
+  ⟳ Menghubungi FK-8 (10.27.2.27) — DHCP server: dhcp_LabA [ROS v6] ...
+  ✓ FIA: 5 aktif (UTBK-OS: 2, Other: 3) / 136 total lease
+  ⟳ Menghubungi FK-8 (10.27.2.27) — DHCP server: dhcp_LabB [ROS v6] ...
+  ✓ FILKOM: 26 aktif (UTBK-OS: 26, Other: 0) / 26 total lease
+  ⟳ Menghubungi FK-8 (10.27.2.27) — DHCP server: dhcp_LabC [ROS v6] ...
+  ✓ FKG: 28 aktif (UTBK-OS: 21, Other: 7) / 84 total lease
+  ⟳ Menghubungi FK-1 (10.27.2.28) — DHCP server: LAB_Lt.1 [ROS v6] ...
+  ✓ FILKOM: 26 aktif (UTBK-OS: 26, Other: 0) / 26 total lease
+  ✓ FILKOM: 26 aktif (UTBK-OS: 26, Other: 0) / 26 total lease
+  ✓ FILKOM: 0 aktif (UTBK-OS: 0, Other: 0) / 26 total lease
+  ✓ FILKOM: 26 aktif (UTBK-OS: 26, Other: 0) / 26 total lease
+  ✓ VOKASI: 12 aktif (UTBK-OS: 12, Other: 0) / 55 total lease
+  ✓ FK-8: 115 aktif (UTBK-OS: 114, Other: 1) / 130 total lease
+  ✓ DTI: 41 aktif (UTBK-OS: 38, Other: 3) / 273 total lease
+  ✓ FK-1: 168 aktif (UTBK-OS: 0, Other: 168) / 173 total lease
+  ✓ FK-8: 43 aktif (UTBK-OS: 27, Other: 16) / 84 total lease
+  ✓ FK-8: 138 aktif (UTBK-OS: 137, Other: 1) / 143 total lease
+
+=================================================================
+  LAPORAN DHCP LEASE — MONITORING PERANGKAT UTBK
+  Timestamp: 2026-04-25 16:30:01
+=================================================================
+
+╭────────────┬─────────────┬────────────────────┬─────────┬───────────┬─────────┬───────────┬────────────┬─────────┬──────────╮
+│ Router     │ Host        │ DHCP Server        │   Bound │   UTBK-OS │   Other │   Waiting │   Disabled │   Total │ Status   │
+├────────────┼─────────────┼────────────────────┼─────────┼───────────┼─────────┼───────────┼────────────┼─────────┼──────────┤
+│ DTI        │ 10.39.0.1   │ dhcp-lab-tik       │      41 │        38 │       3 │       221 │         11 │     273 │ ✓ OK     │
+│ FIB        │ 10.32.8.1   │ server-lab         │      15 │        13 │       2 │        33 │          0 │      48 │ ✓ OK     │
+│ FH         │ 10.1.1.21   │ lab                │       4 │         4 │       0 │        64 │          0 │      68 │ ✓ OK     │
+│ FEB        │ 10.0.20.64  │ CBT                │      74 │        74 │       0 │        60 │          0 │     134 │ ✓ OK     │
+│ FIA        │ 10.0.20.98  │ dhcp-2380-lab      │       5 │         2 │       3 │       131 │          0 │     136 │ ✓ OK     │
+│ FP         │ 10.0.20.11  │ lab                │       0 │         0 │       0 │        82 │          0 │      82 │ ✓ OK     │
+│ FAPET      │ 10.0.20.1   │ network-Lab        │      18 │        18 │       0 │         5 │          0 │      23 │ ✓ OK     │
+│ FT-DEKANAT │ 10.0.20.36  │ Lab-66-pimp        │       0 │         0 │       0 │        57 │          0 │      57 │ ✓ OK     │
+│ FT-GBE     │ 10.0.20.22  │ Lab-67-Admin       │       0 │         0 │       0 │        29 │          0 │      29 │ ✓ OK     │
+│ FPIK       │ 10.0.20.4   │ serverlabutbk      │       0 │         0 │       0 │        60 │          0 │      60 │ ✓ OK     │
+│ FTP        │ 10.0.20.123 │ dhcp7              │      41 │        41 │       0 │        18 │          0 │      59 │ ✓ OK     │
+│ FISIP      │ 10.0.20.51  │ serverpoollab      │       0 │         0 │       0 │        53 │          0 │      53 │ ✓ OK     │
+│ FILKOM     │ 10.34.0.53  │ G1.3-vlan3495      │       0 │         0 │       0 │        26 │          0 │      26 │ ✓ OK     │
+│ FILKOM     │ 10.34.0.53  │ G1.4-vlan3496      │      26 │        26 │       0 │         0 │          0 │      26 │ ✓ OK     │
+│ FILKOM     │ 10.34.0.53  │ G1.6-vlan3497      │      26 │        26 │       0 │         0 │          0 │      26 │ ✓ OK     │
+│ FILKOM     │ 10.34.0.53  │ G1.2-vlan3498      │      26 │        26 │       0 │         0 │          0 │      26 │ ✓ OK     │
+│ FILKOM     │ 10.34.0.53  │ G1.5-vlan3499      │      26 │        26 │       0 │         0 │          0 │      26 │ ✓ OK     │
+│ VOKASI     │ 10.0.20.44  │ 3508-serverpoollab │      12 │        12 │       0 │        43 │          0 │      55 │ ✓ OK     │
+│ FKG        │ 10.0.20.110 │ dhcp2              │      28 │        21 │       7 │        45 │         11 │      84 │ ✓ OK     │
+│ FK-8       │ 10.27.2.27  │ dhcp_LabA          │     115 │       114 │       1 │        15 │          0 │     130 │ ✓ OK     │
+│ FK-8       │ 10.27.2.27  │ dhcp_LabB          │     138 │       137 │       1 │         5 │          0 │     143 │ ✓ OK     │
+│ FK-8       │ 10.27.2.27  │ dhcp_LabC          │      43 │        27 │      16 │        38 │          0 │      84 │ ✓ OK     │
+│ FK-1       │ 10.27.2.28  │ LAB_Lt.1           │     168 │         0 │     168 │         5 │          0 │     173 │ ✓ OK     │
+╰────────────┴─────────────┴────────────────────┴─────────┴───────────┴─────────┴───────────┴────────────┴─────────┴──────────╯
+
+  TOTAL PERANGKAT AKTIF (bound)   :   806
+  - host-name=utbk-os             :   605
+  - host-name lain                :   201
+  Total lease waiting              :   990
+  Total disabled (tidak dihitung)  :    22
+  Total seluruh lease              :  1821
+  Router berhasil diquery          : 23/23
+
+=================================================================
+
+Menyimpan output ke file...
+  → output/dhcp-lease-dti-dhcp-lab-tik-20260425_163001.txt
+  → output/dhcp-lease-fib-server-lab-20260425_163000.txt
+  → output/dhcp-lease-fh-lab-20260425_163000.txt
+  → output/dhcp-lease-feb-CBT-20260425_163000.txt
+  → output/dhcp-lease-fia-dhcp-2380-lab-20260425_163000.txt
+  → output/dhcp-lease-fp-lab-20260425_163000.txt
+  → output/dhcp-lease-fapet-network-Lab-20260425_163000.txt
+  → output/dhcp-lease-ft-dekanat-Lab-66-pimp-20260425_163000.txt
+  → output/dhcp-lease-ft-gbe-Lab-67-Admin-20260425_163000.txt
+  → output/dhcp-lease-fpik-serverlabutbk-20260425_163000.txt
+  → output/dhcp-lease-ftp-dhcp7-20260425_163000.txt
+  → output/dhcp-lease-fisip-serverpoollab-20260425_163000.txt
+  → output/dhcp-lease-filkom-G1.3-vlan3495-20260425_163000.txt
+  → output/dhcp-lease-filkom-G1.4-vlan3496-20260425_163000.txt
+  → output/dhcp-lease-filkom-G1.6-vlan3497-20260425_163000.txt
+  → output/dhcp-lease-filkom-G1.2-vlan3498-20260425_163000.txt
+  → output/dhcp-lease-filkom-G1.5-vlan3499-20260425_163000.txt
+  → output/dhcp-lease-vokasi-3508-serverpoollab-20260425_163001.txt
+  → output/dhcp-lease-fkg-dhcp2-20260425_163000.txt
+  → output/dhcp-lease-fk-8-dhcp_LabA-20260425_163001.txt
+  → output/dhcp-lease-fk-8-dhcp_LabB-20260425_163001.txt
+  → output/dhcp-lease-fk-8-dhcp_LabC-20260425_163001.txt
+  → output/dhcp-lease-fk-1-LAB_Lt.1-20260425_163001.txt
+  → output/summary-20260425_163001.txt (ringkasan)
+
+Found 4 day(s) of data:
+  - 20260421: 404 file(s)
+  - 20260422: 46 file(s)
+  - 20260424: 112 file(s)
+  - 20260425: 115 file(s)
+
+Processing 20260421 (404 files)...
+  -> Skipped (already exists): /home/alan/Documents/03Resource/mikrotik-cek-lease/laporan/dhcp-lease-20260421.md
+
+Processing 20260422 (46 files)...
+  -> Skipped (already exists): /home/alan/Documents/03Resource/mikrotik-cek-lease/laporan/dhcp-lease-20260422.md
+
+Processing 20260424 (112 files)...
+  -> Skipped (already exists): /home/alan/Documents/03Resource/mikrotik-cek-lease/laporan/dhcp-lease-20260424.md
+
+Processing 20260425 (115 files)...
+  [AI] Generating narratives for 25 April 2026...
+  [AI] Generating AI narratives in parallel...
+  [AI] ✓ Narrative ready: executive
+  [AI] ✓ Narrative ready: section1
+  [AI] ✓ Narrative ready: section2
+  [AI] ✓ Narrative ready: section3
+  [AI] ✓ Narrative ready: section5
+  [AI] ✓ Narrative ready: section7
+  [AI] ✓ Narrative ready: section8
+  [AI] ✓ Narrative ready: section9
+  -> Generated: /home/alan/Documents/03Resource/mikrotik-cek-lease/laporan/dhcp-lease-20260425.md
+
+Done! Reports saved to /home/alan/Documents/03Resource/mikrotik-cek-lease/laporan/

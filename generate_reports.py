@@ -13,10 +13,30 @@ from pathlib import Path
 import requests
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+
+def _load_dotenv() -> None:
+    """Load .env file into os.environ if present."""
+    env_file = Path(__file__).parent / ".env"
+    if not env_file.exists():
+        return
+    with open(env_file, encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, val = line.partition("=")
+            key = key.strip()
+            val = val.strip()
+            if key and key not in os.environ:
+                os.environ[key] = val
+
+
+_load_dotenv()
+
 OUTPUT_DIR = Path(__file__).parent / "output"
 LAPORAN_DIR = Path(__file__).parent / "laporan"
-OLLAMA_BASE_URL = "http://10.45.185.253:11434"
-OLLAMA_MODEL = "qwen3.6:35b-a3b-q8_0"
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen3.6:35b-a3b-q8_0")
 OLLAMA_TIMEOUT = 300  # seconds per request
 
 
