@@ -991,9 +991,10 @@ class AIScreen(Screen):
                         ai_chunks.append(content)
                 app._wake.set()
 
-            final = "\n".join(ai_chunks).strip() if ai_chunks else "(Tidak ada respons)"
+            final = "\n".join(ai_chunks).strip()
             with self._lock:
-                self.data["history"].append({"role": "assistant", "content": final})
+                if final:
+                    self.data["history"].append({"role": "assistant", "content": final})
                 self.data["state"] = "IDLE"
                 self.data["scroll"] = 999999
         except Exception as exc:
@@ -1052,9 +1053,10 @@ class AIScreen(Screen):
                                     retry_chunks.append(content)
                             app._wake.set()
 
-                        final = "\n".join(retry_chunks).strip() if retry_chunks else "(Tidak ada respons)"
+                        final = "\n".join(retry_chunks).strip()
                         with self._lock:
-                            self.data["history"].append({"role": "assistant", "content": final})
+                            if final:
+                                self.data["history"].append({"role": "assistant", "content": final})
                             self.data["state"] = "IDLE"
                             self.data["scroll"] = 999999
                     except Exception as retry_exc:
@@ -1201,9 +1203,10 @@ class AIScreen(Screen):
 
             if key in (curses.KEY_DOWN, 258):
                 with self._lock:
-                    hist_len = len(self.data.get("history", []))
+                    total = self.data.get("_rendered_total", len(self.data.get("history", [])) * 8)
+                    vis = self.data.get("_visible_rows", 20)
                     self.data["scroll"] = min(
-                        max(0, hist_len - 1),
+                        max(0, total - vis),
                         int(self.data.get("scroll", 0)) + 1,
                     )
                 return True
@@ -1249,9 +1252,12 @@ class AIScreen(Screen):
 
         if ch in ("j", "J"):
             with self._lock:
-                hist_len = len(self.data.get("history", []))
-                max_s = max(0, hist_len * 8)
-                self.data["scroll"] = min(max_s, int(self.data.get("scroll", 0)) + 1)
+                total = self.data.get("_rendered_total", len(self.data.get("history", [])) * 8)
+                vis = self.data.get("_visible_rows", 20)
+                self.data["scroll"] = min(
+                    max(0, total - vis),
+                    int(self.data.get("scroll", 0)) + 1,
+                )
             return True
 
         if ch in ("k", "K"):
@@ -1347,12 +1353,15 @@ class AIScreen(Screen):
 
             total = len(rendered)
             visible = max(1, content_rows)
-            clamped = max(0, min(scroll, max(0, total - visible)))
-            if clamped != scroll:
-                with self._lock:
-                    # Only update if scroll is out of range (normalize after snap-to-end)
-                    if int(self.data.get("scroll", 0)) == scroll:
-                        self.data["scroll"] = clamped
+            max_scroll = max(0, total - visible)
+            clamped = max(0, min(scroll, max_scroll))
+            with self._lock:
+                # Store for accurate scroll clamping in handle_key
+                self.data["_rendered_total"] = total
+                self.data["_visible_rows"] = visible
+                # Normalize scroll position after snap-to-end (999999 → real max)
+                if int(self.data.get("scroll", 0)) == scroll and clamped != scroll:
+                    self.data["scroll"] = clamped
             start = clamped
             view = rendered[start : start + visible]
             for idx, (line, attr) in enumerate(view):
