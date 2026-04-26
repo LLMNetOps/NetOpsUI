@@ -17,7 +17,7 @@
 #   ./schedule_utbk.sh --cancel # batalkan semua jadwal UTBK
 # ─────────────────────────────────────────────────────────────
 
-WORKDIR="/home/alan/Documents/03Resource/mikrotik-cek-lease"
+WORKDIR="/home/alan/Documents/03Resource/llmnetops"
 PYTHON="python3"
 LOG="$WORKDIR/schedule.log"
 

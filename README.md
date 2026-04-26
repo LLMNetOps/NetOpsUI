@@ -198,7 +198,7 @@ langgraph>=0.2.0
 ## Struktur Direktori
 
 ```text
-mikrotik-cek-lease/
+llmnetops/
 |-- agent.py             # LangGraph ReAct AI agent (18 tools)
 |-- tui.py               # Curses TUI (6 screens)
 |-- mikrotik_agent.py    # SSH collector + parser
