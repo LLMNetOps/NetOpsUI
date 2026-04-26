@@ -5,3 +5,11 @@ output/
 .venv/
 __pycache__/
 *.pyc
+
+# Data DHCP lease (berisi MAC address & IP perangkat nyata)
+*.txt
+laporan/
+
+# Log files
+*.log
+schedule.log
