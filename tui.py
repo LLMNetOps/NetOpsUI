@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import curses
 import datetime as dt
+import os
 import re
 import shutil
 import subprocess
@@ -13,13 +14,6 @@ import time
 from pathlib import Path
 from typing import Any
 
-try:
-    import requests as _requests
-
-    _HAS_REQUESTS = True
-except ImportError:
-    _requests = None
-    _HAS_REQUESTS = False
 
 WORKDIR = Path(__file__).parent
 OUTPUT_DIR = WORKDIR / "output"
@@ -28,10 +22,27 @@ LOG_FILE = WORKDIR / "schedule.log"
 MENU_WIDTH = 18
 REFRESH_INTERVAL = 5
 MIN_ROWS, MIN_COLS = 24, 60
-TITLE = "UTBK 2026 — DHCP Lease Monitor"
-OLLAMA_BASE_URL = "http://10.45.185.253:11434"
-OLLAMA_MODEL = "qwen3.6:35b-a3b-q8_0"
-OLLAMA_TIMEOUT = 120
+TITLE = "NetOps AI — Campus Network Operations"
+
+
+def _load_dotenv() -> None:
+    """Load .env file into os.environ if present (tanpa dependency python-dotenv)."""
+    env_file = WORKDIR / ".env"
+    if not env_file.exists():
+        return
+    with open(env_file, encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, val = line.partition("=")
+            key = key.strip()
+            val = val.strip()
+            if key and key not in os.environ:  # jangan override env var yang sudah ada
+                os.environ[key] = val
+
+
+_load_dotenv()
 
 C_HEADER = 1
 C_MENU = 2
@@ -51,16 +62,20 @@ MENU = [
     ("4", "Laporan"),
     ("5", "Log"),
     ("6", "AI Chat"),
+    ("7", "Aktivitas Agent"),
 ]
 
-# ── LangGraph agent (optional) ───────────────────────────────────────────────
+# ── Agent module ─────────────────────────────────────────────────────────────
 _HAS_AGENT = False
 _agent_mod = None
 try:
     import agent as _agent_mod
-    _HAS_AGENT = getattr(_agent_mod, "_HAS_LANGGRAPH", False)
+    _HAS_AGENT = True
 except Exception:
     pass
+
+# Shared activity log: written by AIScreen, read by AgentActivityScreen
+_agent_activity_log: list[dict] = []
 
 _HAS_COLORS = False
 ATQ_RE = re.compile(r"^(\d+)\t(\w{3} \w{3}\s+\d+ \d{2}:\d{2}:\d{2} \d{4})")
@@ -172,120 +187,6 @@ def strip_markdown(text: str) -> str:
     # Clean up excessive blank lines (more than 2 -> 1)
     text = _re.sub(r"\n{3,}", "\n\n", text)
     return text.strip()
-
-
-def build_data_context() -> str:
-    """Build a context string from the latest laporan and output summary."""
-    parts: list[str] = []
-
-    reports = sorted(
-        LAPORAN_DIR.glob("*.md"),
-        key=lambda p: p.stat().st_mtime,
-        reverse=True,
-    )
-    if reports:
-        latest_report = reports[0]
-        try:
-            content = latest_report.read_text(encoding="utf-8", errors="replace")
-            if len(content) > 12000:
-                content = (
-                    content[:12000]
-                    + "\n...[laporan terpotong, lihat tool read_report untuk konten lengkap]..."
-                )
-            parts.append(f"=== LAPORAN TERBARU: {latest_report.name} ===\n{content}")
-        except OSError:
-            pass
-
-    txt_files = sorted(
-        OUTPUT_DIR.glob("*.txt"),
-        key=lambda p: p.stat().st_mtime,
-        reverse=True,
-    )
-    if txt_files:
-        by_date: dict[str, int] = {}
-        for file_path in txt_files[:100]:
-            name = file_path.stem
-            parts_name = name.split("-")
-            date_part = ""
-            for part_name in parts_name:
-                if len(part_name) == 8 and part_name.isdigit():
-                    date_part = part_name
-                    break
-            if not date_part and "_" in name:
-                try:
-                    date_part = name.split("_")[0].split("-")[-1]
-                except Exception:
-                    pass
-            if date_part:
-                by_date[date_part] = by_date.get(date_part, 0) + 1
-
-        summary_lines = ["Tanggal-jumlah file output txt:"]
-        for date_value, count in sorted(by_date.items(), reverse=True)[:7]:
-            summary_lines.append(f"  {date_value}: {count} file")
-        summary_lines.append(f"Total: {len(txt_files)} file")
-        parts.append("=== RINGKASAN FILE OUTPUT ===\n" + "\n".join(summary_lines))
-
-    # --- Scheduled at jobs (all of them) ---
-    jobs = parse_atq()
-    now = dt.datetime.now()
-    if jobs:
-        past_jobs = [j for j in jobs if j["dt"] <= now]
-        future_jobs = [j for j in jobs if j["dt"] > now]
-        job_lines = [
-            f"Total: {len(jobs)} job terdaftar "
-            f"({len(future_jobs)} akan datang, {len(past_jobs)} terlewat).",
-            "",
-        ]
-        if future_jobs:
-            job_lines.append("Jadwal yang akan datang:")
-            for job in future_jobs:
-                countdown = format_countdown(job["dt"])
-                day = job["dt"].strftime("%A %d %b %Y")
-                time_str = job["dt"].strftime("%H:%M")
-                job_lines.append(f"  #{job['id']}  {day}  {time_str}  ({countdown})")
-        if past_jobs:
-            job_lines.append("")
-            job_lines.append("Jadwal yang sudah terlewat (mungkin sudah dieksekusi):")
-            for job in past_jobs[-3:]:  # only last 3 past jobs
-                day = job["dt"].strftime("%A %d %b %Y")
-                time_str = job["dt"].strftime("%H:%M")
-                job_lines.append(f"  #{job['id']}  {day}  {time_str}  (terlewat)")
-        parts.append("=== JADWAL AT JOBS ===\n" + "\n".join(job_lines))
-    else:
-        parts.append("=== JADWAL AT JOBS ===\nTidak ada jadwal at yang terdaftar.")
-
-    # --- UTBK schedule context (read from schedule_utbk.sh comments) ---
-    schedule_script = WORKDIR / "schedule_utbk.sh"
-    if schedule_script.exists():
-        try:
-            script_text = schedule_script.read_text(encoding="utf-8", errors="replace")
-            # Extract comment lines at the top that describe the schedule
-            comment_lines: list[str] = []
-            for line in script_text.splitlines():
-                stripped = line.strip()
-                if stripped.startswith("#") and not stripped.startswith("#!/"):
-                    comment_lines.append(stripped.lstrip("# ").strip())
-                elif comment_lines and not stripped.startswith("#"):
-                    # Stop at first non-comment line after we've started collecting
-                    break
-            if comment_lines:
-                parts.append(
-                    "=== INFORMASI JADWAL UTBK ===\n" + "\n".join(comment_lines)
-                )
-        except OSError:
-            pass
-
-    # --- Current time context ---
-    parts.append(
-        f"=== WAKTU SEKARANG ===\n"
-        f"{now.strftime('%A, %d %B %Y %H:%M:%S')}\n"
-        f"(Hari ini: {now.strftime('%Y%m%d')})"
-    )
-
-    if not parts:
-        return "Belum ada data laporan atau output tersedia."
-
-    return "\n\n".join(parts)
 
 
 class Screen:
@@ -896,18 +797,60 @@ class LogScreen(Screen):
         safe_addstr(win, rows - 1, 2, "[R] Refresh  [J/K] Scroll", cp(C_MENU))
 
 
-class AIScreen(Screen):
-    """Interactive AI chat using Ollama API."""
+class AgentActivityScreen(Screen):
+    """Real-time agent routing and tool activity monitor."""
 
-    SYSTEM_PROMPT = (
-        "Kamu adalah asisten monitoring jaringan DHCP untuk ujian UTBK 2026. "
-        "Kamu membantu menganalisis data DHCP lease dari router Mikrotik. "
-        "Jika ada DATA KONTEKS yang diberikan, gunakan itu untuk menjawab "
-        "pertanyaan spesifik. Jawab dalam Bahasa Indonesia. Gunakan istilah teknis "
-        "jaringan dalam bahasa Inggris dengan backtick, contoh: `bound`, "
-        "`waiting`, `IP`, `MAC`, `DHCP`, `lease`. Jawaban singkat dan langsung ke "
-        "poin kecuali diminta detail."
-    )
+    _EVENT_ICONS = {
+        "routing":          ("→", C_WARN),
+        "tool_call":        ("⚙", C_OK),
+        "tool_result":      ("✓", C_DIM),
+        "approval_required":("⚠", C_ERR),
+        "error":            ("✗", C_ERR),
+    }
+
+    def handle_key(self, key: int, app: "App") -> bool:
+        ch = chr(key) if 0 < key < 256 else ""
+        if ch in ("c", "C"):
+            _agent_activity_log.clear()
+            return True
+        return False
+
+    def draw(self, win: Any, rows: int, cols: int) -> None:
+        safe_addstr(win, 0, 1, "Agent Activity", cp(C_TITLE) | curses.A_BOLD)
+        safe_addstr(win, 1, 1, "─" * max(1, cols - 2), cp(C_DIM))
+
+        if _HAS_AGENT and _agent_mod is not None:
+            status = _agent_mod.get_agent_status()
+            model  = status.get("model", "?")
+            skills = status.get("skills_loaded", 0)
+            safe_addstr(win, 2, 1, f"Model: {model}   Skills: {skills} loaded", cp(C_DIM))
+        else:
+            safe_addstr(win, 2, 1, "Agent tidak tersedia.", cp(C_ERR))
+
+        safe_addstr(win, 3, 1, "─" * max(1, cols - 2), cp(C_DIM))
+
+        log = list(_agent_activity_log)
+        content_rows = rows - 6
+        if not log:
+            safe_addstr(win, 5, 2, "Belum ada aktivitas.", cp(C_DIM))
+            safe_addstr(win, 6, 2, "Kirim pesan di [6] AI Chat untuk melihat aktivitas.", cp(C_DIM))
+        else:
+            start = max(0, len(log) - content_rows)
+            for i, entry in enumerate(log[start:]):
+                if i >= content_rows:
+                    break
+                evt   = entry.get("event_type", "")
+                icon, color = self._EVENT_ICONS.get(evt, ("·", C_DIM))
+                ts    = entry.get("time", "--:--:--")
+                text  = entry.get("content", "")
+                line  = f"[{ts}] {icon} {text}"
+                safe_addstr(win, 4 + i, 2, line[: cols - 4], cp(color))
+
+        safe_addstr(win, rows - 1, 2, "[C] Hapus log", cp(C_MENU))
+
+
+class AIScreen(Screen):
+    """Interactive AI chat powered by NetOps multi-agent."""
 
     def __init__(self) -> None:
         super().__init__()
@@ -915,22 +858,19 @@ class AIScreen(Screen):
             self.data["history"] = []
             self.data["state"] = "IDLE"
             self.data["scroll"] = 0
-            self.data["error"] = ""
             self.data["input_buf"] = ""
             self.data["input_mode"] = True
-            self.data["use_context"] = True
-        self._langgraph_agent: Any = None
-        self._langgraph_config: dict[str, Any] = {}
+            self.data["pending_approval"] = None
+        self._agent: Any = None
+        self._agent_config: dict[str, Any] = {}
         if _HAS_AGENT and _agent_mod is not None:
             try:
-                self._langgraph_agent, self._langgraph_config = \
+                self._agent, self._agent_config = \
                     _agent_mod.create_agent(thread_id=str(id(self)))
-            except Exception as _e:
-                err_str = str(_e)
-                self.data["error"] = f"Agent init error: {err_str}"
+            except Exception as exc:
                 self.data["history"].append({
                     "role": "assistant",
-                    "content": f"⚠ Agent init gagal (fallback ke Ollama): {err_str}",
+                    "content": f"⚠ Agent init gagal: {exc}",
                 })
 
     def refresh(self) -> None:
@@ -944,52 +884,60 @@ class AIScreen(Screen):
             self.data["history"].append({"role": "user", "content": buf})
             self.data["input_buf"] = ""
             self.data["state"] = "WAITING"
-            history_copy = list(self.data["history"])
-            use_context = self.data.get("use_context", True)
-            self.data["scroll"] = 999999  # will be clamped to max in draw
+            self.data["scroll"] = 999999
+            user_msg = buf
 
         threading.Thread(
             target=self._call_agent,
-            args=(history_copy, use_context, app),
+            args=(user_msg, app),
             daemon=True,
         ).start()
 
-    def _call_agent(self, history: list[dict[str, str]], use_context: bool, app: "App") -> None:
-        """Run LangGraph agent in background thread. Falls back to _call_ollama if unavailable."""
-        if not _HAS_AGENT or self._langgraph_agent is None:
-            self._call_ollama(history, use_context, app)
+    def _call_agent(self, user_msg: str, app: "App") -> None:
+        """Stream agent response in a background thread."""
+        if not _HAS_AGENT or self._agent is None:
+            with self._lock:
+                self.data["history"].append({
+                    "role": "assistant",
+                    "content": "⚠ Agent tidak tersedia. Pastikan modul agent.py dan dependencies terinstall.",
+                })
+                self.data["state"] = "IDLE"
+            app._wake.set()
             return
-
-        user_msg = history[-1]["content"]
-
-        # Inject file-based context only on first message of the session
-        if use_context and len(history) == 1:
-            ctx = build_data_context()
-            if ctx:
-                user_msg = f"[KONTEKS DATA SISTEM]\n{ctx}\n[/KONTEKS]\n\n{user_msg}"
 
         ai_chunks: list[str] = []
         try:
-            import agent as _am
-            for event_type, content in _am.stream_agent_response(
-                self._langgraph_agent, self._langgraph_config, user_msg
+            for event_type, content in _agent_mod.stream_agent_response(
+                self._agent, self._agent_config, user_msg
             ):
+                ts = dt.datetime.now().strftime("%H:%M:%S")
                 with self._lock:
-                    if event_type == "tool_call":
+                    if event_type in ("routing", "tool_call", "tool_result"):
+                        icon = {"routing": "→", "tool_call": "⚙", "tool_result": "✓"}.get(event_type, "·")
                         self.data["history"].append({
                             "role": "agent_event",
-                            "content": f"[🔧 {content}]",
+                            "content": f"[{icon} {content}]",
                         })
                         self.data["scroll"] = 999999
-                    elif event_type == "tool_result":
-                        self.data["history"].append({
-                            "role": "agent_event",
-                            "content": f"[✓ {content}]",
+                        _agent_activity_log.append({
+                            "event_type": event_type,
+                            "content": content,
+                            "time": ts,
                         })
-                        self.data["scroll"] = 999999
                     elif event_type == "ai":
                         ai_chunks.append(content)
+                    elif event_type == "approval_required":
+                        self.data["pending_approval"] = content
+                        self.data["state"] = "APPROVAL"
+                        self.data["scroll"] = 999999
+                        _agent_activity_log.append({
+                            "event_type": "approval_required",
+                            "content": content,
+                            "time": ts,
+                        })
                 app._wake.set()
+                if event_type == "approval_required":
+                    return
 
             final = "\n".join(ai_chunks).strip()
             with self._lock:
@@ -998,172 +946,43 @@ class AIScreen(Screen):
                 self.data["state"] = "IDLE"
                 self.data["scroll"] = 999999
         except Exception as exc:
-            err_msg = str(exc)
-            if "GraphRecursionError" in err_msg or "recursion" in err_msg.lower():
-                err_msg = "Terlalu banyak iterasi tool (max 15). Coba pertanyaan yang lebih spesifik."
-                with self._lock:
-                    self.data["history"].append({
-                        "role": "assistant",
-                        "content": f"⚠ {err_msg}",
-                    })
-                    self.data["state"] = "IDLE"
-            elif "INVALIDCHATHISTORY" in err_msg or "do not have a corresponding ToolMessage" in err_msg:
-                # Auto-reset: create a new thread to clear corrupt history, then retry
-                reset_ok = False
-                if _HAS_AGENT and _agent_mod is not None:
-                    try:
-                        new_tid = f"{id(self)}-{int(time.time())}"
-                        self._langgraph_agent, self._langgraph_config = \
-                            _agent_mod.create_agent(thread_id=new_tid)
-                        reset_ok = True
-                    except Exception:
-                        pass
-
-                if reset_ok:
-                    with self._lock:
-                        self.data["history"].append({
-                            "role": "agent_event",
-                            "content": "[↺ Riwayat agent direset otomatis, mencoba ulang...]",
-                        })
-                        self.data["scroll"] = 999999
-
-                    app._wake.set()
-
-                    # Retry with fresh agent (no context injection on retry)
-                    retry_chunks: list[str] = []
-                    try:
-                        import agent as _am
-                        for event_type, content in _am.stream_agent_response(
-                            self._langgraph_agent, self._langgraph_config, user_msg
-                        ):
-                            with self._lock:
-                                if event_type == "tool_call":
-                                    self.data["history"].append({
-                                        "role": "agent_event",
-                                        "content": f"[🔧 {content}]",
-                                    })
-                                    self.data["scroll"] = 999999
-                                elif event_type == "tool_result":
-                                    self.data["history"].append({
-                                        "role": "agent_event",
-                                        "content": f"[✓ {content}]",
-                                    })
-                                    self.data["scroll"] = 999999
-                                elif event_type == "ai":
-                                    retry_chunks.append(content)
-                            app._wake.set()
-
-                        final = "\n".join(retry_chunks).strip()
-                        with self._lock:
-                            if final:
-                                self.data["history"].append({"role": "assistant", "content": final})
-                            self.data["state"] = "IDLE"
-                            self.data["scroll"] = 999999
-                    except Exception as retry_exc:
-                        with self._lock:
-                            self.data["history"].append({
-                                "role": "assistant",
-                                "content": f"⚠ Gagal setelah reset: {retry_exc}",
-                            })
-                            self.data["state"] = "IDLE"
-                else:
-                    with self._lock:
-                        self.data["history"].append({
-                            "role": "assistant",
-                            "content": "⚠ Riwayat chat rusak dan reset gagal. Tekan [C] untuk hapus riwayat secara manual.",
-                        })
-                        self.data["state"] = "IDLE"
-            else:
-                with self._lock:
-                    self.data["history"].append({
-                        "role": "assistant",
-                        "content": f"⚠ Agent error: {err_msg}",
-                    })
-                    self.data["state"] = "IDLE"
+            with self._lock:
+                self.data["history"].append({
+                    "role": "assistant",
+                    "content": f"⚠ Agent error: {exc}",
+                })
+                self.data["state"] = "IDLE"
         app._wake.set()
 
-    def _call_ollama(
-        self,
-        history: list[dict[str, str]],
-        use_context: bool,
-        app: "App",
-    ) -> None:
-        """Run Ollama API call in a background thread."""
-        if not _HAS_REQUESTS:
-            with self._lock:
-                self.data["history"].append(
-                    {
-                        "role": "assistant",
-                        "content": (
-                            "Error: library 'requests' tidak tersedia. "
-                            "Install dengan: pip install requests"
-                        ),
-                    }
-                )
-                self.data["state"] = "IDLE"
-            app._wake.set()
-            return
-
-        messages = [{"role": "system", "content": self.SYSTEM_PROMPT}]
-
-        if use_context:
-            context_data = build_data_context()
-            if context_data:
-                messages.append(
-                    {
-                        "role": "user",
-                        "content": (
-                            f"[KONTEKS DATA SISTEM]\n{context_data}\n[AKHIR KONTEKS]"
-                        ),
-                    }
-                )
-                messages.append(
-                    {
-                        "role": "assistant",
-                        "content": (
-                            "Baik, saya sudah membaca data konteks sistem. "
-                            "Silakan tanya."
-                        ),
-                    }
-                )
-
-        for msg in history:
-            messages.append(
-                {
-                    "role": msg.get("role", "user"),
-                    "content": msg.get("content", ""),
-                }
-            )
-
-        payload = {
-            "model": OLLAMA_MODEL,
-            "messages": messages,
-            "stream": False,
-            "think": False,
-            "options": {
-                "num_predict": 512,
-                "temperature": 0.4,
-            },
-        }
-
-        try:
-            resp = _requests.post(
-                f"{OLLAMA_BASE_URL}/api/chat",
-                json=payload,
-                timeout=OLLAMA_TIMEOUT,
-            )
-            resp.raise_for_status()
-            data = resp.json()
-            content = data.get("message", {}).get("content", "").strip()
-            if not content:
-                content = "(Tidak ada respons dari AI)"
-        except Exception as exc:
-            content = f"Error: {exc}"
-
+    def _submit_approval(self, decision: str, app: "App") -> None:
+        """Submit approval decision and resume the paused graph."""
         with self._lock:
-            self.data["history"].append({"role": "assistant", "content": content})
-            self.data["state"] = "IDLE"
-            self.data["scroll"] = 999999  # will be clamped to max in draw
+            self.data["pending_approval"] = None
+            self.data["state"] = "WAITING"
+            self.data["history"].append({
+                "role": "agent_event",
+                "content": f"[✓ Operator: {decision.upper()}]",
+            })
+            self.data["scroll"] = 999999
+        app._wake.set()
+        threading.Thread(
+            target=self._resume_after_approval,
+            args=(decision, app),
+            daemon=True,
+        ).start()
+
+    def _resume_after_approval(self, decision: str, app: "App") -> None:
+        try:
+            _agent_mod.submit_approval(self._agent, self._agent_config, decision)
+            with self._lock:
+                self.data["state"] = "IDLE"
+        except Exception as exc:
+            with self._lock:
+                self.data["history"].append({
+                    "role": "assistant",
+                    "content": f"⚠ Resume setelah approval gagal: {exc}",
+                })
+                self.data["state"] = "IDLE"
         app._wake.set()
 
     def handle_key(self, key: int, app: "App") -> bool:
@@ -1216,21 +1035,22 @@ class AIScreen(Screen):
                     self.data["input_buf"] = self.data.get("input_buf", "") + chr(key)
                 return True
 
-            if key == 4:
-                with self._lock:
-                    self.data["use_context"] = not self.data.get("use_context", True)
-                return True
-
             return False
+
+        # Approval response (Y/N) when waiting for operator decision
+        with self._lock:
+            state = self.data.get("state", "IDLE")
+        if state == "APPROVAL":
+            if ch in ("y", "Y"):
+                self._submit_approval("approved", app)
+                return True
+            if ch in ("n", "N"):
+                self._submit_approval("rejected", app)
+                return True
 
         if ch in ("i", "I") or key in (10, 13):
             with self._lock:
                 self.data["input_mode"] = True
-            return True
-
-        if ch in ("d", "D"):
-            with self._lock:
-                self.data["use_context"] = not self.data.get("use_context", True)
             return True
 
         if ch in ("c", "C"):
@@ -1240,14 +1060,13 @@ class AIScreen(Screen):
                     self.data["state"] = "IDLE"
                     self.data["scroll"] = 0
                     self.data["input_buf"] = ""
-            # Reset LangGraph memory for fresh conversation
-            if _HAS_AGENT and _agent_mod is not None:
-                try:
-                    new_tid = f"{id(self)}-{int(time.time())}"
-                    self._langgraph_agent, self._langgraph_config = \
-                        _agent_mod.create_agent(thread_id=new_tid)
-                except Exception:
-                    pass
+                if _HAS_AGENT and _agent_mod is not None:
+                    try:
+                        new_tid = f"{id(self)}-{int(time.time())}"
+                        self._agent, self._agent_config = \
+                            _agent_mod.create_agent(thread_id=new_tid)
+                    except Exception:
+                        pass
             return True
 
         if ch in ("j", "J"):
@@ -1274,28 +1093,14 @@ class AIScreen(Screen):
             scroll = int(self.data.get("scroll", 0))
             input_buf = self.data.get("input_buf", "")
             input_mode = self.data.get("input_mode", True)
-            use_context = self.data.get("use_context", True)
 
-        ctx_indicator = "[D:ON] " if use_context else "[D:OFF]"
-        if _HAS_AGENT and self._langgraph_agent is not None:
-            agent_label = "Agent+SSH"
-        elif _HAS_AGENT and self.data.get("error"):
-            agent_label = "Ollama (init error)"
-        else:
-            agent_label = "Ollama"
+        agent_label = "NetOps Agent" if (_HAS_AGENT and self._agent is not None) else "Agent tidak tersedia"
         safe_addstr(
-            win,
-            0,
-            1,
-            f"AI Chat  ({agent_label})  {ctx_indicator}",
+            win, 0, 1,
+            f"AI Chat  [{agent_label}]",
             cp(C_TITLE) | curses.A_BOLD,
         )
         safe_addstr(win, 1, 1, "─" * max(1, cols - 2), cp(C_DIM))
-
-        if not _HAS_REQUESTS:
-            safe_addstr(win, 3, 2, "requests tidak terinstall.", cp(C_ERR))
-            safe_addstr(win, 4, 2, "Jalankan: pip install requests", cp(C_WARN))
-            return
 
         input_sep_row = rows - 4
         input_row = rows - 3
@@ -1373,13 +1178,30 @@ class AIScreen(Screen):
 
         safe_addstr(win, input_sep_row, 1, "─" * max(1, cols - 2), cp(C_DIM))
 
-        if state == "WAITING":
+        if state == "APPROVAL":
+            with self._lock:
+                approval_data = self.data.get("pending_approval", "")
+            safe_addstr(win, input_sep_row - 2, 1, "─" * max(1, cols - 2), cp(C_ERR))
+            safe_addstr(win, input_sep_row - 1, 2,
+                        "⚠ APPROVAL REQUIRED — agent meminta izin sebelum melanjutkan",
+                        cp(C_ERR) | curses.A_BOLD)
+            safe_addstr(win, input_row, 2,
+                        f"Aksi: {str(approval_data)[:cols-10]}",
+                        cp(C_WARN))
+            safe_addstr(win, status_row, 2,
+                        "[Y] Setuju   [N] Tolak",
+                        cp(C_OK) | curses.A_BOLD)
+            safe_addstr(win, hint_row, 1,
+                        "Operator harus menyetujui aksi config agent sebelum dieksekusi.",
+                        cp(C_DIM))
+            return
+        elif state == "WAITING":
             spin = SPINNER[int(time.time() * 8) % len(SPINNER)]
             safe_addstr(
                 win,
                 input_row,
                 2,
-                f"{spin} AI sedang berpikir...",
+                f"{spin} Agent sedang bekerja...",
                 cp(C_WARN) | curses.A_BOLD,
             )
         else:
@@ -1410,32 +1232,18 @@ class AIScreen(Screen):
 
         mode_label = "INSERT" if input_mode else "NORMAL"
         mode_attr = cp(C_OK) if input_mode else cp(C_WARN)
-        safe_addstr(
-            win,
-            status_row,
-            2,
-            f"Mode: {mode_label}",
-            mode_attr | curses.A_BOLD,
-        )
-        if use_context:
-            safe_addstr(win, status_row, 14, "  Data: ✓ terhubung ke laporan", cp(C_DIM))
-        else:
-            safe_addstr(win, status_row, 14, "  Data: ✗ konteks dinonaktifkan", cp(C_DIM))
+        safe_addstr(win, status_row, 2, f"Mode: {mode_label}", mode_attr | curses.A_BOLD)
 
         if input_mode:
             safe_addstr(
-                win,
-                hint_row,
-                1,
-                "[Enter] Kirim  [Esc] Nav  [^U] Hapus baris  [↑↓] Scroll  [^D] Toggle data",
+                win, hint_row, 1,
+                "[Enter] Kirim  [Esc] Nav  [^U] Hapus baris  [↑↓] Scroll",
                 cp(C_MENU),
             )
         else:
             safe_addstr(
-                win,
-                hint_row,
-                1,
-                "[I] Insert  [C] Hapus riwayat  [D] Toggle data  [J/K] Scroll  [1-6] Menu",
+                win, hint_row, 1,
+                "[I] Insert  [C] Hapus riwayat  [J/K] Scroll  [1-7] Menu  [7] Aktivitas",
                 cp(C_MENU),
             )
 
@@ -1453,6 +1261,7 @@ class App:
             LaporanScreen(),
             LogScreen(),
             AIScreen(),
+            AgentActivityScreen(),
         ]
         self.current = 0
         self._wake = threading.Event()
@@ -1549,7 +1358,7 @@ class App:
 
         if self.current == 5:
             ai_screen = self.screens[5]
-            if ai_screen.data.get("input_mode", True):
+            if ai_screen.data.get("input_mode", True) or ai_screen.data.get("state") == "APPROVAL":
                 consumed = ai_screen.handle_key(key, self)
                 if consumed:
                     self._wake.set()
@@ -1558,7 +1367,7 @@ class App:
         if ch in ("q", "Q"):
             return False
 
-        if ch and ch in "123456":
+        if ch and ch in "1234567":
             idx = int(ch) - 1
             if idx != self.current:
                 self.current = idx
