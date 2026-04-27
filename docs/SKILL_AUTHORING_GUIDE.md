@@ -203,9 +203,9 @@ Daftar tool yang dapat didefinisikan di frontmatter `tools:`:
 | Tool | Deskripsi |
 |---|---|
 | `get_dhcp_leases` | Data lease satu DHCP server |
-| `get_all_leases_for_router` | Semua lease di satu router |
+| `get_router_leases` | Semua lease di satu router |
 | `search_device` | Cari perangkat by IP atau MAC |
-| `audit_all_routers` | Audit DHCP semua router |
+| `audit_dhcp` | Audit DHCP semua router |
 
 ### Routing & Interface
 | Tool | Deskripsi |
@@ -213,6 +213,15 @@ Daftar tool yang dapat didefinisikan di frontmatter `tools:`:
 | `get_routing_full` | Routing table + OSPF + BGP lengkap |
 | `get_router_config` | Konfigurasi router (berbagai section) |
 | `get_interface_stats` | Error dan drop per interface |
+
+### Traffic
+| Tool | Deskripsi |
+|---|---|
+| `get_interface_traffic` | TX/RX rate realtime per interface |
+| `get_traffic_summary` | Ringkasan traffic semua interface |
+| `get_top_talkers` | IP dengan koneksi terbanyak |
+| `get_queue_stats` | Statistik queue dan drop |
+| `get_traffic_all` | Traffic stats semua router paralel |
 
 ### Log
 | Tool | Deskripsi |
@@ -224,7 +233,7 @@ Daftar tool yang dapat didefinisikan di frontmatter `tools:`:
 |---|---|
 | `run_diagnostic` | Ping atau traceroute dari router |
 | `run_command` | Perintah read-only di satu router |
-| `run_command_all_routers` | Perintah yang sama di semua router |
+| `run_command_all` | Perintah yang sama di semua router |
 
 ### Config & Backup
 | Tool | Deskripsi |
@@ -236,14 +245,14 @@ Daftar tool yang dapat didefinisikan di frontmatter `tools:`:
 ### Security
 | Tool | Deskripsi |
 |---|---|
-| `security_audit` | Audit user, NTP, firewall |
+| `audit_security` | Audit user, NTP, firewall |
 
 ### Laporan
 | Tool | Deskripsi |
 |---|---|
 | `list_reports` | Daftar file laporan |
-| `read_report` | Baca laporan Markdown |
-| `read_report_section` | Baca section tertentu dari laporan |
+| `get_report` | Baca laporan Markdown |
+| `get_report_section` | Baca section tertentu dari laporan |
 | `get_report_toc` | Daftar isi laporan |
 
 ---
