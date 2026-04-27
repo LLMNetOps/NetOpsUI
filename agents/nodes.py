@@ -243,9 +243,99 @@ def _make_specialist_node(agent_name: str, tools: list):
     return _node
 
 
+# ── Config node with human-in-the-loop approval ───────────────────────────────
+
+# Tools that require operator approval before execution
+_APPROVAL_REQUIRED_TOOLS = {"backup_router_config"}
+
+_CONFIG_TOOLS_MAP = {t.name: t for t in CONFIG_TOOLS}
+_CONFIG_LLM = _make_llm(temperature=0.3).bind_tools(CONFIG_TOOLS)
+
+
+def config_node(state: dict) -> dict:
+    """Config specialist with interrupt() gate for destructive tools."""
+    from agent import _skill_lib  # noqa: PLC0415
+    from langgraph.types import interrupt  # noqa: PLC0415
+
+    skill_names = state.get("injected_skills") or []
+    skill_objs = [s for n in skill_names if (s := _skill_lib.get_by_name(n))]
+    skill_ctx = _skill_lib.inject_context(skill_objs) if skill_objs else ""
+
+    sys_msg = SystemMessage(content=_SPECIALIST_SYS.format(
+        role=_AGENT_ROLES["config_agent"],
+        skill_context=skill_ctx,
+    ).strip())
+
+    messages = [sys_msg] + list(state["messages"])[-10:]
+    logs: list[dict] = []
+
+    for _ in range(12):
+        response = _CONFIG_LLM.invoke(messages)
+        messages = messages + [response]
+
+        if not getattr(response, "tool_calls", None):
+            break
+
+        for tc in response.tool_calls:
+            name = tc["name"]
+            args = tc.get("args", {})
+            args_str = ", ".join(f"{k}={json.dumps(v)}" for k, v in args.items())
+            logs.append(_log("config_agent", "tool_call", f"{name}({args_str})"))
+
+            # Gate: interrupt for tools that need approval
+            if name in _APPROVAL_REQUIRED_TOOLS:
+                router = args.get("router_name", "router")
+                approval_req = {
+                    "agent": "config_agent",
+                    "action": f"Backup config router '{router}'",
+                    "risk_level": "medium",
+                    "details": args,
+                }
+                logs.append(_log("config_agent", "approval_required",
+                                  f"Menunggu approval: {approval_req['action']}"))
+                decision = interrupt(approval_req)
+
+                if decision != "approved":
+                    result = f"Aksi dibatalkan oleh operator (keputusan: {decision})."
+                    logs.append(_log("config_agent", "tool_result", result))
+                    messages.append(ToolMessage(content=result, tool_call_id=tc["id"]))
+                    continue
+
+                logs.append(_log("config_agent", "tool_result", "Operator menyetujui — eksekusi backup..."))
+
+            tool_fn = _CONFIG_TOOLS_MAP.get(name)
+            if tool_fn is None:
+                result = f"Error: tool '{name}' tidak ditemukan."
+            else:
+                try:
+                    result = tool_fn.invoke(args)
+                except Exception as exc:
+                    result = f"Error: {exc}"
+
+            preview = str(result)[:120].replace("\n", " ")
+            if len(str(result)) > 120:
+                preview += "…"
+            logs.append(_log("config_agent", "tool_result", preview))
+            messages.append(ToolMessage(content=str(result), tool_call_id=tc["id"]))
+
+    final_msg = messages[-1]
+    if isinstance(final_msg, AIMessage):
+        content = _clean(final_msg.content or "")
+        if content:
+            final_msg = AIMessage(content=content)
+
+    logs.append(_log("config_agent", "routing", "← kembali ke supervisor"))
+    return {
+        "messages": [final_msg],
+        "active_agent": "config_agent",
+        "next_agent": "supervisor",
+        "agent_log": logs,
+    }
+
+
 # ── Exported node functions ───────────────────────────────────────────────────
 
 monitor_node   = _make_specialist_node("monitor_agent",  MONITOR_TOOLS)
 diagnose_node  = _make_specialist_node("diagnose_agent", DIAGNOSE_TOOLS)
-config_node    = _make_specialist_node("config_agent",   CONFIG_TOOLS)
 security_node  = _make_specialist_node("security_agent", SECURITY_TOOLS)
+# config_node defined above with interrupt() support
