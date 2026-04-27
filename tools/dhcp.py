@@ -84,7 +84,7 @@ def get_dhcp_leases(router_name: str, dhcp_server: str) -> str:
 
 
 @tool
-def get_all_leases_for_router(router_name: str) -> str:
+def get_router_leases(router_name: str) -> str:
     """
     Ambil dan agregasi semua DHCP lease dari semua DHCP server di satu router.
     Berguna untuk router dengan banyak DHCP server (contoh: FILKOM, FK-8).
@@ -158,9 +158,9 @@ def search_device(query: str) -> str:
 
 
 @tool
-def audit_all_routers() -> str:
+def audit_dhcp() -> str:
     """
-    Audit menyeluruh semua router: ambil data DHCP lease dari seluruh
+    Audit menyeluruh DHCP semua router: ambil data lease dari seluruh
     perangkat secara paralel. Menampilkan ringkasan status per router.
     Proses ini membutuhkan 30-90 detik.
     """

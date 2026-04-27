@@ -47,7 +47,7 @@ def _audit_one(entry: dict[str, Any]) -> dict[str, Any]:
 
 
 @tool
-def security_audit(router_name: str = "all") -> str:
+def audit_security(router_name: str = "all") -> str:
     """
     Audit keamanan router: cek user accounts, NTP sync, dan keberadaan
     default admin. Bisa audit satu router atau semua router sekaligus.

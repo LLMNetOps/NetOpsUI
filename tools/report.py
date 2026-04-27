@@ -29,7 +29,7 @@ def list_reports() -> str:
 
 
 @tool
-def read_report(filename: str) -> str:
+def get_report(filename: str) -> str:
     """
     Baca isi file laporan dari direktori laporan/.
     Gunakan list_reports() untuk mengetahui nama file yang tersedia.
@@ -66,16 +66,16 @@ def read_report(filename: str) -> str:
         return (
             f"=== {target.name} (8000/{len(content)} karakter) ===\n"
             + content[:8000]
-            + f"\n...[terpotong. Gunakan read_report_section() untuk bagian spesifik.]..."
+            + f"\n...[terpotong. Gunakan get_report_section() untuk bagian spesifik.]..."
         )
     return f"=== {target.name} ===\n{content}"
 
 
 @tool
-def read_report_section(filename: str, section: str) -> str:
+def get_report_section(filename: str, section: str) -> str:
     """
     Baca satu section spesifik dari laporan berdasarkan nomor atau kata kunci.
-    Lebih efisien dari read_report() untuk laporan yang panjang.
+    Lebih efisien dari get_report() untuk laporan yang panjang.
     Args:
         filename: Nama file laporan atau 'latest'.
         section:  Nomor section ('7', '8', '9') atau kata kunci judul

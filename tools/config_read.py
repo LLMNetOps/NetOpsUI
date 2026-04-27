@@ -72,7 +72,7 @@ def run_command(router_name: str, command: str) -> str:
 
 
 @tool
-def run_command_all_routers(command: str) -> str:
+def run_command_all(command: str) -> str:
     """
     Jalankan perintah MikroTik read-only yang SAMA di SEMUA router secara paralel.
     Jauh lebih efisien dari memanggil run_command() satu per satu.
