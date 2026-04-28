@@ -1584,9 +1584,22 @@ class App:
 
 if __name__ == "__main__":
     import locale
+    import logging
+    import sys
+
+    # Redirect stderr ke log file — mencegah traceback paramiko/library lain
+    # merusak tampilan curses di terminal.
+    _stderr_log = open(WORKDIR / "netops_stderr.log", "a", buffering=1)
+    sys.stderr = _stderr_log
+
+    # Suppress paramiko transport thread exception noise
+    logging.getLogger("paramiko").setLevel(logging.CRITICAL)
+    logging.getLogger("paramiko.transport").setLevel(logging.CRITICAL)
 
     locale.setlocale(locale.LC_ALL, "")
     try:
         App().run()
     except KeyboardInterrupt:
         pass
+    finally:
+        _stderr_log.close()

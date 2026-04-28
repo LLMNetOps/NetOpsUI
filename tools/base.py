@@ -43,7 +43,7 @@ def _load_dotenv() -> None:
 _load_dotenv()
 
 OLLAMA_BASE_URL: str = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-OLLAMA_MODEL: str = os.getenv("OLLAMA_MODEL", "qwen3.6:35b-a3b-q8_0")
+OLLAMA_MODEL: str = os.getenv("OLLAMA_MODEL", "gemma4:e4b")
 
 # ── SSH (dari mikrotik_agent.py) ──────────────────────────────────────────────
 
@@ -51,22 +51,42 @@ _HAS_SSH = False
 
 try:
     from mikrotik_agent import (          # type: ignore[import]
-        ssh_run_command,
-        ssh_get_dhcp_leases,
+        ssh_run_command as _ssh_run_command,
+        ssh_get_dhcp_leases as _ssh_get_dhcp_leases,
         parse_mikrotik_dhcp_output,
     )
     _HAS_SSH = True
 except ImportError:
     _HAS_SSH = False
 
-    def ssh_run_command(*a: Any, **kw: Any) -> tuple[bool, str, str]:  # type: ignore[misc]
+    def _ssh_run_command(*a: Any, **kw: Any) -> tuple[bool, str, str]:  # type: ignore[misc]
         return (False, "", "mikrotik_agent.py tidak ditemukan")
 
-    def ssh_get_dhcp_leases(*a: Any, **kw: Any) -> tuple[bool, str, str]:  # type: ignore[misc]
+    def _ssh_get_dhcp_leases(*a: Any, **kw: Any) -> tuple[bool, str, str]:  # type: ignore[misc]
         return (False, "", "mikrotik_agent.py tidak ditemukan")
 
     def parse_mikrotik_dhcp_output(*a: Any, **kw: Any) -> list:  # type: ignore[misc]
         return []
+
+
+def _safe_call(fn, *a: Any, **kw: Any) -> tuple[bool, str, str]:
+    """Panggil fungsi SSH dan tangkap semua exception menjadi (False, '', err)."""
+    try:
+        return fn(*a, **kw)
+    except EOFError:
+        return False, "", "SSH error: EOFError — koneksi terputus saat transfer data."
+    except Exception as exc:
+        return False, "", f"SSH error: {type(exc).__name__}: {exc}"
+
+
+def ssh_run_command(*a: Any, **kw: Any) -> tuple[bool, str, str]:
+    """ssh_run_command dengan exception safety (EOFError, SSHException, dll)."""
+    return _safe_call(_ssh_run_command, *a, **kw)
+
+
+def ssh_get_dhcp_leases(*a: Any, **kw: Any) -> tuple[bool, str, str]:
+    """ssh_get_dhcp_leases dengan exception safety."""
+    return _safe_call(_ssh_get_dhcp_leases, *a, **kw)
 
 
 # ── Config ────────────────────────────────────────────────────────────────────
@@ -153,3 +173,22 @@ def get_all_routers() -> list[dict[str, Any]]:
 def get_router_names() -> list[str]:
     """Return sorted list nama router yang valid."""
     return sorted(VALID_ROUTER_NAMES)
+
+
+def ssh_error_hint(err: str) -> str:
+    """Terjemahkan pesan error SSH menjadi diagnosis yang actionable."""
+    if "Error reading SSH protocol banner" in err:
+        return (
+            f"{err} — Port 22 terbuka (TCP) tetapi SSH handshake gagal. "
+            "Kemungkinan SSH ACL router membatasi akses dari sumber IP ini. "
+            "Gunakan check_ssh_access untuk diagnosis lebih detail."
+        )
+    if "timed out" in err.lower() or "Connection timed out" in err:
+        return f"{err} — Firewall kemungkinan memblokir port 22 (DROP)."
+    if "Connection refused" in err.lower():
+        return f"{err} — SSH service tidak berjalan atau port 22 di-block (REJECT)."
+    if "Network is unreachable" in err or "No route to host" in err:
+        return f"{err} — Tidak ada rute ke host, masalah routing atau link down."
+    if "Authentication failed" in err:
+        return f"{err} — Kredensial SSH salah (username/password)."
+    return err

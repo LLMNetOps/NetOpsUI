@@ -12,6 +12,7 @@ triggers:
   - router offline
 tools:
   - check_reachability
+  - check_ssh_access
   - get_system_info
   - run_command
   - get_router_log
@@ -27,9 +28,16 @@ router mati, link putus, IP berubah, atau firewall yang memblokir akses manajeme
 
 ## Prosedur
 
-### Langkah 1: Konfirmasi Router Tidak Reachable
+### Langkah 1: Konfirmasi Status Reachability
 Gunakan `check_reachability` pada router yang dilaporkan. Catat apakah ping benar-benar
 gagal atau hanya lambat (high latency).
+
+**Jika ping berhasil (ICMP ok) tetapi SSH gagal:** Ini berbeda dari "router down".
+Gunakan `check_ssh_access` untuk diagnosa SSH:
+- ICMP ✓, TCP:22 ✓, SSH banner ✗ → **SSH ACL**: router membatasi SSH dari sumber IP ini.
+  Solusi: tambahkan IP sumber ke `/ip/ssh` allowed-addresses di router tersebut.
+- ICMP ✓, TCP:22 timeout → **Firewall DROP**: port 22 diblokir dari sumber ini.
+- ICMP ✓, TCP:22 refused → **SSH nonaktif** atau firewall REJECT.
 
 ### Langkah 2: Cek Router Tetangga
 Jika ada router tetangga (uplink atau same-segment), cek reachability router tetangga:

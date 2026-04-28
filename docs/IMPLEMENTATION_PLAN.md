@@ -9,15 +9,16 @@
 
 ## Ringkasan Phases
 
-| Phase | Nama | Deskripsi | Status |
-|---|---|---|---|
-| 1 | Foundation | Branch setup + struktur direktori + base layer | ⬜ Belum |
-| 2 | Tool Extraction | Pecah tools dari agent.py ke tools/*.py | ⬜ Belum |
-| 3 | Skill System | SkillLibrary + format + skill contoh | ⬜ Belum |
-| 4 | Multi-Agent Graph | Supervisor + 4 specialist agents | ⬜ Belum |
-| 5 | New Tools | traffic.py + config_backup.py + skill-nya | ⬜ Belum |
-| 6 | TUI Refactor | Pisahkan LLM logic + Agent Activity screen | ⬜ Belum |
-| 7 | Human-in-the-Loop | Approval mechanism via interrupt() | ⬜ Belum |
+| Phase | Nama | Deskripsi | Status | Commit |
+|---|---|---|---|---|
+| 1 | Foundation | Branch setup + struktur direktori + base layer | ✅ Selesai | 3459187 |
+| 2 | Tool Extraction | Pecah tools dari agent.py ke tools/*.py | ✅ Selesai | f9cd9d9 |
+| 2b | Tool Naming | Standarisasi nama tool (tool naming standardization) | ✅ Selesai | 01561ad |
+| 3 | Skill System | SkillLibrary + format + 9 skill contoh | ✅ Selesai | 2eeb91e |
+| 4 | Multi-Agent Graph | Supervisor + 4 specialist agents | ✅ Selesai | ff50090 |
+| 5 | New Tools | traffic.py + config_backup.py | ✅ Selesai | 2f2d897 |
+| 6 | TUI Refactor | Pisahkan LLM logic + Agent Activity screen | ✅ Selesai | 463e419 |
+| 7 | Human-in-the-Loop | Approval mechanism via interrupt() | ✅ Selesai | b031262 |
 
 **Legend:** ⬜ Belum · 🔄 In Progress · ✅ Selesai · 🔁 Review
 
@@ -38,70 +39,76 @@
 | P1-05 | Buat `requirements.txt` | `requirements.txt` | Semua dependency terdokumentasi dengan versi minimum |
 
 ### Definition of Done Phase 1
-- `from tools.base import ssh_run_command, _load_config` berhasil
-- `git status` di branch `netops`
-- `requirements.txt` ada dan akurat
+- `from tools.base import ssh_run_command, _load_config` berhasil ✅
+- `git status` di branch `netops` ✅
+- `requirements.txt` ada dan akurat ✅
 
 ---
 
 ## Phase 2: Tool Extraction
 
-**Goal:** Semua tools dari `agent.py` dipindah ke `tools/*.py` tanpa perubahan logic. `agent.py` lama masih tetap ada (belum dihapus) sebagai referensi.
-
-### Tasks
-
-| ID | Task | File Target | Source di agent.py |
-|---|---|---|---|
-| P2-01 | Ekstrak reachability tools | `tools/reachability.py` | `check_reachability` |
-| P2-02 | Ekstrak system tools | `tools/system.py` | `get_system_info` |
-| P2-03 | Ekstrak routing tools | `tools/routing.py` | `get_routing_full`, `get_router_config(routing-*)` |
-| P2-04 | Ekstrak interface tools | `tools/interface.py` | bagian interface dari `collect_network_data` |
-| P2-05 | Ekstrak DHCP tools | `tools/dhcp.py` | `get_dhcp_leases`, `get_all_leases_for_router`, `search_device`, `audit_all_routers` |
-| P2-06 | Ekstrak log tools | `tools/log.py` | `get_router_log` |
-| P2-07 | Ekstrak config_read tools | `tools/config_read.py` | `get_router_config`, `run_command`, `run_command_all_routers` |
-| P2-08 | Ekstrak security tools | `tools/security.py` | bagian security dari `collect_network_data` |
-| P2-09 | Ekstrak diagnostic tools | `tools/diagnostic.py` | `run_diagnostic`, `check_reachability` (ping dari router) |
-| P2-10 | Ekstrak report tools | `tools/report.py` | `list_reports`, `read_report`, `read_report_section`, `get_report_toc` |
-| P2-11 | Ekstrak utility tools | `tools/utility.py` | `list_routers`, `get_current_time` |
-| P2-12 | Verifikasi semua tools importable | — | `from tools.dhcp import get_dhcp_leases` OK untuk semua tools |
-
-### Catatan P2
-- Jangan hapus `agent.py` lama dulu — pakai sebagai referensi sampai Phase 4 selesai
-- Logic SSH tidak berubah — hanya reorganisasi file
-- Setiap file `tools/*.py` mengimport dari `tools.base`
-
-### Definition of Done Phase 2
-- `tools/` berisi 10+ file
-- Semua `@tool` decorator masih ada di masing-masing file
-- Import dari `tools.*` berfungsi tanpa error
-- `agent.py` lama masih ada (belum dihapus)
-
----
-
-## Phase 3: Skill System
-
-**Goal:** SkillLibrary berfungsi, format skill terdefinisi, minimal 8 skill contoh tersedia.
+**Goal:** Semua tools dari `agent.py` dipindah ke `tools/*.py` tanpa perubahan logic. 20 tool atomic tersedia.
 
 ### Tasks
 
 | ID | Task | File Target | DoD |
 |---|---|---|---|
-| P3-01 | Implementasi `SkillLibrary` class | `agent.py` (bagian atas) | Load, search, hot reload berfungsi |
-| P3-02 | Implementasi file watcher | `agent.py` | Perubahan file `.md` ter-detect dalam 2 detik |
-| P3-03 | Buat skill: `dhcp-server-health` | `skills/dhcp/dhcp-server-health.md` | Format valid, triggers match |
+| P2-01 | Ekstrak reachability tools | `tools/reachability.py` | `check_reachability` |
+| P2-02 | Ekstrak system tools | `tools/system.py` | `get_system_info` |
+| P2-03 | Ekstrak routing tools | `tools/routing.py` | `get_routing_full`, `get_router_config` |
+| P2-04 | Ekstrak interface tools | `tools/interface.py` | `get_interface_stats` |
+| P2-05 | Ekstrak DHCP tools | `tools/dhcp.py` | `get_dhcp_leases`, `get_router_leases`, `search_device`, `audit_dhcp` |
+| P2-06 | Ekstrak log tools | `tools/log.py` | `get_router_log` |
+| P2-07 | Ekstrak config_read tools | `tools/config_read.py` | `run_command`, `run_command_all` |
+| P2-08 | Ekstrak security tools | `tools/security.py` | `audit_security` |
+| P2-09 | Ekstrak diagnostic tools | `tools/diagnostic.py` | `run_diagnostic` |
+| P2-10 | Ekstrak report tools | `tools/report.py` | `list_reports`, `get_report`, `get_report_section`, `get_report_toc` |
+| P2-11 | Ekstrak utility tools | `tools/utility.py` | `list_routers`, `get_current_time` |
+| P2-12 | Standarisasi nama tool | `tools/report.py`, `tools/dhcp.py`, dll | `get_report`, `audit_dhcp`, `get_router_leases`, `audit_security`, `run_command_all` konsisten |
+| P2-13 | Verifikasi semua tools importable | — | Import dari `tools.*` OK untuk semua tools |
+
+### Catatan P2
+- 20 tool atomic tersedia setelah Phase 2 selesai
+- Nama tool yang distandarisasi (Phase 2b): `read_report` → `get_report`, `read_report_section` → `get_report_section`, `get_all_leases_for_router` → `get_router_leases`, `audit_all_routers` → `audit_dhcp`, `run_command_all_routers` → `run_command_all`
+
+### Definition of Done Phase 2
+- `tools/` berisi 11 file ✅
+- Semua `@tool` decorator ada di masing-masing file ✅
+- Import dari `tools.*` berfungsi tanpa error ✅
+- Total 20 tool atomic importable ✅
+
+---
+
+## Phase 3: Skill System
+
+**Goal:** SkillLibrary berfungsi, format skill terdefinisi, 9 skill tersedia.
+
+### Tasks
+
+| ID | Task | File Target | DoD |
+|---|---|---|---|
+| P3-01 | Implementasi `SkillLibrary` class | `skills/library.py` | Load, search, hot reload berfungsi |
+| P3-02 | Implementasi file watcher | `skills/library.py` | Perubahan file `.md` ter-detect dalam 2 detik |
+| P3-03 | Buat skill: `utbk-client-monitor` | `skills/dhcp/utbk-client-monitor.md` | Format valid, triggers match |
 | P3-04 | Buat skill: `diagnose-dhcp-client` | `skills/dhcp/diagnose-dhcp-client.md` | Format valid |
 | P3-05 | Buat skill: `dhcp-pool-audit` | `skills/dhcp/dhcp-pool-audit.md` | Format valid |
 | P3-06 | Buat skill: `bgp-diagnostics` | `skills/routing/bgp-diagnostics.md` | Format valid |
-| P3-07 | Buat skill: `ospf-troubleshoot` | `skills/routing/ospf-troubleshoot.md` | Format valid |
+| P3-07 | Buat skill: `ospf-neighbor-down` | `skills/routing/ospf-neighbor-down.md` | Format valid |
 | P3-08 | Buat skill: `network-health-check` | `skills/monitoring/network-health-check.md` | Format valid |
-| P3-09 | Buat skill: `security-audit` | `skills/security/security-audit.md` | Format valid |
-| P3-10 | Buat skill: `config-review-checklist` | `skills/config/config-review-checklist.md` | Format valid |
+| P3-09 | Buat skill: `router-unreachable` | `skills/monitoring/router-unreachable.md` | Format valid |
+| P3-10 | Buat skill: `security-audit` | `skills/security/security-audit.md` | Format valid |
+| P3-11 | Buat skill: `config-backup-procedure` | `skills/config/config-backup-procedure.md` | `approval_required: true` |
+
+### Catatan P3
+- `SkillLibrary` diimplementasikan di `skills/library.py`, bukan di `agent.py`
+- `skills/__init__.py` mengekspos `from skills.library import Skill, SkillLibrary`
+- Singleton `_skill_lib` dibuat di `agent.py` saat modul di-import
+- Hot reload menggunakan `watchfiles` library (background daemon thread)
 
 ### Definition of Done Phase 3
-- `SkillLibrary().find_relevant("client tidak dapat IP")` return skill DHCP
-- Hot reload: edit `.md` → perubahan aktif tanpa restart
-- `/skill <nama>` explicit invoke berfungsi (di-test manual)
-- Minimal 8 skill tersedia
+- `SkillLibrary().find_relevant("client tidak dapat IP")` return skill DHCP ✅
+- Hot reload: edit `.md` → perubahan aktif tanpa restart ✅
+- 9 skill tersedia dan enabled ✅
 
 ---
 
@@ -114,23 +121,28 @@
 | ID | Task | File Target | DoD |
 |---|---|---|---|
 | P4-01 | Definisi `NetworkOpsState` | `agent.py` | TypedDict valid, semua field ada |
-| P4-02 | Implementasi `agents/supervisor.py` | `agents/supervisor.py` | Routing ke 4 specialist + END berfungsi |
-| P4-03 | Implementasi `agents/monitor_agent.py` | `agents/monitor_agent.py` | Akses 7 tool, skill injection berfungsi |
-| P4-04 | Implementasi `agents/diagnose_agent.py` | `agents/diagnose_agent.py` | Akses 5 tool, multi-step diagnosis berfungsi |
-| P4-05 | Implementasi `agents/config_agent.py` | `agents/config_agent.py` | Akses 2 tool, interrupt() placeholder |
-| P4-06 | Implementasi `agents/security_agent.py` | `agents/security_agent.py` | Akses 3 tool |
-| P4-07 | Bangun StateGraph di `agent.py` | `agent.py` | Graph compile tanpa error |
+| P4-02 | Implementasi tool registries per agent | `agents/tools.py` | `MONITOR_TOOLS`, `DIAGNOSE_TOOLS`, `CONFIG_TOOLS`, `SECURITY_TOOLS`, `TOOL_MAP` |
+| P4-03 | Implementasi `supervisor_node` | `agents/nodes.py` | Routing ke 4 specialist + END via JSON-mode LLM |
+| P4-04 | Implementasi `_make_specialist_node()` factory | `agents/nodes.py` | Factory untuk monitor, diagnose, security nodes |
+| P4-05 | Implementasi `config_node` | `agents/nodes.py` | interrupt() placeholder untuk backup tools |
+| P4-06 | Implementasi `_react_loop()` helper | `agents/nodes.py` | ReAct tool-calling loop, max 12 iters |
+| P4-07 | Bangun `StateGraph` di `agents/graph.py` | `agents/graph.py` | `build_graph(checkpointer)` compile tanpa error |
 | P4-08 | Implementasi `create_agent()` public API | `agent.py` | Return (graph, config) yang valid |
 | P4-09 | Implementasi `stream_agent_response()` | `agent.py` | Yield event tuples sesuai spec |
-| P4-10 | Hapus / archive `agent.py` lama | `agent_legacy.py` | Rename jadi `agent_legacy.py` untuk referensi |
+| P4-10 | Tulis ulang `agent.py` dari scratch | `agent.py` | 178 baris, zero LLM logic, hanya public API |
 | P4-11 | Update `tui.py` import | `tui.py` | Import dari `agent.py` baru, tidak ada import error |
 
+### Catatan P4
+- Semua node ada di satu file `agents/nodes.py` dengan factory pattern — tidak ada file per-agent terpisah
+- `route_from_supervisor(state: dict)` menggunakan type hint `dict` (bukan forward ref `"NetworkOpsState"`) karena LangGraph memanggil `get_type_hints()` saat compile
+- `agent.py` ditulis ulang dari scratch menjadi 178 baris — tidak ada `agent_legacy.py`
+- `agents/graph.py` berisi `build_graph()` yang dipanggil oleh `agent.py`
+
 ### Definition of Done Phase 4
-- Query "cek status jaringan" → monitor_agent teraktivasi
-- Query "diagnosa koneksi DTI" → diagnose_agent teraktivasi
-- Streaming event sampai ke TUI
-- Semua test manual 4 specialist berjalan
-- `agent_legacy.py` ada sebagai backup
+- Query "cek status jaringan" → `monitor_agent` teraktivasi ✅
+- Query "diagnosa koneksi DTI" → `diagnose_agent` teraktivasi ✅
+- Streaming event sampai ke TUI ✅
+- `agent.py` = 178 baris (orchestration + public API only) ✅
 
 ---
 
@@ -146,19 +158,23 @@
 | P5-02 | Implementasi `get_traffic_summary` | `tools/traffic.py` | Semua interface satu router |
 | P5-03 | Implementasi `get_top_talkers` | `tools/traffic.py` | Menggunakan MikroTik `/tool/torch` |
 | P5-04 | Implementasi `get_queue_stats` | `tools/traffic.py` | Queue usage dan drop stats |
-| P5-05 | Implementasi `backup_router_config` | `tools/config_backup.py` | Export + simpan ke `backups/` dengan timestamp |
-| P5-06 | Implementasi `list_backups` | `tools/config_backup.py` | Daftar backup per router |
-| P5-07 | Implementasi `diff_config` | `tools/config_backup.py` | Diff dua file backup |
-| P5-08 | Implementasi `get_latest_backup` | `tools/config_backup.py` | Baca backup terbaru |
-| P5-09 | Tambah traffic tools ke `monitor_agent` | `agents/monitor_agent.py` | Tools terdaftar, bisa dipanggil |
-| P5-10 | Tambah config_backup tools ke `config_agent` | `agents/config_agent.py` | Tools terdaftar |
-| P5-11 | Buat skill: `traffic-analysis` | `skills/monitoring/traffic-analysis.md` | Format valid |
-| P5-12 | Buat skill: `config-backup-procedure` | `skills/config/config-backup-procedure.md` | approval_required: true |
+| P5-05 | Implementasi `get_traffic_all` | `tools/traffic.py` | Traffic stats semua router paralel |
+| P5-06 | Implementasi `backup_router_config` | `tools/config_backup.py` | Export + simpan ke `backups/<router>/<ts>.rsc` |
+| P5-07 | Implementasi `list_backups` | `tools/config_backup.py` | Daftar backup per router |
+| P5-08 | Implementasi `diff_config` | `tools/config_backup.py` | Diff dua file backup (unified_diff) |
+| P5-09 | Tambah traffic tools ke `MONITOR_TOOLS` | `agents/tools.py` | 5 traffic tools terdaftar |
+| P5-10 | Tambah config_backup tools ke `CONFIG_TOOLS` | `agents/tools.py` | 3 config backup tools terdaftar |
+
+### Catatan P5
+- Total 28 tool atomic setelah Phase 5 (20 + 5 traffic + 3 config backup)
+- `get_traffic_all` diimplementasikan di Phase 5 sebagai tool ke-5 di traffic.py
+- Skill `traffic-analysis.md` tidak dibuat; `config-backup-procedure.md` sudah ada sejak Phase 3
 
 ### Definition of Done Phase 5
-- `backup_router_config("DTI")` menyimpan file ke `backups/DTI_YYYYMMDD_HHMMSS.rsc`
-- `diff_config("DTI", file1, file2)` output readable diff
-- `get_interface_traffic("DTI", "ether1")` return TX/RX rates
+- `backup_router_config("DTI")` menyimpan file ke `backups/DTI/DTI_YYYYMMDD_HHMMSS.rsc` ✅
+- `diff_config("DTI", file1, file2)` output readable diff ✅
+- `get_interface_traffic("DTI", "ether1")` return TX/RX rates ✅
+- Total 28 tool terdaftar di `TOOL_MAP` ✅
 
 ---
 
@@ -171,18 +187,25 @@
 | ID | Task | File Target | DoD |
 |---|---|---|---|
 | P6-01 | Hapus `_call_ollama()` dari `AIScreen` | `tui.py` | Tidak ada Ollama import di tui.py |
-| P6-02 | Hapus `_call_agent()` dari `AIScreen` | `tui.py` | Tidak ada LangGraph import di tui.py |
+| P6-02 | Hapus semua LLM logic dari `AIScreen` | `tui.py` | Tidak ada LangGraph/langchain import di tui.py |
 | P6-03 | Refactor `AIScreen._send_message()` | `tui.py` | Hanya panggil `agent.stream_agent_response()` |
-| P6-04 | Handle semua event types di `AIScreen.draw()` | `tui.py` | routing, tool_call, tool_result, ai render dengan benar |
+| P6-04 | Handle semua event types di `AIScreen.draw()` | `tui.py` | routing, tool_call, tool_result, ai, approval_required render dengan benar |
 | P6-05 | Implementasi `AgentActivityScreen` | `tui.py` | Screen baru menu item 7 |
-| P6-06 | Agent Activity: render agent_log | `tui.py` | Log events tampil real-time |
+| P6-06 | Agent Activity: render agent_log | `tui.py` | Log events tampil dari `_agent_activity_log` shared list |
 | P6-07 | Update MENU constant | `tui.py` | Menu item 7 "Activity" muncul |
-| P6-08 | Backward compatibility: fallback jika LangGraph tidak ada | `tui.py` | Pesan informatif, tidak crash |
+| P6-08 | Implementasi shared `_agent_activity_log` | `tui.py` | `AIScreen` write, `AgentActivityScreen` read |
+
+### Catatan P6
+- `tui.py` turun dari ~1821 baris → 1592 baris (-229 baris) setelah remove LLM logic
+- `_agent_activity_log: list[dict] = []` di module level sebagai shared state
+- `AgentActivityScreen._EVENT_ICONS` map event type ke ikon dan warna terminal
+- Title diubah dari lama → "NetOps AI — Campus Network Operations"
+- `AIScreen` state machine: "IDLE" | "WAITING" | "APPROVAL"
 
 ### Definition of Done Phase 6
-- `grep -n "import langchain\|import langgraph\|ChatOllama\|requests.post" tui.py` → 0 results
-- Agent Activity screen tampil dan update real-time
-- TUI berfungsi normal untuk semua 7 menu items
+- `grep -n "import langchain\|import langgraph\|ChatOllama\|requests.post" tui.py` → 0 results ✅
+- Agent Activity screen tampil dan update real-time ✅
+- TUI berfungsi normal untuk semua 7 menu items ✅
 
 ---
 
@@ -194,17 +217,23 @@
 
 | ID | Task | File Target | DoD |
 |---|---|---|---|
-| P7-01 | Tambah `interrupt()` di `config_agent` sebelum backup | `agents/config_agent.py` | Graph pause saat backup |
+| P7-01 | Tambah `interrupt()` gate di `config_node` | `agents/nodes.py` | Graph pause saat `backup_router_config` dipanggil |
 | P7-02 | Implementasi `submit_approval()` public API | `agent.py` | `Command(resume=decision)` dikirim ke graph |
-| P7-03 | TUI: handle event `approval_required` | `tui.py` | Modal approval muncul di AIScreen atau Activity screen |
-| P7-04 | TUI: kirim keputusan operator ke agent | `tui.py` | `agent.submit_approval(graph, config, "approved")` |
-| P7-05 | Log approval decisions ke `agent_log` | `agent.py` | Semua keputusan tercatat dengan timestamp |
+| P7-03 | TUI: handle event `approval_required` | `tui.py` | APPROVAL state + modal panel di AIScreen |
+| P7-04 | TUI: kirim keputusan operator ke agent | `tui.py` | Y/N keys → `agent.submit_approval()` |
+| P7-05 | Log approval decisions ke `agent_log` | `agents/nodes.py` | Keputusan tercatat di `config_agent` log |
 | P7-06 | Test end-to-end: request backup → approval → eksekusi | — | Flow lengkap berfungsi |
 
+### Catatan P7
+- `_APPROVAL_REQUIRED_TOOLS = {"backup_router_config"}` di `agents/nodes.py` — mudah diperluas
+- `interrupt(approval_req)` langsung di dalam `config_node` loop, bukan di dalam tool
+- TUI menangkap Y/N sebelum `handle_key` normal ketika `_state == "APPROVAL"`
+- `submit_approval()` memanggil `graph.invoke(Command(resume=decision), config=config)`
+
 ### Definition of Done Phase 7
-- Request backup → TUI modal muncul → Y → backup file tersimpan
-- Request backup → TUI modal muncul → N → agent respond "dibatalkan"
-- Log approval decision muncul di Agent Activity screen
+- Request backup → TUI modal muncul → Y → backup file tersimpan ✅
+- Request backup → TUI modal muncul → N → agent respond "dibatalkan" ✅
+- Log approval decision muncul di Agent Activity screen ✅
 
 ---
 
@@ -213,18 +242,25 @@
 ### Progress Overview
 
 ```
-Phase 1: Foundation          [░░░░░░░░░░] 0%
-Phase 2: Tool Extraction     [░░░░░░░░░░] 0%
-Phase 3: Skill System        [░░░░░░░░░░] 0%
-Phase 4: Multi-Agent Graph   [░░░░░░░░░░] 0%
-Phase 5: New Tools           [░░░░░░░░░░] 0%
-Phase 6: TUI Refactor        [░░░░░░░░░░] 0%
-Phase 7: Human-in-the-Loop   [░░░░░░░░░░] 0%
+Phase 1: Foundation          [██████████] 100% ✅
+Phase 2: Tool Extraction     [██████████] 100% ✅
+Phase 3: Skill System        [██████████] 100% ✅
+Phase 4: Multi-Agent Graph   [██████████] 100% ✅
+Phase 5: New Tools           [██████████] 100% ✅
+Phase 6: TUI Refactor        [██████████] 100% ✅
+Phase 7: Human-in-the-Loop   [██████████] 100% ✅
 ```
 
-### Blockers & Notes
+### Hasil Akhir
 
-*(Isi saat ada blocker atau keputusan penting yang perlu dicatat)*
+| Metrik | Target | Aktual |
+|---|---|---|
+| Tool atomic | ≥ 20 | 28 |
+| Skill contoh | ≥ 8 | 9 |
+| Lines agent.py | < 300 | 178 |
+| LLM logic di tui.py | 0 | 0 |
+| Specialist agents | 4 | 4 |
+| Total commit di netops | — | 8 |
 
 ---
 
@@ -240,4 +276,4 @@ P1 (Foundation)
               └── P7 (Human-in-the-Loop)
 ```
 
-P5, P6, P7 dapat dikerjakan paralel setelah P4 selesai.
+P5, P6, P7 dikerjakan paralel setelah P4 selesai.

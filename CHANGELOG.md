@@ -5,6 +5,40 @@ Semua perubahan penting pada proyek ini akan didokumentasikan di file ini.
 Format mengikuti [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 dan proyek ini menggunakan [Semantic Versioning](https://semver.org/lang/id/).
 
+## [v1.0.0] - 2026-04-27 (branch: netops)
+
+Rilis major pertama NetOps AI — platform operasional jaringan kampus berbasis multi-agent LangGraph. Transformasi dari tool monitoring DHCP monolitik menjadi sistem multi-agent yang dapat dikonfigurasi operator.
+
+### Added
+- **Multi-agent LangGraph**: Supervisor + 4 specialist agents (monitor, diagnose, config, security) via `agents/nodes.py` dan `agents/graph.py`
+- **Skill System**: `SkillLibrary` di `skills/library.py` dengan hot reload via `watchfiles`; 9 skill contoh tersedia di `skills/`
+- **28 tool atomic** di `tools/` (dipecah dari `agent.py` monolitik):
+  - `tools/traffic.py`: `get_interface_traffic`, `get_traffic_summary`, `get_top_talkers`, `get_queue_stats`, `get_traffic_all`
+  - `tools/config_backup.py`: `backup_router_config`, `list_backups`, `diff_config`
+  - `tools/base.py`: SSH helper terpusat untuk semua tool
+- **Human-in-the-loop approval**: `interrupt()` gate di `config_node` untuk `backup_router_config`; TUI menampilkan approval modal Y/N
+- **`AgentActivityScreen`** (menu 7): monitoring komunikasi antar agent real-time (routing, tool calls, tool results, approval)
+- **Public API** di `agent.py`: `create_agent()`, `stream_agent_response()`, `submit_approval()`, `get_available_skills()`, `get_agent_status()`
+- Dokumentasi lengkap: `docs/PRD.md`, `docs/ARCHITECTURE.md`, `docs/IMPLEMENTATION_PLAN.md`, `docs/SKILL_AUTHORING_GUIDE.md`
+
+### Changed
+- `agent.py` ditulis ulang dari ~2600 baris monolitik menjadi 178 baris public API + orchestration murni
+- `tui.py` direfactor: semua LLM/agent logic dipindah ke `agent.py`; tui.py menjadi zero LLM (1592 baris, -229 dari sebelumnya)
+- Title TUI: "NetOps AI — Campus Network Operations"
+- Default model: `qwen3:32b` (sebelumnya `qwen3.6:35b-a3b-q8_0`)
+- Nama tool distandarisasi: `read_report` → `get_report`, `audit_all_routers` → `audit_dhcp`, `get_all_leases_for_router` → `get_router_leases`, `run_command_all_routers` → `run_command_all`
+
+### Fixed
+- StructuredTool unhashable: deduplication tool map menggunakan `dict.setdefault()` bukan `set()`
+- LangGraph routing function: `route_from_supervisor(state: dict)` — type hint `dict` bukan forward ref `"NetworkOpsState"` untuk menghindari `NameError` saat `get_type_hints()` dipanggil
+
+### Security
+- Credentials SSH tidak pernah masuk ke agent log atau output
+- `backup_router_config` memerlukan persetujuan eksplisit operator sebelum dieksekusi
+- File backup di `backups/` dikecualikan dari git
+
+---
+
 ## [v0.8.0] - 2026-04-25
 
 ### Added

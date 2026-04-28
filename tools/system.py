@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from langchain_core.tools import tool
 
-from tools.base import validate_router, get_router_entries, ssh_creds, ssh_run_command
+from tools.base import validate_router, get_router_entries, ssh_creds, ssh_run_command, ssh_error_hint
 
 
 @tool
@@ -27,5 +27,5 @@ def get_system_info(router_name: str) -> str:
         timeout=creds["timeout"],
     )
     if not ok:
-        return f"Gagal terhubung ke {router_name} ({entry['host']}): {err}"
+        return f"Gagal terhubung ke {router_name} ({entry['host']}): {ssh_error_hint(err)}"
     return f"System info {router_name} ({entry['host']}):\n{out.strip()}"

@@ -173,6 +173,6 @@ def get_available_skills() -> list[dict]:
 def get_agent_status() -> dict:
     return {
         "skills_loaded": len(_skill_lib),
-        "model": os.getenv("OLLAMA_MODEL", "qwen3:32b"),
+        "model": os.getenv("OLLAMA_MODEL", "gemma4:e4b"),
         "ollama_url": os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
     }

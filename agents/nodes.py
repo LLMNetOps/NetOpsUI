@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 import logging
 import os
-import re
 from datetime import datetime, timezone, timedelta
 from typing import TYPE_CHECKING, Any
 
@@ -13,7 +12,7 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, Tool
 from langchain_ollama import ChatOllama
 
 from agents.tools import (
-    MONITOR_TOOLS, DIAGNOSE_TOOLS, CONFIG_TOOLS, SECURITY_TOOLS, TOOL_MAP,
+    MONITOR_TOOLS, DIAGNOSE_TOOLS, CONFIG_TOOLS, SECURITY_TOOLS,
 )
 
 if TYPE_CHECKING:
@@ -22,10 +21,9 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-OLLAMA_MODEL    = os.getenv("OLLAMA_MODEL", "qwen3:32b")
+OLLAMA_MODEL    = os.getenv("OLLAMA_MODEL", "gemma4:e4b")
 
 WIB = timezone(timedelta(hours=7))
-_THINK_RE = re.compile(r"<think>.*?</think>", re.DOTALL)
 
 # ── LLM factory ───────────────────────────────────────────────────────────────
 
@@ -34,8 +32,8 @@ def _make_llm(temperature: float = 0.3, json_mode: bool = False) -> ChatOllama:
         base_url=OLLAMA_BASE_URL,
         model=OLLAMA_MODEL,
         temperature=temperature,
-        num_predict=8192,
-        num_ctx=32768,
+        num_predict=4096,
+        num_ctx=16384,
         timeout=300,
     )
     if json_mode:
@@ -50,7 +48,7 @@ def _now_str() -> str:
 
 
 def _clean(text: str) -> str:
-    return _THINK_RE.sub("", text).strip()
+    return text.strip()
 
 
 def _log(source: str, event_type: str, content: str) -> dict:
@@ -104,31 +102,28 @@ def _react_loop(
 # ── Supervisor node ───────────────────────────────────────────────────────────
 
 _SUPERVISOR_SYS = """\
-Kamu adalah supervisor operasional jaringan kampus. Tugas kamu adalah menganalisis
-pertanyaan/permintaan operator jaringan dan memutuskan agent mana yang harus menanganinya.
+Kamu adalah supervisor operasional jaringan kampus. Tugasmu menganalisis permintaan \
+operator dan memutuskan agent yang menanganinya.
 
-Agent yang tersedia:
+Agent tersedia:
 - monitor_agent   : status jaringan, health check, DHCP overview, interface stats, laporan
 - diagnose_agent  : masalah konektivitas, ping/traceroute, DHCP client gagal, packet loss
 - config_agent    : baca konfigurasi router, config backup, eksport config
 - security_agent  : audit keamanan, user accounts, NTP sync, firewall check
 
-Pertimbangkan skill yang tersedia (nama → trigger):
+Skill tersedia (nama → trigger):
 {skill_list}
 
-Jawab HANYA dengan JSON berikut (tanpa penjelasan lain):
-{{
-  "next_agent": "<monitor_agent|diagnose_agent|config_agent|security_agent|END>",
-  "relevant_skills": ["<skill-name>"],
-  "reasoning": "<1 kalimat>"
-}}
+Balas HANYA dengan JSON valid, tanpa teks lain sebelum atau sesudah JSON.
+Contoh format yang benar:
+{{"next_agent":"monitor_agent","relevant_skills":[],"reasoning":"query status jaringan"}}
 
-Gunakan END jika pertanyaan sudah terjawab oleh AI sebelumnya dalam percakapan ini.
+Field next_agent harus salah satu: monitor_agent, diagnose_agent, config_agent, security_agent, END
+Gunakan END jika pertanyaan sudah dijawab AI sebelumnya dalam percakapan ini.
 """
 
 
 def supervisor_node(state: "NetworkOpsState") -> dict:
-    from skills import SkillLibrary
     from agent import _skill_lib  # noqa: PLC0415
 
     messages = state["messages"]
@@ -185,6 +180,8 @@ Kamu adalah {role} untuk jaringan kampus universitas.
 Infrastruktur menggunakan MikroTik RouterOS v6/v7. Jawab dalam Bahasa Indonesia,
 teknis dan ringkas. Gunakan backtick untuk istilah teknis.
 
+Tool yang tersedia (HANYA ini yang boleh dipanggil): {tool_names}
+
 {skill_context}
 """
 
@@ -198,6 +195,7 @@ _AGENT_ROLES = {
 
 def _make_specialist_node(agent_name: str, tools: list):
     tool_map_local = {t.name: t for t in tools}
+    tool_names_str = ", ".join(t.name for t in tools)
     llm_with_tools = _make_llm(temperature=0.3).bind_tools(tools)
 
     def _node(state: "NetworkOpsState") -> dict:
@@ -210,6 +208,7 @@ def _make_specialist_node(agent_name: str, tools: list):
 
         sys_content = _SPECIALIST_SYS.format(
             role=_AGENT_ROLES[agent_name],
+            tool_names=tool_names_str,
             skill_context=skill_ctx,
         ).strip()
         sys_msg = SystemMessage(content=sys_content)
@@ -261,8 +260,10 @@ def config_node(state: dict) -> dict:
     skill_objs = [s for n in skill_names if (s := _skill_lib.get_by_name(n))]
     skill_ctx = _skill_lib.inject_context(skill_objs) if skill_objs else ""
 
+    _config_tool_names = ", ".join(t.name for t in CONFIG_TOOLS)
     sys_msg = SystemMessage(content=_SPECIALIST_SYS.format(
         role=_AGENT_ROLES["config_agent"],
+        tool_names=_config_tool_names,
         skill_context=skill_ctx,
     ).strip())
 

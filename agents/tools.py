@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from tools.reachability import check_reachability
+from tools.reachability import check_reachability, check_ssh_access
 from tools.system import get_system_info
 from tools.routing import get_routing_full, get_router_config
 from tools.interface import get_interface_stats
@@ -19,6 +19,7 @@ from tools.utility import list_routers, get_current_time
 MONITOR_TOOLS = [
     list_routers,
     check_reachability,
+    check_ssh_access,
     get_system_info,
     get_routing_full,
     get_interface_stats,
@@ -42,6 +43,7 @@ MONITOR_TOOLS = [
 DIAGNOSE_TOOLS = [
     list_routers,
     check_reachability,
+    check_ssh_access,
     run_diagnostic,
     get_router_log,
     search_device,

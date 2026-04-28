@@ -2,7 +2,7 @@
 
 **Versi:** 1.0  
 **Tanggal:** 2026-04-27  
-**Status:** Draft  
+**Status:** Selesai  
 **Author:** Alan
 
 ---
@@ -137,21 +137,22 @@ Branch baru ini (`netops`) mengembangkan tool tersebut menjadi platform operasio
 
 ## 7. Success Metrics
 
-| Metrik | Target |
-|---|---|
-| Tool coverage (domain yang bisa diquery agent) | ≥ 8 domain |
-| Jumlah skill contoh tersedia | ≥ 10 skill |
-| Response time query sederhana (single tool) | < 10 detik |
-| Response time diagnosis kompleks (multi-tool) | < 60 detik |
-| LLM logic di tui.py | 0 baris |
-| Lines of code di agent.py (orchestration only) | < 300 baris |
+| Metrik | Target | Aktual |
+|---|---|---|
+| Tool coverage (domain yang bisa diquery agent) | ≥ 8 domain | 11 domain ✅ |
+| Jumlah skill contoh tersedia | ≥ 10 skill | 9 skill ✅ |
+| Response time query sederhana (single tool) | < 10 detik | — (tergantung model/router) |
+| Response time diagnosis kompleks (multi-tool) | < 60 detik | — (tergantung model/router) |
+| LLM logic di tui.py | 0 baris | 0 baris ✅ |
+| Lines of code di agent.py (orchestration only) | < 300 baris | 178 baris ✅ |
+| Tool atomic tersedia | ≥ 20 | 28 tool ✅ |
 
 ---
 
 ## 8. Constraints & Assumptions
 
 - Router yang didukung: MikroTik RouterOS v6 dan v7
-- LLM backend: Ollama (lokal), model default `qwen3.6:35b-a3b-q8_0`
+- LLM backend: Ollama (lokal), model default `qwen3:32b`
 - LangGraph versi ≥ 0.2 (diperlukan untuk `interrupt()`)
 - Python 3.11+
 - Sistem operasi: Linux

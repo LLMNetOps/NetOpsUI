@@ -2,7 +2,7 @@
 
 **Versi:** 1.0  
 **Tanggal:** 2026-04-27  
-**Status:** Draft
+**Status:** Selesai
 
 ---
 
@@ -38,39 +38,49 @@ NetOps AI adalah platform operasional jaringan kampus berbasis multi-agent LangG
 
 ```
 llmnetops/
-├── agent.py                    ← Supervisor graph + SkillLibrary + public API
-├── tui.py                      ← UI only (zero LLM logic)
+├── agent.py                    ← Public API + NetworkOpsState + SkillLibrary singleton (178 baris)
+├── tui.py                      ← UI only (zero LLM logic, 1592 baris)
 ├── generate_reports.py         ← Standalone DHCP report generator (tidak diubah)
 │
-├── tools/                      ← Atomic SSH operations
+├── tools/                      ← 28 atomic SSH operations
 │   ├── base.py                 ← SSH helper, config loader, _validate_router
 │   ├── reachability.py         ← ICMP ping check
 │   ├── system.py               ← CPU, RAM, uptime
 │   ├── routing.py              ← Route table, OSPF, BGP
 │   ├── interface.py            ← Interface stats, errors
-│   ├── traffic.py              ← TX/RX rates, top talkers, queue stats [NEW]
+│   ├── traffic.py              ← TX/RX rates, top talkers, queue stats
 │   ├── dhcp.py                 ← DHCP lease queries, search device
 │   ├── log.py                  ← Router log pull
 │   ├── config_read.py          ← Config sections (read-only)
-│   ├── config_backup.py        ← Export + save, diff, list backups [NEW]
+│   ├── config_backup.py        ← Export + save, diff, list backups
 │   ├── security.py             ← User audit, firewall, NTP check
 │   ├── diagnostic.py           ← Ping/traceroute dari router
-│   └── report.py               ← List/read laporan Markdown
+│   ├── report.py               ← List/read laporan Markdown
+│   └── utility.py              ← list_routers, get_current_time
 │
 ├── skills/                     ← Operator-defined Markdown knowledge files
+│   ├── __init__.py             ← from skills.library import Skill, SkillLibrary
+│   ├── library.py              ← SkillLibrary class + Skill dataclass + hot reload
 │   ├── dhcp/
+│   │   ├── diagnose-dhcp-client.md
+│   │   ├── dhcp-pool-audit.md
+│   │   └── utbk-client-monitor.md
 │   ├── routing/
+│   │   ├── ospf-neighbor-down.md
+│   │   └── bgp-diagnostics.md
 │   ├── monitoring/
+│   │   ├── network-health-check.md
+│   │   └── router-unreachable.md
 │   ├── security/
+│   │   └── security-audit.md
 │   └── config/
+│       └── config-backup-procedure.md
 │
-├── agents/                     ← Specialist agent definitions
-│   ├── __init__.py
-│   ├── supervisor.py
-│   ├── monitor_agent.py
-│   ├── diagnose_agent.py
-│   ├── config_agent.py
-│   └── security_agent.py
+├── agents/                     ← Multi-agent LangGraph
+│   ├── __init__.py             ← from agents.graph import build_graph
+│   ├── graph.py                ← StateGraph builder (START→supervisor→specialists→END)
+│   ├── nodes.py                ← supervisor_node + 4 specialist nodes + config_node
+│   └── tools.py                ← Tool registries per agent domain (TOOL_MAP)
 │
 ├── docs/                       ← Project documentation
 ├── backups/                    ← Config backups (gitignored)
@@ -125,11 +135,11 @@ Supervisor menggunakan LLM untuk menentukan:
 3. Apakah query butuh chain ke lebih dari satu specialist
 
 ```python
-# Supervisor routing decision
+# Supervisor routing decision (JSON-mode LLM output)
 {
     "next_agent": "monitor_agent | diagnose_agent | config_agent | security_agent | END",
     "relevant_skills": ["skill-name-1", "skill-name-2"],
-    "requires_chain": bool
+    "reasoning": "<1 kalimat alasan>"
 }
 ```
 
@@ -153,14 +163,17 @@ class ApprovalRequest(TypedDict):
     risk_level: str    # "medium" | "high"
     details: dict
 
+def _append(existing: list, new: list) -> list:
+    return (existing or []) + (new or [])
+
 class NetworkOpsState(TypedDict):
-    messages:           Annotated[list, add_messages]
-    next_agent:         str                    # supervisor routing decision
-    active_agent:       str                    # currently executing agent
-    injected_skills:    list[str]              # skill names yang sedang aktif
-    agent_log:          list[AgentLogEntry]    # visible di TUI Agent Activity
-    pending_approval:   ApprovalRequest | None # blocked waiting for operator
-    approval_decision:  str | None             # "approved" | "rejected"
+    messages:           Annotated[list, add_messages]           # LangGraph reducer
+    next_agent:         str                                     # supervisor routing decision
+    active_agent:       str                                     # currently executing agent
+    injected_skills:    list[str]                               # skill names yang sedang aktif
+    agent_log:          Annotated[list[AgentLogEntry], _append] # visible di TUI Agent Activity
+    pending_approval:   ApprovalRequest | None                  # blocked waiting for operator
+    approval_decision:  str | None                              # "approved" | "rejected"
 ```
 
 ---
@@ -205,20 +218,23 @@ enabled: true
 
 ### 5.2 SkillLibrary
 
+File: `skills/library.py`. Singleton `_skill_lib` dibuat di `agent.py` saat modul di-import.
+
 ```python
+@dataclass
+class Skill:
+    name: str; domain: str; triggers: list[str]; tools: list[str]
+    approval_required: bool; enabled: bool; body: str; path: Path
+
 class SkillLibrary:
-    skills: dict[str, Skill]          # name → Skill object
-    
-    def load_all() -> None            # scan skills/**/*.md
-    def start_watcher() -> None       # watchdog untuk hot reload
-    def find_relevant(
-        query: str,
-        domain: str = None
-    ) -> list[Skill]                  # keyword matching dari triggers
-    def get_by_name(name: str) -> Skill | None
-    def inject_context(
-        skills: list[Skill]
-    ) -> str                          # gabungkan body Markdown untuk injection
+    def __init__(self, skills_dir: Path)
+    def _load_all(self) -> None         # scan skills/**/*.md
+    def list_enabled(self) -> list[Skill]
+    def start_watcher(self) -> None     # watchfiles background daemon thread
+    def stop_watcher(self) -> None
+    def find_relevant(self, query: str, domain: str = None) -> list[Skill]
+    def get_by_name(self, name: str) -> Skill | None
+    def inject_context(self, skills: list[Skill]) -> str  # gabungkan body Markdown
 ```
 
 ### 5.3 Hot Reload Mechanism
@@ -289,22 +305,21 @@ config_agent memutuskan perlu backup
 
 ```python
 # Inisialisasi
-def create_agent(thread_id: str) -> tuple[StateGraph, RunnableConfig]
-def reset_agent(thread_id: str) -> tuple[StateGraph, RunnableConfig]
+def create_agent(thread_id: str) -> tuple[CompiledStateGraph, RunnableConfig]
+def reset_agent(thread_id: str) -> tuple[CompiledStateGraph, RunnableConfig]
 
 # Eksekusi
 def stream_agent_response(
-    graph: StateGraph,
+    graph: CompiledStateGraph,
     config: RunnableConfig,
     message: str
 ) -> Iterator[tuple[str, str]]
 # Yields: (event_type, content)
-# event_type: "routing" | "tool_call" | "tool_result" |
-#             "agent_thinking" | "approval_required" | "ai" | "error"
+# event_type: "routing" | "tool_call" | "tool_result" | "ai" | "approval_required" | "error"
 
 # Approval
 def submit_approval(
-    graph: StateGraph,
+    graph: CompiledStateGraph,
     config: RunnableConfig,
     decision: str           # "approved" | "rejected"
 ) -> None
@@ -355,18 +370,36 @@ def get_agent_status() -> dict
 
 | Tool | monitor | diagnose | config | security |
 |---|:---:|:---:|:---:|:---:|
-| reachability | ✓ | ✓ | | |
-| system | ✓ | | | |
-| routing | ✓ | ✓ | | |
-| interface | ✓ | | | |
-| traffic | ✓ | | | |
-| dhcp | ✓ | ✓ | | |
-| log | ✓ | ✓ | | ✓ |
-| config_read | ✓ | | ✓ | ✓ |
-| config_backup | | | ✓ | |
-| security | | | | ✓ |
-| diagnostic | | ✓ | | |
-| report | ✓ | | | |
+| `list_routers` | ✓ | ✓ | ✓ | ✓ |
+| `check_reachability` | ✓ | ✓ | | |
+| `get_system_info` | ✓ | ✓ | | |
+| `get_routing_full` | ✓ | ✓ | | |
+| `get_interface_stats` | ✓ | | | |
+| `get_interface_traffic` | ✓ | | | |
+| `get_traffic_summary` | ✓ | | | |
+| `get_top_talkers` | ✓ | | | |
+| `get_queue_stats` | ✓ | | | |
+| `get_traffic_all` | ✓ | | | |
+| `get_dhcp_leases` | ✓ | ✓ | | |
+| `get_router_leases` | ✓ | ✓ | | |
+| `audit_dhcp` | ✓ | | | |
+| `search_device` | | ✓ | | |
+| `get_router_log` | ✓ | ✓ | | ✓ |
+| `run_command` | | ✓ | ✓ | ✓ |
+| `run_command_all` | ✓ | | ✓ | ✓ |
+| `get_router_config` | | | ✓ | |
+| `backup_router_config` | | | ✓ | |
+| `list_backups` | | | ✓ | |
+| `diff_config` | | | ✓ | |
+| `audit_security` | | | | ✓ |
+| `run_diagnostic` | | ✓ | | |
+| `list_reports` | ✓ | | ✓ | |
+| `get_report` | ✓ | | ✓ | |
+| `get_report_section` | ✓ | | | |
+| `get_report_toc` | ✓ | | | |
+| `get_current_time` | ✓ | ✓ | ✓ | ✓ |
+
+**Total: 28 tool atomic** (20 dari Phase 2 + 5 traffic + 3 config_backup dari Phase 5)
 
 ---
 
