@@ -5,6 +5,25 @@ Semua perubahan penting pada proyek ini akan didokumentasikan di file ini.
 Format mengikuti [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 dan proyek ini menggunakan [Semantic Versioning](https://semver.org/lang/id/).
 
+## [v1.1.0] - 2026-05-04 (branch: netops)
+
+### Added
+- **Document Agent** ("budi"): specialist ke-5 untuk menulis laporan ke file, mengelola template, dan mengkurasi hasil agent lain menjadi dokumen terstruktur
+- **4 document tools** di `tools/document.py`: `list_templates`, `read_template`, `write_document`, `create_template`
+- **Skill `write-report`** di `skills/documents/`: prosedur lengkap menulis laporan ke `laporan/` menggunakan template
+- **Template `security-assessment.md`**: blank template penilaian keamanan web dengan `{{PLACEHOLDER}}` di `skills/documents/templates/`
+- **`AGENT_ALIAS`** dict: display names untuk semua agent (bambang/eko/agus/joko/satria/budi); log agent kini menampilkan nama alias
+- **`context_window` parameter** di `_make_specialist_node()`: document_agent pakai window 20 messages (specialist lain default 10)
+- Skip subdirektori `templates/` di `SkillLibrary._load_all()` — file template tidak dimuat sebagai skill
+- Dokumentasi LangGraph: `docs/LANGGRAPH_FUNDAMENTALS.md`, `docs/AGENT_COMMUNICATION_PATTERNS.md`, `docs/PERSISTENCE_AND_MEMORY.md`
+
+### Changed
+- Total tool atomic: 28 → 32
+- Total skill contoh: 9 → 10
+- Supervisor prompt diperbarui: tambah `document_agent` ke routing options dan penjelasan alur multi-domain ke dokumentasi
+
+---
+
 ## [v1.0.0] - 2026-04-27 (branch: netops)
 
 Rilis major pertama NetOps AI — platform operasional jaringan kampus berbasis multi-agent LangGraph. Transformasi dari tool monitoring DHCP monolitik menjadi sistem multi-agent yang dapat dikonfigurasi operator.

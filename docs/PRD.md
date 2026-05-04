@@ -1,7 +1,7 @@
 # PRD — NetOps AI: AI-Powered Campus Network Operations Platform
 
-**Versi:** 1.0  
-**Tanggal:** 2026-04-27  
+**Versi:** 1.1  
+**Tanggal:** 2026-05-04  
 **Status:** Selesai  
 **Author:** Alan
 
@@ -43,12 +43,13 @@ Branch baru ini (`netops`) mengembangkan tool tersebut menjadi platform operasio
 ## 4. Scope
 
 ### 4.1 In Scope (Branch `netops`)
-- Multi-agent LangGraph: Supervisor + 4 specialist agents
-- Skill system berbasis Markdown dengan hot reload
-- Tools: reachability, system resource, routing, interface, traffic stats, DHCP, log, config read, config backup, security, diagnostic, report
+- Multi-agent LangGraph: Supervisor + 5 specialist agents (monitor, diagnose, config, security, document)
+- Skill system berbasis Markdown dengan hot reload; template sistem untuk panduan format laporan
+- Tools: reachability, system resource, routing, interface, traffic stats, DHCP, log, config read, config backup, security, diagnostic, report, document
 - TUI: Agent Activity panel untuk monitoring komunikasi agent
 - Human-in-the-loop approval untuk operasi berisiko (config backup)
 - Pengembangan scope dari DHCP-only → network operations menyeluruh
+- Document agent: tulis laporan terstruktur ke file, kelola template, kurasi output agent lain
 
 ### 4.2 Out of Scope (v1.0)
 - Write operations ke router (set, add, remove) — hanya read + backup
@@ -77,6 +78,7 @@ Branch baru ini (`netops`) mengembangkan tool tersebut menjadi platform operasio
 | FA-03 | Supervisor dapat chain multiple specialist untuk query kompleks |
 | FA-04 | Operator dapat invoke skill secara eksplisit dengan prefix `/skill <nama>` |
 | FA-05 | Supervisor secara otomatis mendeteksi skill yang relevan berdasarkan keyword query |
+| FA-06 | Supervisor dapat route ke document_agent untuk kompilasi laporan multi-domain setelah specialist lain mengumpulkan data |
 
 ### 5.2 Skill System
 
@@ -98,6 +100,8 @@ Branch baru ini (`netops`) mengembangkan tool tersebut menjadi platform operasio
 | FC-03 | Tool baru untuk traffic stats: TX/RX rate realtime, top talkers, queue stats |
 | FC-04 | Tool baru untuk config backup: export + simpan, diff dua versi, list backups |
 | FC-05 | Tool read-only yang sudah ada di `agent.py` dipindahkan tanpa perubahan logic |
+| FC-06 | Tool `write_document` menyimpan dokumen ke `laporan/` dengan konvensi nama `{tipe}_{YYYYMMDD}_{HHMMSS}.md` |
+| FC-07 | Tool `create_template` membuat/memperbarui template di `skills/documents/templates/` tanpa restart |
 
 ### 5.4 Human-in-the-Loop
 
@@ -139,13 +143,14 @@ Branch baru ini (`netops`) mengembangkan tool tersebut menjadi platform operasio
 
 | Metrik | Target | Aktual |
 |---|---|---|
-| Tool coverage (domain yang bisa diquery agent) | ≥ 8 domain | 11 domain ✅ |
-| Jumlah skill contoh tersedia | ≥ 10 skill | 9 skill ✅ |
+| Tool coverage (domain yang bisa diquery agent) | ≥ 8 domain | 12 domain ✅ |
+| Jumlah skill contoh tersedia | ≥ 10 skill | 10 skill ✅ |
 | Response time query sederhana (single tool) | < 10 detik | — (tergantung model/router) |
 | Response time diagnosis kompleks (multi-tool) | < 60 detik | — (tergantung model/router) |
 | LLM logic di tui.py | 0 baris | 0 baris ✅ |
 | Lines of code di agent.py (orchestration only) | < 300 baris | 178 baris ✅ |
-| Tool atomic tersedia | ≥ 20 | 28 tool ✅ |
+| Tool atomic tersedia | ≥ 20 | 32 tool ✅ |
+| Specialist agents | ≥ 4 | 5 agent ✅ |
 
 ---
 
