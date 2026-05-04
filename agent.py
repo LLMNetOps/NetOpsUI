@@ -10,9 +10,10 @@ from typing import Annotated, Any, Iterator, TypedDict
 
 from langchain_core.messages import HumanMessage
 from langchain_core.runnables import RunnableConfig
-from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph.message import add_messages
 from langgraph.types import Command
+import sqlite3
+from langgraph.checkpoint.sqlite import SqliteSaver
 
 # ── Load .env ──────────────────────────────────────────────────────────────────
 
@@ -72,7 +73,9 @@ _skill_lib.start_watcher()
 
 # ── Graph cache ────────────────────────────────────────────────────────────────
 
-_checkpointer = MemorySaver()
+_DB_PATH = Path(__file__).parent / "data" / "checkpoints.db"
+_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+_checkpointer = SqliteSaver(sqlite3.connect(str(_DB_PATH), check_same_thread=False))
 _graph: Any = None
 
 
@@ -103,7 +106,7 @@ def reset_agent(thread_id: str) -> tuple[Any, RunnableConfig]:
         "configurable": {"thread_id": thread_id},
         "recursion_limit": 30,
     }
-    # MemorySaver: overwrite state with empty messages
+    # Overwrite state with empty messages untuk reset percakapan
     graph.update_state(config, {"messages": [], "agent_log": [], "next_agent": "",
                                  "active_agent": "", "injected_skills": [],
                                  "pending_approval": None, "approval_decision": None})
