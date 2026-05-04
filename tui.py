@@ -393,7 +393,7 @@ class JadwalScreen(Screen):
 
 
 class CollectScreen(Screen):
-    """Run mikrotik_agent.py and stream output."""
+    """Run legacy/mikrotik_agent.py and stream output."""
 
     def __init__(self) -> None:
         super().__init__()
@@ -430,7 +430,7 @@ class CollectScreen(Screen):
 
         try:
             proc = subprocess.Popen(
-                ["python3", "mikrotik_agent.py"],
+                ["python3", "legacy/mikrotik_agent.py"],
                 cwd=str(WORKDIR),
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
@@ -506,7 +506,7 @@ class CollectScreen(Screen):
         safe_addstr(win, 1, 1, "-" * max(1, cols - 2), cp(C_DIM))
 
         if state == "IDLE":
-            safe_addstr(win, 3, 2, "Jalankan mikrotik_agent.py untuk mengambil")
+            safe_addstr(win, 3, 2, "Jalankan legacy/mikrotik_agent.py untuk mengambil")
             safe_addstr(win, 4, 2, "data DHCP lease dari semua router.")
             safe_addstr(win, 6, 2, "Output disimpan ke: output/")
             safe_addstr(win, 7, 2, "Log: schedule.log")
@@ -600,7 +600,7 @@ class LaporanScreen(Screen):
             self.data["gen_elapsed"] = 0.0
             self.data["gen_exit_code"] = None
 
-        cmd = ["python3", "generate_reports.py"]
+        cmd = ["python3", "legacy/generate_reports.py"]
         if force:
             cmd.append("--force")
 

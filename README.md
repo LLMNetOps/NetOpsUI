@@ -62,6 +62,12 @@ llmnetops/
 │   ├── document.py       ← list_templates, read_template, write_document, create_template
 │   └── ...               ← reachability, system, routing, dhcp, log, dll
 │
+├── legacy/               ← Script main-branch (DHCP collector, report generator, scheduler)
+│   ├── mikrotik_agent.py ← SSH DHCP collector (dipakai CollectScreen via subprocess)
+│   ├── generate_reports.py ← DHCP report generator (dipakai LaporanScreen via subprocess)
+│   ├── schedule_utbk.sh  ← Scheduler UTBK 2026
+│   └── test_regex.py     ← One-off test script
+│
 ├── backups/              ← Config backups (gitignored)
 ├── docs/                 ← PRD, Architecture, Implementation Plan, Skill Authoring Guide
 └── laporan/              ← Generated reports (gitignored)

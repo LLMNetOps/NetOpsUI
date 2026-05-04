@@ -45,11 +45,14 @@ _load_dotenv()
 OLLAMA_BASE_URL: str = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 OLLAMA_MODEL: str = os.getenv("OLLAMA_MODEL", "gemma4:e4b")
 
-# ── SSH (dari mikrotik_agent.py) ──────────────────────────────────────────────
+# ── SSH (dari legacy/mikrotik_agent.py) ───────────────────────────────────────
 
 _HAS_SSH = False
+_LEGACY_DIR = str(Path(__file__).parent.parent / "legacy")
 
 try:
+    if _LEGACY_DIR not in sys.path:
+        sys.path.insert(0, _LEGACY_DIR)
     from mikrotik_agent import (          # type: ignore[import]
         ssh_run_command as _ssh_run_command,
         ssh_get_dhcp_leases as _ssh_get_dhcp_leases,
@@ -60,10 +63,10 @@ except ImportError:
     _HAS_SSH = False
 
     def _ssh_run_command(*a: Any, **kw: Any) -> tuple[bool, str, str]:  # type: ignore[misc]
-        return (False, "", "mikrotik_agent.py tidak ditemukan")
+        return (False, "", "legacy/mikrotik_agent.py tidak ditemukan")
 
     def _ssh_get_dhcp_leases(*a: Any, **kw: Any) -> tuple[bool, str, str]:  # type: ignore[misc]
-        return (False, "", "mikrotik_agent.py tidak ditemukan")
+        return (False, "", "legacy/mikrotik_agent.py tidak ditemukan")
 
     def parse_mikrotik_dhcp_output(*a: Any, **kw: Any) -> list:  # type: ignore[misc]
         return []
