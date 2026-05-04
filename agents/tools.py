@@ -15,6 +15,7 @@ from tools.security import audit_security
 from tools.diagnostic import run_diagnostic
 from tools.report import list_reports, get_report, get_report_section, get_report_toc
 from tools.utility import list_routers, get_current_time
+from tools.document import list_templates, read_template, write_document, create_template
 
 MONITOR_TOOLS = [
     list_routers,
@@ -77,7 +78,29 @@ SECURITY_TOOLS = [
     get_current_time,
 ]
 
+DOCUMENT_TOOLS = [
+    list_routers,
+    get_current_time,
+    list_templates,
+    read_template,
+    write_document,
+    create_template,
+    list_reports,
+    get_report,
+    get_report_section,
+    get_report_toc,
+    check_reachability,
+    get_system_info,
+    get_interface_stats,
+    get_traffic_summary,
+    get_dhcp_leases,
+    audit_dhcp,
+    get_router_log,
+    audit_security,
+    run_command_all,
+]
+
 # Flat map: tool name → callable (deduped by name)
 TOOL_MAP: dict[str, object] = {}
-for _t in MONITOR_TOOLS + DIAGNOSE_TOOLS + CONFIG_TOOLS + SECURITY_TOOLS:
+for _t in MONITOR_TOOLS + DIAGNOSE_TOOLS + CONFIG_TOOLS + SECURITY_TOOLS + DOCUMENT_TOOLS:
     TOOL_MAP.setdefault(_t.name, _t)

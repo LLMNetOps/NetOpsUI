@@ -1,4 +1,4 @@
-"""LangGraph node functions: supervisor + 4 specialist agents."""
+"""LangGraph node functions: supervisor + 5 specialist agents."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, Tool
 from langchain_ollama import ChatOllama
 
 from agents.tools import (
-    MONITOR_TOOLS, DIAGNOSE_TOOLS, CONFIG_TOOLS, SECURITY_TOOLS,
+    MONITOR_TOOLS, DIAGNOSE_TOOLS, CONFIG_TOOLS, SECURITY_TOOLS, DOCUMENT_TOOLS,
 )
 
 if TYPE_CHECKING:
@@ -24,6 +24,17 @@ OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 OLLAMA_MODEL    = os.getenv("OLLAMA_MODEL", "gemma4:e4b")
 
 WIB = timezone(timedelta(hours=7))
+
+# ── Agent alias mapping (display only — tidak mempengaruhi routing/kode) ──────
+
+AGENT_ALIAS: dict[str, str] = {
+    "supervisor":    "bambang",
+    "monitor_agent": "eko",
+    "diagnose_agent": "agus",
+    "config_agent":  "joko",
+    "security_agent": "satria",
+    "document_agent": "budi",
+}
 
 # ── LLM factory ───────────────────────────────────────────────────────────────
 
@@ -52,7 +63,9 @@ def _clean(text: str) -> str:
 
 
 def _log(source: str, event_type: str, content: str) -> dict:
-    return {"timestamp": _now_str(), "source": source,
+    """Build a log entry, resolving source to its display alias if defined."""
+    display = AGENT_ALIAS.get(source, source)
+    return {"timestamp": _now_str(), "source": display,
             "event_type": event_type, "content": content}
 
 
@@ -106,10 +119,15 @@ Kamu adalah supervisor operasional jaringan kampus. Tugasmu menganalisis permint
 operator dan memutuskan agent yang menanganinya.
 
 Agent tersedia:
-- monitor_agent   : status jaringan, health check, DHCP overview, interface stats, laporan
-- diagnose_agent  : masalah konektivitas, ping/traceroute, DHCP client gagal, packet loss
-- config_agent    : baca konfigurasi router, config backup, eksport config
-- security_agent  : audit keamanan, user accounts, NTP sync, firewall check
+- monitor_agent  [eko]    : status jaringan, health check, DHCP overview, interface stats
+- diagnose_agent [agus]   : masalah konektivitas, ping/traceroute, DHCP client gagal, packet loss
+- config_agent   [joko]   : baca konfigurasi router, config backup, eksport config
+- security_agent [satria] : audit keamanan, user accounts, NTP sync, firewall check
+- document_agent [budi]   : tulis dokumen laporan ke file, baca/buat template, kurasi hasil agent lain
+
+Untuk laporan komprehensif yang butuh data multi-domain: gunakan monitor_agent atau
+security_agent terlebih dahulu untuk mengumpulkan data, baru route ke document_agent
+untuk kompilasi dan penulisan dokumen ke file.
 
 Skill tersedia (nama → trigger):
 {skill_list}
@@ -118,7 +136,7 @@ Balas HANYA dengan JSON valid, tanpa teks lain sebelum atau sesudah JSON.
 Contoh format yang benar:
 {{"next_agent":"monitor_agent","relevant_skills":[],"reasoning":"query status jaringan"}}
 
-Field next_agent harus salah satu: monitor_agent, diagnose_agent, config_agent, security_agent, END
+Field next_agent harus salah satu: monitor_agent, diagnose_agent, config_agent, security_agent, document_agent, END
 Gunakan END jika pertanyaan sudah dijawab AI sebelumnya dalam percakapan ini.
 """
 
@@ -128,7 +146,6 @@ def supervisor_node(state: "NetworkOpsState") -> dict:
 
     messages = state["messages"]
 
-    # If the last message is an AIMessage with content → task done
     last = messages[-1] if messages else None
     if isinstance(last, AIMessage) and _clean(last.content or ""):
         return {
@@ -137,7 +154,6 @@ def supervisor_node(state: "NetworkOpsState") -> dict:
             "agent_log": [_log("supervisor", "routing", "→ END (respons sudah ada)")],
         }
 
-    # Build skill summary
     skill_list = "\n".join(
         f"  {s.name}: {', '.join(s.triggers[:3])}"
         for s in _skill_lib.list_enabled()
@@ -155,7 +171,7 @@ def supervisor_node(state: "NetworkOpsState") -> dict:
         data = {"next_agent": "monitor_agent", "relevant_skills": [], "reasoning": str(exc)}
 
     next_agent = data.get("next_agent", "monitor_agent")
-    if next_agent not in ("monitor_agent", "diagnose_agent", "config_agent", "security_agent", "END"):
+    if next_agent not in ("monitor_agent", "diagnose_agent", "config_agent", "security_agent", "document_agent", "END"):
         next_agent = "monitor_agent"
 
     skills = data.get("relevant_skills", [])
@@ -186,14 +202,15 @@ Tool yang tersedia (HANYA ini yang boleh dipanggil): {tool_names}
 """
 
 _AGENT_ROLES = {
-    "monitor_agent":   "agen monitoring jaringan — bertugas menganalisis status, health, dan statistik jaringan",
-    "diagnose_agent":  "agen diagnostik jaringan — bertugas menginvestigasi dan mendiagnosa masalah konektivitas",
-    "config_agent":    "agen konfigurasi — bertugas membaca dan memverifikasi konfigurasi router",
-    "security_agent":  "agen keamanan jaringan — bertugas mengaudit postur keamanan router dan akun",
+    "monitor_agent":  "agen monitoring jaringan — bertugas menganalisis status, health, dan statistik jaringan",
+    "diagnose_agent": "agen diagnostik jaringan — bertugas menginvestigasi dan mendiagnosa masalah konektivitas",
+    "config_agent":   "agen konfigurasi — bertugas membaca dan memverifikasi konfigurasi router",
+    "security_agent": "agen keamanan jaringan — bertugas mengaudit postur keamanan router dan akun",
+    "document_agent": "agen dokumentasi — bertugas membuat laporan terstruktur, mengelola template, dan mengkurasi hasil agent lain menjadi dokumen laporan yang tersimpan di file",
 }
 
 
-def _make_specialist_node(agent_name: str, tools: list):
+def _make_specialist_node(agent_name: str, tools: list, context_window: int = 10):
     tool_map_local = {t.name: t for t in tools}
     tool_names_str = ", ".join(t.name for t in tools)
     llm_with_tools = _make_llm(temperature=0.3).bind_tools(tools)
@@ -201,7 +218,6 @@ def _make_specialist_node(agent_name: str, tools: list):
     def _node(state: "NetworkOpsState") -> dict:
         from agent import _skill_lib  # noqa: PLC0415
 
-        # Inject relevant skill context
         skill_names = state.get("injected_skills") or []
         skill_objs = [s for n in skill_names if (s := _skill_lib.get_by_name(n))]
         skill_ctx = _skill_lib.inject_context(skill_objs) if skill_objs else ""
@@ -213,8 +229,7 @@ def _make_specialist_node(agent_name: str, tools: list):
         ).strip()
         sys_msg = SystemMessage(content=sys_content)
 
-        # Use last 10 messages as context
-        context_msgs = list(state["messages"])[-10:]
+        context_msgs = list(state["messages"])[-context_window:]
         all_msgs, logs = _react_loop(
             llm_with_tools,
             [sys_msg] + context_msgs,
@@ -222,7 +237,6 @@ def _make_specialist_node(agent_name: str, tools: list):
             agent_name,
         )
 
-        # The last message is the final AI response
         final_msg = all_msgs[-1]
         if isinstance(final_msg, AIMessage):
             content = _clean(final_msg.content or "")
@@ -283,7 +297,6 @@ def config_node(state: dict) -> dict:
             args_str = ", ".join(f"{k}={json.dumps(v)}" for k, v in args.items())
             logs.append(_log("config_agent", "tool_call", f"{name}({args_str})"))
 
-            # Gate: interrupt for tools that need approval
             if name in _APPROVAL_REQUIRED_TOOLS:
                 router = args.get("router_name", "router")
                 approval_req = {
@@ -336,7 +349,8 @@ def config_node(state: dict) -> dict:
 
 # ── Exported node functions ───────────────────────────────────────────────────
 
-monitor_node   = _make_specialist_node("monitor_agent",  MONITOR_TOOLS)
-diagnose_node  = _make_specialist_node("diagnose_agent", DIAGNOSE_TOOLS)
-security_node  = _make_specialist_node("security_agent", SECURITY_TOOLS)
+monitor_node  = _make_specialist_node("monitor_agent",  MONITOR_TOOLS)
+diagnose_node = _make_specialist_node("diagnose_agent", DIAGNOSE_TOOLS)
+security_node = _make_specialist_node("security_agent", SECURITY_TOOLS)
+document_node = _make_specialist_node("document_agent", DOCUMENT_TOOLS, context_window=20)
 # config_node defined above with interrupt() support

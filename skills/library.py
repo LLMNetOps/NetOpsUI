@@ -95,6 +95,8 @@ class SkillLibrary:
     def _load_all(self) -> None:
         loaded: dict[str, Skill] = {}
         for md_file in self._dir.rglob("*.md"):
+            if "templates" in md_file.parts:
+                continue
             skill = _parse_skill_file(md_file)
             if skill:
                 if skill.name in loaded:
