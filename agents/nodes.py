@@ -176,13 +176,33 @@ def supervisor_node(state: "NetworkOpsState") -> dict:
 
     skills = data.get("relevant_skills", [])
     log_msg = f"→ {next_agent}  skills: {skills}  | {data.get('reasoning','')}"
-
-    return {
+    base_result = {
         "next_agent": next_agent,
         "active_agent": "supervisor",
         "injected_skills": skills,
         "agent_log": [_log("supervisor", "routing", log_msg)],
     }
+
+    # Bambang menjawab langsung jika END tapi belum ada respons AI (sapaan, pertanyaan umum)
+    if next_agent == "END":
+        has_ai_reply = any(
+            isinstance(m, AIMessage) and _clean(m.content or "")
+            for m in recent
+        )
+        if not has_ai_reply:
+            llm_chat = _make_llm(temperature=0.5)
+            chat_sys = SystemMessage(content=(
+                "Kamu adalah Bambang, supervisor operasional jaringan kampus universitas. "
+                "Balas sapaan atau pertanyaan umum dengan ramah dan singkat dalam Bahasa Indonesia. "
+                "Sebutkan bahwa kamu siap membantu kebutuhan operasional jaringan kampus."
+            ))
+            try:
+                reply = llm_chat.invoke([chat_sys] + recent)
+                base_result["messages"] = [reply]
+            except Exception:
+                pass
+
+    return base_result
 
 
 def route_from_supervisor(state: dict) -> str:

@@ -6,12 +6,17 @@ import re
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
+import yaml
 from langchain_core.tools import tool
 
 _BASE = Path(__file__).parent.parent
 _TEMPLATES_DIR = _BASE / "skills" / "documents" / "templates"
 _LAPORAN_DIR = _BASE / "laporan"
+_SKILLS_DIR = _BASE / "skills"
 _WIB = timezone(timedelta(hours=7))
+
+_VALID_DOMAINS = {"dhcp", "routing", "monitoring", "security", "config", "documents"}
+_REQUIRED_FRONTMATTER = {"name", "domain", "triggers", "tools", "enabled"}
 
 
 def _safe_path(base: Path, name: str) -> Path | None:
@@ -148,4 +153,94 @@ def create_template(name: str, content: str) -> str:
         f"Template berhasil {action}: skills/documents/templates/{safe_name}\n"
         f"Ukuran: {len(content):,} karakter\n"
         f"Template ini tersedia untuk semua agent via list_templates() dan read_template()."
+    )
+
+
+@tool
+def write_skill(domain: str, name: str, content: str) -> str:
+    """
+    Tulis atau perbarui file skill Markdown di skills/{domain}/{name}.md.
+    Skill yang ditulis langsung aktif (hot-reload otomatis tanpa restart).
+
+    File skill HARUS diawali frontmatter YAML dengan field wajib:
+      name, domain, triggers (list), tools (list), enabled (bool).
+
+    Domain yang valid: dhcp, routing, monitoring, security, config, documents
+
+    Contoh content minimal:
+      ---
+      name: nama-skill
+      domain: security
+      triggers:
+        - kata kunci pemicu
+      tools:
+        - audit_security
+      approval_required: false
+      enabled: true
+      ---
+
+      ## Konteks
+      Kapan skill ini digunakan.
+
+      ## Prosedur
+      Langkah-langkah yang harus diikuti agent.
+
+    Args:
+        domain:  Domain skill (dhcp/routing/monitoring/security/config/documents)
+        name:    Nama file skill tanpa ekstensi (contoh: security-audit, ospf-down)
+        content: Isi lengkap file skill dalam format Markdown dengan frontmatter YAML
+    """
+    if domain not in _VALID_DOMAINS:
+        return (
+            f"Error: domain '{domain}' tidak valid.\n"
+            f"Domain yang tersedia: {', '.join(sorted(_VALID_DOMAINS))}"
+        )
+
+    # Validate frontmatter
+    if not content.strip().startswith("---"):
+        return "Error: content harus diawali frontmatter YAML (---)"
+
+    end = content.find("---", 3)
+    if end == -1:
+        return "Error: frontmatter YAML tidak tertutup (tidak ada --- penutup)"
+
+    try:
+        fm = yaml.safe_load(content[3:end].strip()) or {}
+    except yaml.YAMLError as e:
+        return f"Error: YAML frontmatter tidak valid — {e}"
+
+    missing = _REQUIRED_FRONTMATTER - set(fm.keys())
+    if missing:
+        return f"Error: frontmatter wajib memiliki field: {', '.join(sorted(missing))}"
+
+    if not isinstance(fm.get("triggers"), list) or not fm["triggers"]:
+        return "Error: 'triggers' harus berupa list dengan minimal satu item"
+
+    if not isinstance(fm.get("tools"), list):
+        return "Error: 'tools' harus berupa list"
+
+    # Write file
+    safe_name = Path(name).stem + ".md"
+    if re.search(r'[/\\]', safe_name):
+        return "Error: nama file tidak boleh mengandung path separator"
+
+    domain_dir = _SKILLS_DIR / domain
+    domain_dir.mkdir(parents=True, exist_ok=True)
+
+    target = domain_dir / safe_name
+    try:
+        target.resolve().relative_to(_SKILLS_DIR.resolve())
+    except ValueError:
+        return "Error: path traversal terdeteksi."
+
+    action = "diperbarui" if target.exists() else "dibuat"
+    try:
+        target.write_text(content, encoding="utf-8")
+    except OSError as e:
+        return f"Gagal menyimpan skill: {e}"
+
+    return (
+        f"Skill '{fm['name']}' berhasil {action}: skills/{domain}/{safe_name}\n"
+        f"Domain: {domain}  |  Triggers: {len(fm['triggers'])}  |  Tools: {len(fm.get('tools', []))}\n"
+        f"Skill langsung aktif — hot-reload otomatis."
     )

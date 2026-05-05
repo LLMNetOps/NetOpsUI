@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Single-file curses TUI for DHCP lease monitoring."""
+"""Campus Network Operations Platform TUI."""
 
 from __future__ import annotations
 
@@ -7,7 +7,6 @@ import curses
 import datetime as dt
 import os
 import re
-import shutil
 import subprocess
 import threading
 import time
@@ -16,8 +15,9 @@ from typing import Any
 
 
 WORKDIR = Path(__file__).parent
-OUTPUT_DIR = WORKDIR / "output"
 LAPORAN_DIR = WORKDIR / "laporan"
+BACKUPS_DIR = WORKDIR / "backups"
+CONFIG_FILE = WORKDIR / "config.yaml"
 LOG_FILE = WORKDIR / "schedule.log"
 MENU_WIDTH = 18
 REFRESH_INTERVAL = 5
@@ -57,12 +57,13 @@ SPINNER = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
 
 MENU = [
     ("1", "Dashboard"),
-    ("2", "Jadwal"),
-    ("3", "Collect"),
+    ("2", "Skills"),
+    ("3", "Reachability"),
     ("4", "Laporan"),
     ("5", "Log"),
     ("6", "AI Chat"),
     ("7", "Aktivitas Agent"),
+    ("8", "Status Agent"),
 ]
 
 # ── Agent module ─────────────────────────────────────────────────────────────
@@ -74,11 +75,115 @@ try:
 except Exception:
     pass
 
-# Shared activity log: written by AIScreen, read by AgentActivityScreen
+# Shared activity log: written by AIScreen, read by AgentActivityScreen + KanbanScreen
 _agent_activity_log: list[dict] = []
 
+# ── Kanban state ──────────────────────────────────────────────────────────────
+
+AGENT_INFO: dict[str, str] = {
+    "bambang": "supervisor",
+    "eko":     "monitor",
+    "agus":    "diagnosa",
+    "joko":    "config",
+    "satria":  "security",
+    "budi":    "dokumen",
+}
+
+_ROLE_TO_ALIAS: dict[str, str] = {
+    "monitor_agent":  "eko",
+    "diagnose_agent": "agus",
+    "config_agent":   "joko",
+    "security_agent": "satria",
+    "document_agent": "budi",
+    "supervisor":     "bambang",
+}
+
+KANBAN_COLS: list[tuple[str, str]] = [
+    ("standby",  "STANDBY"),
+    ("antrean",  "ANTREAN"),
+    ("berjalan", "BERJALAN"),
+    ("menunggu", "MENUNGGU"),
+    ("selesai",  "SELESAI"),
+    ("gagal",    "GAGAL"),
+]
+
+_KANBAN_COL_COLOR: dict[str, int] = {
+    "standby":  C_DIM,
+    "antrean":  C_WARN,
+    "berjalan": C_OK,
+    "menunggu": C_WARN,
+    "selesai":  C_TITLE,
+    "gagal":    C_ERR,
+}
+
+_kanban_lock = threading.Lock()
+
+
+def _kanban_blank() -> dict:
+    return {"col": "standby", "col_since": time.time(), "tool_count": 0, "last_tool": ""}
+
+
+def _set_col(agents: dict, alias: str, col: str) -> None:
+    """Set agent column and record transition timestamp."""
+    agents[alias]["col"] = col
+    agents[alias]["col_since"] = time.time()
+
+
+_kanban_state: dict = {
+    "query":       "",
+    "query_start": time.time(),
+    "agents":      {alias: _kanban_blank() for alias in AGENT_INFO},
+}
+
+
+def _kanban_reset(query: str) -> None:
+    with _kanban_lock:
+        now = time.time()
+        _kanban_state["query"] = query[:60]
+        _kanban_state["query_start"] = now
+        _kanban_state["agents"] = {alias: _kanban_blank() for alias in AGENT_INFO}
+        _kanban_state["agents"]["bambang"]["col"] = "berjalan"
+        _kanban_state["agents"]["bambang"]["col_since"] = now
+
+
+def _kanban_update(event_type: str, content: str) -> None:
+    m = re.match(r'^\[(\w+)\]\s*(.*)', content, re.DOTALL)
+    if not m:
+        # approval_required content is JSON — map config_agent → joko
+        if event_type == "approval_required":
+            with _kanban_lock:
+                _set_col(_kanban_state["agents"], "joko", "menunggu")
+        return
+
+    alias, msg = m.group(1).strip(), m.group(2).strip()
+
+    with _kanban_lock:
+        agents = _kanban_state["agents"]
+        if alias not in agents:
+            return
+
+        if event_type == "routing":
+            if msg.startswith("→"):
+                target_role = msg.lstrip("→").strip().split()[0]
+                if target_role == "END" or "END" in target_role:
+                    _set_col(agents, "bambang", "selesai")
+                else:
+                    _set_col(agents, "bambang", "selesai")
+                    target = _ROLE_TO_ALIAS.get(target_role, "")
+                    if target:
+                        _set_col(agents, target, "berjalan")
+            elif "←" in msg:
+                _set_col(agents, alias, "selesai")
+
+        elif event_type == "tool_call":
+            agents[alias]["col"] = "berjalan"
+            agents[alias]["tool_count"] += 1
+            agents[alias]["last_tool"] = re.split(r'[\s(]', msg)[0] if msg else ""
+
+        elif event_type == "error":
+            _set_col(agents, alias, "gagal")
+
 _HAS_COLORS = False
-ATQ_RE = re.compile(r"^(\d+)\t(\w{3} \w{3}\s+\d+ \d{2}:\d{2}:\d{2} \d{4})")
 
 
 def cp(pair_id: int) -> int:
@@ -123,44 +228,6 @@ def tail_file(path: Path, n: int = 30) -> list[str]:
         return [line.rstrip("\n") for line in lines[-n:]]
     except OSError:
         return []
-
-
-def parse_atq() -> list[dict[str, Any]]:
-    """Parse atq output into dictionaries: id, dt, label."""
-    output = run_cmd(["atq"], cwd=WORKDIR, timeout=5)
-    jobs: list[dict[str, Any]] = []
-    for raw in output.splitlines():
-        line = raw.strip("\n")
-        m = ATQ_RE.match(line)
-        if not m:
-            continue
-        job_id = m.group(1)
-        dt_str = m.group(2)
-        try:
-            parsed_dt = dt.datetime.strptime(dt_str, "%a %b %d %H:%M:%S %Y")
-        except ValueError:
-            continue
-        jobs.append({"id": job_id, "dt": parsed_dt, "label": dt_str})
-    return jobs
-
-
-def format_countdown(target: dt.datetime) -> str:
-    """Format countdown from now to target datetime."""
-    if not target:
-        return "-"
-    now = dt.datetime.now()
-    delta = target - now
-    sec = int(delta.total_seconds())
-    if sec < 0:
-        return "overdue"
-    hours = sec // 3600
-    minutes = (sec % 3600) // 60
-    return f"{hours}h {minutes}m"
-
-
-def today_str() -> str:
-    """Return today's date in YYYYMMDD format."""
-    return dt.datetime.now().strftime("%Y%m%d")
 
 
 def strip_markdown(text: str) -> str:
@@ -208,192 +275,237 @@ class Screen:
 
 
 class DashboardScreen(Screen):
-    """Overview status and key counters."""
+    """System overview: agent status, routers, laporan, skills."""
 
     def refresh(self) -> None:
-        atd_status = run_cmd(["systemctl", "is-active", "atd"]).strip() or "unknown"
-        at_available = shutil.which("at") is not None
-        jobs = sorted(parse_atq(), key=lambda x: x["dt"])
+        # Agent status
+        agent_status: dict = {}
+        if _HAS_AGENT and _agent_mod is not None:
+            try:
+                agent_status = _agent_mod.get_agent_status()
+            except Exception:
+                pass
 
-        now = dt.datetime.now()
-        next_job = None
-        for item in jobs:
-            if item["dt"] > now:
-                next_job = item
-                break
+        # Routers dari config.yaml
+        routers: list[str] = []
+        if CONFIG_FILE.exists():
+            try:
+                import yaml as _yaml
+                cfg = _yaml.safe_load(CONFIG_FILE.read_text())
+                routers = [r.get("name", "?") for r in cfg.get("routers", [])]
+            except Exception:
+                pass
 
-        txt_today = len(list(OUTPUT_DIR.glob(f"*{today_str()}*.txt")))
-        md_all = len(list(LAPORAN_DIR.glob("*.md")))
-
-        recent = sorted(
-            OUTPUT_DIR.glob("*.txt"),
+        # Laporan files
+        laporan = sorted(
+            LAPORAN_DIR.glob("*.md"),
             key=lambda p: p.stat().st_mtime,
             reverse=True,
-        )[:5]
+        ) if LAPORAN_DIR.exists() else []
+
+        # Backups
+        backup_count = len(list(BACKUPS_DIR.rglob("*.rsc"))) if BACKUPS_DIR.exists() else 0
 
         with self._lock:
-            self.data["atd_status"] = atd_status
-            self.data["at_available"] = at_available
-            self.data["jobs"] = jobs
-            self.data["next_job"] = next_job
-            self.data["txt_today"] = txt_today
-            self.data["md_all"] = md_all
-            self.data["recent_txt"] = [p.name for p in recent]
+            self.data["agent_status"] = agent_status
+            self.data["routers"] = routers
+            self.data["laporan"] = [p.name for p in laporan]
+            self.data["laporan_count"] = len(laporan)
+            self.data["backup_count"] = backup_count
+            self.data["config_ok"] = CONFIG_FILE.exists()
 
     def draw(self, win: Any, rows: int, cols: int) -> None:
         with self._lock:
             data = dict(self.data)
 
-        safe_addstr(win, 0, 1, "Dashboard", cp(C_TITLE) | curses.A_BOLD)
-        safe_addstr(win, 1, 1, "-" * max(1, cols - 2), cp(C_DIM))
+        safe_addstr(win, 0, 1, "Dashboard — NetOps AI", cp(C_TITLE) | curses.A_BOLD)
+        safe_addstr(win, 1, 1, "─" * max(1, cols - 2), cp(C_DIM))
 
-        safe_addstr(win, 3, 2, "Status Sistem", cp(C_TITLE) | curses.A_BOLD)
-        safe_addstr(win, 4, 2, "-------------", cp(C_DIM))
+        row = 2
 
-        atd_active = data.get("atd_status") == "active"
-        if atd_active:
-            safe_addstr(win, 5, 2, "atd service  : ", 0)
-            safe_addstr(win, 5, 17, "● active", cp(C_OK) | curses.A_BOLD)
+        # ── Agent ──
+        safe_addstr(win, row, 2, "Agent", cp(C_TITLE) | curses.A_BOLD)
+        row += 1
+        status = data.get("agent_status", {})
+        if status:
+            model   = status.get("model", "?")
+            skills  = status.get("skills_loaded", 0)
+            url     = status.get("ollama_url", "?")
+            safe_addstr(win, row,     2, f"  Model   : {model}", cp(C_OK))
+            safe_addstr(win, row + 1, 2, f"  Skills  : {skills} loaded", cp(C_OK))
+            safe_addstr(win, row + 2, 2, f"  Ollama  : {url}", cp(C_DIM))
+            row += 3
         else:
-            safe_addstr(win, 5, 2, "atd service  : ", 0)
-            safe_addstr(win, 5, 17, "✗ tidak aktif", cp(C_ERR) | curses.A_BOLD)
+            safe_addstr(win, row, 2, "  Agent tidak tersedia", cp(C_ERR))
+            row += 1
 
-        at_available = bool(data.get("at_available"))
-        if at_available:
-            safe_addstr(win, 6, 2, "at command   : ", 0)
-            safe_addstr(win, 6, 17, "✓ tersedia", cp(C_OK) | curses.A_BOLD)
+        row += 1
+        safe_addstr(win, row, 2, "─" * max(1, cols - 4), cp(C_DIM))
+        row += 1
+
+        # ── Config & Routers ──
+        safe_addstr(win, row, 2, "Konfigurasi", cp(C_TITLE) | curses.A_BOLD)
+        row += 1
+        config_ok = data.get("config_ok", False)
+        cfg_label = "✓ config.yaml" if config_ok else "✗ config.yaml tidak ditemukan"
+        cfg_color = C_OK if config_ok else C_ERR
+        safe_addstr(win, row, 2, f"  {cfg_label}", cp(cfg_color))
+        row += 1
+
+        routers = data.get("routers", [])
+        if routers:
+            safe_addstr(win, row, 2, f"  Routers  : {', '.join(routers)}", cp(C_DIM))
         else:
-            safe_addstr(win, 6, 2, "at command   : ", 0)
-            safe_addstr(win, 6, 17, "✗ tidak ditemukan", cp(C_ERR) | curses.A_BOLD)
+            safe_addstr(win, row, 2, "  Routers  : (belum dikonfigurasi)", cp(C_WARN))
+        row += 2
 
-        safe_addstr(win, 8, 2, "Jadwal Berikutnya", cp(C_TITLE) | curses.A_BOLD)
-        safe_addstr(win, 9, 2, "-----------------", cp(C_DIM))
+        safe_addstr(win, row, 2, "─" * max(1, cols - 4), cp(C_DIM))
+        row += 1
 
-        next_job = data.get("next_job")
-        if next_job:
-            label = next_job["dt"].strftime("%a %b %d %H:%M:%S")
-            safe_addstr(win, 10, 2, f"Job #{next_job['id']}  ->  {label}"[: cols - 3])
-            safe_addstr(win, 11, 2, "Countdown  : ")
-            safe_addstr(
-                win,
-                11,
-                15,
-                format_countdown(next_job["dt"]),
-                cp(C_WARN) | curses.A_BOLD,
-            )
-        else:
-            safe_addstr(win, 10, 2, "Tidak ada jadwal")
-            safe_addstr(win, 11, 2, "Countdown  : -", cp(C_DIM))
+        # ── Laporan ──
+        safe_addstr(win, row, 2, "Laporan", cp(C_TITLE) | curses.A_BOLD)
+        row += 1
+        lcount   = data.get("laporan_count", 0)
+        bcount   = data.get("backup_count", 0)
+        safe_addstr(win, row,     2, f"  .md files : {lcount}", cp(C_DIM))
+        safe_addstr(win, row + 1, 2, f"  Backups   : {bcount} .rsc", cp(C_DIM))
+        row += 2
 
-        safe_addstr(win, 13, 2, "File Hari Ini", cp(C_TITLE) | curses.A_BOLD)
-        safe_addstr(win, 14, 2, "--------------", cp(C_DIM))
-        safe_addstr(win, 15, 2, f".txt output  :  {int(data.get('txt_today', 0))} file")
-        safe_addstr(win, 16, 2, f".md laporan  :  {int(data.get('md_all', 0))} file")
+        laporan = data.get("laporan", [])[:min(5, rows - row - 2)]
+        if laporan:
+            safe_addstr(win, row, 2, "  Terbaru:", cp(C_DIM))
+            row += 1
+            for name in laporan:
+                if row >= rows - 1:
+                    break
+                maxw = max(4, cols - 7)
+                show = name if len(name) <= maxw else name[: maxw - 3] + "..."
+                safe_addstr(win, row, 4, show, cp(C_DIM))
+                row += 1
 
-        safe_addstr(win, 18, 2, "Terbaru:", cp(C_TITLE))
-        recent = data.get("recent_txt", [])
-        for idx, name in enumerate(recent[:5]):
-            maxw = max(4, cols - 7)
-            show = name if len(name) <= maxw else (name[: maxw - 3] + "...")
-            safe_addstr(win, 19 + idx, 4, show)
+        safe_addstr(win, rows - 1, 2, "[R] Refresh", cp(C_MENU))
 
 
-class JadwalScreen(Screen):
-    """Schedule listing and actions for at jobs."""
+class SkillsScreen(Screen):
+    """Daftar semua skill yang loaded — domain, trigger, tools."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.scroll = 0
 
     def refresh(self) -> None:
-        jobs = sorted(parse_atq(), key=lambda x: x["dt"])
-        at_available = shutil.which("at") is not None
+        skills: list[dict] = []
+        if _HAS_AGENT and _agent_mod is not None:
+            try:
+                skills = _agent_mod.get_available_skills()
+            except Exception:
+                pass
         with self._lock:
-            self.data["jobs"] = jobs
-            self.data["at_available"] = at_available
+            self.data["skills"] = skills
 
     def handle_key(self, key: int, app: "App") -> bool:
         ch = chr(key) if 0 < key < 256 else ""
+        with self._lock:
+            n = len(self.data.get("skills", []))
 
-        if ch in ("s", "S"):
-            if app.modal_confirm(["Jalankan ./schedule_utbk.sh?"]):
-                out = run_cmd(["bash", "schedule_utbk.sh"], cwd=WORKDIR, timeout=30)
-                lines = ["Setup selesai."]
-                if out.strip():
-                    lines.extend(out.strip().splitlines()[-3:])
-                app.modal_message(lines[:6], duration=3.0)
-                self.refresh()
+        if key in (curses.KEY_UP, ord("k"), ord("K")):
+            self.scroll = max(0, self.scroll - 1)
             return True
-
-        if ch in ("c", "C"):
-            if app.modal_confirm(["Cancel SEMUA at jobs?"]):
-                out = run_cmd(
-                    ["bash", "schedule_utbk.sh", "--cancel"],
-                    cwd=WORKDIR,
-                    timeout=30,
-                )
-                lines = ["Cancel selesai."]
-                if out.strip():
-                    lines.extend(out.strip().splitlines()[-3:])
-                app.modal_message(lines[:6], duration=3.0)
-                self.refresh()
+        if key in (curses.KEY_DOWN, ord("j"), ord("J")):
+            self.scroll = min(max(0, n - 1), self.scroll + 1)
             return True
-
-        if ch in ("x", "X"):
-            job_id = app.modal_input("Nomor job (contoh: 7): ")
-            if job_id.isdigit():
-                out = run_cmd(["atrm", job_id], cwd=WORKDIR, timeout=10)
-                lines = [f"Job #{job_id} dibatalkan."]
-                if out.strip():
-                    lines.extend(out.strip().splitlines()[-2:])
-                app.modal_message(lines[:5], duration=2.5)
-                self.refresh()
-            else:
-                app.modal_message(["Input tidak valid."], duration=1.5)
+        if ch in ("r", "R"):
+            self.refresh()
+            app._wake.set()
             return True
-
         return False
 
     def draw(self, win: Any, rows: int, cols: int) -> None:
         with self._lock:
-            jobs = list(self.data.get("jobs", []))
-            at_available = bool(self.data.get("at_available", False))
+            skills = list(self.data.get("skills", []))
 
-        safe_addstr(
-            win,
-            0,
-            1,
-            f"Jadwal at Jobs  ({len(jobs)} terjadwal)",
-            cp(C_TITLE) | curses.A_BOLD,
+        enabled  = sum(1 for s in skills if s.get("enabled"))
+        safe_addstr(win, 0, 1,
+                    f"Skills  ({enabled} aktif / {len(skills)} total)",
+                    cp(C_TITLE) | curses.A_BOLD)
+        safe_addstr(win, 1, 1, "─" * max(1, cols - 2), cp(C_DIM))
+
+        if not skills:
+            safe_addstr(win, 3, 2, "Belum ada skill — pastikan agent tersedia.", cp(C_WARN))
+            safe_addstr(win, rows - 1, 2, "[R] Refresh", cp(C_MENU))
+            return
+
+        card_h   = 3
+        content_rows = max(1, rows - 4)
+        max_scroll   = max(0, len(skills) - content_rows // card_h)
+        self.scroll  = min(self.scroll, max_scroll)
+        start = self.scroll
+        row = 2
+        for skill in skills[start:]:
+            if row + card_h > rows - 2:
+                break
+            enabled = skill.get("enabled", True)
+            color   = C_OK if enabled else C_DIM
+            name    = skill.get("name", "?")
+            domain  = skill.get("domain", "?")
+            tools   = skill.get("tools", [])
+            triggers = skill.get("triggers", [])
+            trigger_str = ", ".join(triggers[:3])
+            if len(triggers) > 3:
+                trigger_str += f" +{len(triggers)-3}"
+            status = "✓" if enabled else "✗"
+            safe_addstr(win, row,     2,
+                        f"{status} {name}  [{domain}]  tools: {len(tools)}"[: cols - 3],
+                        cp(color) | curses.A_BOLD)
+            safe_addstr(win, row + 1, 4,
+                        f"triggers: {trigger_str}"[: cols - 5],
+                        cp(C_DIM))
+            safe_addstr(win, row + 2, 2, "·" * max(1, cols - 4), cp(C_DIM))
+            row += card_h
+
+        safe_addstr(win, rows - 1, 2, "[J/K] Scroll  [R] Refresh", cp(C_MENU))
+
+
+_PING_SCRIPT = r"""\
+import sys, re, subprocess, yaml
+from pathlib import Path
+cfg_file = Path(sys.argv[1])
+if not cfg_file.exists():
+    print("config.yaml tidak ditemukan.")
+    sys.exit(1)
+cfg = yaml.safe_load(cfg_file.read_text())
+routers = cfg.get("routers", [])
+if not routers:
+    print("Tidak ada router di config.yaml.")
+    sys.exit(0)
+print(f"Ping {len(routers)} router...")
+print()
+for r in routers:
+    name = r.get("name", "?")
+    host = r.get("host", "")
+    if not host:
+        print(f"  {name:<14} (no host)")
+        continue
+    try:
+        res = subprocess.run(
+            ["ping", "-c", "2", "-W", "3", host],
+            capture_output=True, text=True, timeout=8,
         )
-        safe_addstr(win, 1, 1, "-" * max(1, cols - 2), cp(C_DIM))
-
-        row = 3
-        if not at_available:
-            safe_addstr(win, row, 2, "Perintah 'at' tidak tersedia di sistem.", cp(C_ERR))
-            row += 1
-
-        if not jobs:
-            safe_addstr(win, row, 2, "Tidak ada jadwal terdaftar.", cp(C_DIM))
-        else:
-            for item in jobs:
-                if row >= rows - 4:
-                    break
-                when = item["dt"].strftime("%a %b %d %H:%M:%S %Y")
-                cd = format_countdown(item["dt"])
-                line = f"#{item['id']:<3} {when:<24} ({cd})"
-                safe_addstr(win, row, 2, line[: cols - 3])
-                row += 1
-
-        cmd_row = max(2, rows - 3)
-        safe_addstr(win, cmd_row, 1, "-" * max(1, cols - 2), cp(C_DIM))
-        safe_addstr(
-            win,
-            cmd_row + 1,
-            2,
-            "[S] Setup   [C] Cancel semua   [X] Cancel #",
-            cp(C_MENU),
-        )
+        ok  = res.returncode == 0
+        rtt = "-"
+        m   = re.search(r"rtt.*?= [\d.]+/([\d.]+)", res.stdout)
+        if m: rtt = f"{m.group(1)}ms avg"
+        status = "✓ UP  " if ok else "✗ DOWN"
+        print(f"  {name:<14} {host:<18} {status}  {rtt}")
+    except Exception as e:
+        print(f"  {name:<14} {host:<18} ✗ error: {e}")
+print()
+print("Selesai.")
+"""
 
 
-class CollectScreen(Screen):
-    """Run legacy/mikrotik_agent.py and stream output."""
+class ReachabilityScreen(Screen):
+    """Ping check semua router di config.yaml."""
 
     def __init__(self) -> None:
         super().__init__()
@@ -407,21 +519,18 @@ class CollectScreen(Screen):
 
     def refresh(self) -> None:
         with self._lock:
-            proc = self.data.get("proc")
+            proc  = self.data.get("proc")
             start = self.data.get("start")
             state = self.data.get("state", "IDLE")
             if state == "RUNNING" and proc is not None:
                 if proc.poll() is None and start is not None:
                     self.data["elapsed"] = time.time() - float(start)
 
-    def _start_collect(self, app: "App") -> None:
+    def _start_ping(self, app: "App") -> None:
         with self._lock:
             proc = self.data.get("proc")
             if proc is not None and proc.poll() is None:
-                self.data["lines"].append("Collect sedang berjalan...")
-                self.data["lines"] = self.data["lines"][-20:]
                 return
-
             self.data["state"] = "RUNNING"
             self.data["lines"] = []
             self.data["start"] = time.time()
@@ -430,7 +539,7 @@ class CollectScreen(Screen):
 
         try:
             proc = subprocess.Popen(
-                ["python3", "legacy/mikrotik_agent.py"],
+                ["python3", "-c", _PING_SCRIPT, str(CONFIG_FILE)],
                 cwd=str(WORKDIR),
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
@@ -440,7 +549,7 @@ class CollectScreen(Screen):
         except Exception as exc:
             with self._lock:
                 self.data["state"] = "FAILED"
-                self.data["lines"] = [f"Gagal start proses: {exc}"]
+                self.data["lines"] = [f"Gagal: {exc}"]
                 self.data["exit_code"] = -1
             app._wake.set()
             return
@@ -455,12 +564,11 @@ class CollectScreen(Screen):
                         with self._lock:
                             lines = list(self.data.get("lines", []))
                             lines.append(line.rstrip())
-                            self.data["lines"] = lines[-20:]
+                            self.data["lines"] = lines[-40:]
                             start = self.data.get("start")
                             if start is not None:
                                 self.data["elapsed"] = time.time() - float(start)
                         app._wake.set()
-
                 proc.wait()
                 with self._lock:
                     start = self.data.get("start")
@@ -472,8 +580,8 @@ class CollectScreen(Screen):
                 with self._lock:
                     self.data["state"] = "FAILED"
                     lines = list(self.data.get("lines", []))
-                    lines.append(f"Reader error: {exc}")
-                    self.data["lines"] = lines[-20:]
+                    lines.append(f"Error: {exc}")
+                    self.data["lines"] = lines[-40:]
                     self.data["exit_code"] = -1
             finally:
                 app._wake.set()
@@ -485,253 +593,109 @@ class CollectScreen(Screen):
         if ch in ("r", "R"):
             with self._lock:
                 state = self.data.get("state", "IDLE")
-            if state == "RUNNING":
-                with self._lock:
-                    lines = list(self.data.get("lines", []))
-                    lines.append("Collect sudah berjalan.")
-                    self.data["lines"] = lines[-20:]
-                return True
-            self._start_collect(app)
+            if state != "RUNNING":
+                self._start_ping(app)
             return True
         return False
 
     def draw(self, win: Any, rows: int, cols: int) -> None:
         with self._lock:
-            state = self.data.get("state", "IDLE")
-            lines = list(self.data.get("lines", []))
-            elapsed = float(self.data.get("elapsed", 0.0))
+            state    = self.data.get("state", "IDLE")
+            lines    = list(self.data.get("lines", []))
+            elapsed  = float(self.data.get("elapsed", 0.0))
             exit_code = self.data.get("exit_code")
 
-        safe_addstr(win, 0, 1, "Collect Data dari Router", cp(C_TITLE) | curses.A_BOLD)
-        safe_addstr(win, 1, 1, "-" * max(1, cols - 2), cp(C_DIM))
+        safe_addstr(win, 0, 1, "Reachability — Ping Semua Router", cp(C_TITLE) | curses.A_BOLD)
+        safe_addstr(win, 1, 1, "─" * max(1, cols - 2), cp(C_DIM))
 
         if state == "IDLE":
-            safe_addstr(win, 3, 2, "Jalankan legacy/mikrotik_agent.py untuk mengambil")
-            safe_addstr(win, 4, 2, "data DHCP lease dari semua router.")
-            safe_addstr(win, 6, 2, "Output disimpan ke: output/")
-            safe_addstr(win, 7, 2, "Log: schedule.log")
-            safe_addstr(win, 9, 2, "[R] Mulai collect", cp(C_MENU) | curses.A_BOLD)
+            safe_addstr(win, 3, 2, "Ping semua router dari config.yaml.", cp(C_DIM))
+            safe_addstr(win, 4, 2, "Menampilkan status UP/DOWN dan RTT.", cp(C_DIM))
+            safe_addstr(win, 6, 2, "[R] Mulai ping check", cp(C_MENU) | curses.A_BOLD)
             return
 
         if state == "RUNNING":
             spin = SPINNER[int(time.time() * 8) % len(SPINNER)]
-            safe_addstr(
-                win,
-                3,
-                2,
-                f"{spin} Running... {int(elapsed)}s",
-                cp(C_WARN) | curses.A_BOLD,
-            )
-            view = lines[-15:]
+            safe_addstr(win, 3, 2, f"{spin} Pinging...  {elapsed:.0f}s",
+                        cp(C_WARN) | curses.A_BOLD)
+            view = lines[-(rows - 6):]
             for idx, line in enumerate(view):
                 safe_addstr(win, 5 + idx, 2, line[: cols - 3])
             return
 
-        if state == "DONE":
-            safe_addstr(
-                win,
-                3,
-                2,
-                "✓ Selesai (exit 0)",
-                cp(C_OK) | curses.A_BOLD,
-            )
-            safe_addstr(win, 4, 2, f"Elapsed: {int(elapsed)}s", cp(C_DIM))
-            view = lines[-15:]
-            for idx, line in enumerate(view):
-                safe_addstr(win, 6 + idx, 2, line[: cols - 3])
-            safe_addstr(win, rows - 2, 2, "[R] Jalankan lagi", cp(C_MENU) | curses.A_BOLD)
-            return
-
-        safe_addstr(
-            win,
-            3,
-            2,
-            f"✗ Gagal (exit {exit_code})",
-            cp(C_ERR) | curses.A_BOLD,
-        )
-        safe_addstr(win, 4, 2, f"Elapsed: {int(elapsed)}s", cp(C_DIM))
-        view = lines[-15:]
+        hdr_color = C_OK if state == "DONE" else C_ERR
+        hdr = "✓ Selesai" if state == "DONE" else f"✗ Gagal (exit {exit_code})"
+        safe_addstr(win, 3, 2, f"{hdr}  ({elapsed:.0f}s)", cp(hdr_color) | curses.A_BOLD)
+        view = lines[-(rows - 6):]
         for idx, line in enumerate(view):
-            safe_addstr(win, 6 + idx, 2, line[: cols - 3])
-        safe_addstr(win, rows - 2, 2, "[R] Coba lagi", cp(C_MENU) | curses.A_BOLD)
+            color = C_OK if "✓" in line else C_ERR if "✗" in line else 0
+            safe_addstr(win, 5 + idx, 2, line[: cols - 3], cp(color) if color else 0)
+        safe_addstr(win, rows - 1, 2, "[R] Ulangi", cp(C_MENU))
 
 
 class LaporanScreen(Screen):
-    """Report list and report generation."""
+    """Daftar file laporan di laporan/ — dibuat oleh document_agent via AI Chat."""
 
     def __init__(self) -> None:
         super().__init__()
+        self.scroll = 0
         with self._lock:
             self.data["files"] = []
-            self.data["gen_state"] = "IDLE"
-            self.data["gen_lines"] = []
-            self.data["gen_proc"] = None
-            self.data["gen_start"] = None
-            self.data["gen_elapsed"] = 0.0
-            self.data["gen_exit_code"] = None
 
     def refresh(self) -> None:
         files = sorted(
             LAPORAN_DIR.glob("*.md"),
             key=lambda p: p.stat().st_mtime,
             reverse=True,
-        )
-
+        ) if LAPORAN_DIR.exists() else []
         with self._lock:
             self.data["files"] = files
-            proc = self.data.get("gen_proc")
-            state = self.data.get("gen_state")
-            start = self.data.get("gen_start")
-            if state == "RUNNING" and proc is not None and proc.poll() is None and start:
-                self.data["gen_elapsed"] = time.time() - float(start)
-
-    def _start_generate(self, app: "App", force: bool) -> None:
-        with self._lock:
-            proc = self.data.get("gen_proc")
-            if proc is not None and proc.poll() is None:
-                lines = list(self.data.get("gen_lines", []))
-                lines.append("Generate masih berjalan...")
-                self.data["gen_lines"] = lines[-20:]
-                return
-
-            self.data["gen_state"] = "RUNNING"
-            self.data["gen_lines"] = []
-            self.data["gen_start"] = time.time()
-            self.data["gen_elapsed"] = 0.0
-            self.data["gen_exit_code"] = None
-
-        cmd = ["python3", "legacy/generate_reports.py"]
-        if force:
-            cmd.append("--force")
-
-        try:
-            proc = subprocess.Popen(
-                cmd,
-                cwd=str(WORKDIR),
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                bufsize=1,
-            )
-        except Exception as exc:
-            with self._lock:
-                self.data["gen_state"] = "FAILED"
-                self.data["gen_lines"] = [f"Gagal start generate: {exc}"]
-                self.data["gen_exit_code"] = -1
-            app._wake.set()
-            return
-
-        with self._lock:
-            self.data["gen_proc"] = proc
-
-        def reader() -> None:
-            try:
-                if proc.stdout is not None:
-                    for line in proc.stdout:
-                        with self._lock:
-                            out = list(self.data.get("gen_lines", []))
-                            out.append(line.rstrip())
-                            self.data["gen_lines"] = out[-20:]
-                            start = self.data.get("gen_start")
-                            if start is not None:
-                                self.data["gen_elapsed"] = time.time() - float(start)
-                        app._wake.set()
-
-                proc.wait()
-                with self._lock:
-                    start = self.data.get("gen_start")
-                    if start is not None:
-                        self.data["gen_elapsed"] = time.time() - float(start)
-                    self.data["gen_exit_code"] = proc.returncode
-                    self.data["gen_state"] = (
-                        "DONE" if proc.returncode == 0 else "FAILED"
-                    )
-            except Exception as exc:
-                with self._lock:
-                    self.data["gen_state"] = "FAILED"
-                    out = list(self.data.get("gen_lines", []))
-                    out.append(f"Reader error: {exc}")
-                    self.data["gen_lines"] = out[-20:]
-                    self.data["gen_exit_code"] = -1
-            finally:
-                app._wake.set()
-
-        threading.Thread(target=reader, daemon=True).start()
 
     def handle_key(self, key: int, app: "App") -> bool:
         ch = chr(key) if 0 < key < 256 else ""
-        if ch in ("g", "G"):
-            with self._lock:
-                state = self.data.get("gen_state", "IDLE")
-            if state != "RUNNING":
-                self._start_generate(app, force=True)
-            return True
+        with self._lock:
+            n = len(self.data.get("files", []))
 
-        if ch in ("f", "F"):
-            with self._lock:
-                state = self.data.get("gen_state", "IDLE")
-            if state != "RUNNING":
-                self._start_generate(app, force=False)
+        if key in (curses.KEY_UP, ord("k"), ord("K")):
+            self.scroll = max(0, self.scroll - 1)
             return True
-
+        if key in (curses.KEY_DOWN, ord("j"), ord("J")):
+            self.scroll = min(max(0, n - 1), self.scroll + 1)
+            return True
+        if ch in ("r", "R"):
+            self.refresh()
+            app._wake.set()
+            return True
         return False
 
     def draw(self, win: Any, rows: int, cols: int) -> None:
         with self._lock:
             files = list(self.data.get("files", []))
-            gen_state = self.data.get("gen_state", "IDLE")
-            gen_lines = list(self.data.get("gen_lines", []))
-            gen_elapsed = float(self.data.get("gen_elapsed", 0.0))
-            gen_exit_code = self.data.get("gen_exit_code")
 
-        safe_addstr(win, 0, 1, f"Laporan .md ({len(files)} files)", cp(C_TITLE) | curses.A_BOLD)
-        safe_addstr(win, 1, 1, "-" * max(1, cols - 2), cp(C_DIM))
+        safe_addstr(win, 0, 1, f"Laporan  ({len(files)} file)", cp(C_TITLE) | curses.A_BOLD)
+        safe_addstr(win, 1, 1, "─" * max(1, cols - 2), cp(C_DIM))
 
-        row = 2
-        max_list_rows = max(0, rows - 8)
-        for p in files[:max_list_rows]:
-            ts = dt.datetime.fromtimestamp(p.stat().st_mtime).strftime("%Y-%m-%d %H:%M")
-            name_width = max(8, cols - 24)
-            name = p.name
-            if len(name) > name_width:
-                name = name[: name_width - 3] + "..."
-            safe_addstr(win, row, 2, f"{name:<{name_width}}  {ts}"[: cols - 3])
-            row += 1
+        if not files:
+            safe_addstr(win, 3, 2, "Belum ada laporan.", cp(C_DIM))
+            safe_addstr(win, 4, 2, "Gunakan [6] AI Chat untuk meminta document_agent", cp(C_DIM))
+            safe_addstr(win, 5, 2, "membuat dan menyimpan laporan.", cp(C_DIM))
+            safe_addstr(win, rows - 1, 2, "[R] Refresh", cp(C_MENU))
+            return
 
-        cmd_row = max(2, rows - 5)
-        safe_addstr(win, cmd_row, 1, "-" * max(1, cols - 2), cp(C_DIM))
-        safe_addstr(
-            win,
-            cmd_row + 1,
-            2,
-            "[G] Generate --force   [F] Generate fresh",
-            cp(C_MENU),
-        )
+        visible = max(1, rows - 4)
+        max_scroll = max(0, len(files) - visible)
+        self.scroll = min(self.scroll, max_scroll)
+        view = files[self.scroll: self.scroll + visible]
 
-        status_row = cmd_row + 2
-        if gen_state == "RUNNING":
-            spin = SPINNER[int(time.time() * 8) % len(SPINNER)]
-            safe_addstr(
-                win,
-                status_row,
-                2,
-                f"{spin} Generating... {int(gen_elapsed)}s",
-                cp(C_WARN) | curses.A_BOLD,
-            )
-            if gen_lines:
-                safe_addstr(win, min(rows - 1, status_row + 1), 2, gen_lines[-1][: cols - 3], cp(C_DIM))
-        elif gen_state == "DONE":
-            safe_addstr(win, status_row, 2, "✓ Selesai", cp(C_OK) | curses.A_BOLD)
-        elif gen_state == "FAILED":
-            safe_addstr(
-                win,
-                status_row,
-                2,
-                f"✗ Gagal (exit {gen_exit_code})",
-                cp(C_ERR) | curses.A_BOLD,
-            )
-            if gen_lines:
-                safe_addstr(win, min(rows - 1, status_row + 1), 2, gen_lines[-1][: cols - 3], cp(C_DIM))
+        name_w = max(8, cols - 22)
+        for idx, p in enumerate(view):
+            ts   = dt.datetime.fromtimestamp(p.stat().st_mtime).strftime("%Y-%m-%d %H:%M")
+            name = p.name if len(p.name) <= name_w else p.name[: name_w - 3] + "..."
+            size = f"{p.stat().st_size / 1024:.0f}K"
+            line = f"{name:<{name_w}}  {ts}  {size:>5}"
+            safe_addstr(win, 2 + idx, 2, line[: cols - 3])
+
+        safe_addstr(win, rows - 1, 2, "[J/K] Scroll  [R] Refresh  (laporan dibuat via AI Chat)", cp(C_MENU))
 
 
 class LogScreen(Screen):
@@ -780,14 +744,14 @@ class LogScreen(Screen):
             win,
             0,
             1,
-            f"Schedule Log  ({len(lines)} lines, scroll ↑↓)",
+            f"Log  ({len(lines)} baris, scroll ↑↓)",
             cp(C_TITLE) | curses.A_BOLD,
         )
-        safe_addstr(win, 1, 1, "-" * max(1, cols - 2), cp(C_DIM))
+        safe_addstr(win, 1, 1, "─" * max(1, cols - 2), cp(C_DIM))
 
         visible_rows = max(0, rows - 4)
         if not lines:
-            safe_addstr(win, 3, 2, "schedule.log belum ada - jobs belum dieksekusi", cp(C_DIM))
+            safe_addstr(win, 3, 2, "schedule.log belum ada.", cp(C_DIM))
         else:
             start = min(scroll, max(0, len(lines) - visible_rows))
             view = lines[start : start + visible_rows]
@@ -849,6 +813,78 @@ class AgentActivityScreen(Screen):
         safe_addstr(win, rows - 1, 2, "[C] Hapus log", cp(C_MENU))
 
 
+class KanbanScreen(Screen):
+    """Real-time Kanban board — agents as cards, lifecycle columns."""
+
+    def handle_key(self, key: int, app: "App") -> bool:
+        ch = chr(key) if 0 < key < 256 else ""
+        if ch in ("r", "R"):
+            return True
+        return False
+
+    def draw(self, win: Any, rows: int, cols: int) -> None:
+        now = time.time()
+        with _kanban_lock:
+            query        = _kanban_state["query"]
+            query_start  = _kanban_state["query_start"]
+            agents       = {k: dict(v) for k, v in _kanban_state["agents"].items()}
+
+        total_elapsed = now - query_start
+
+        safe_addstr(win, 0, 1, "Status Agent", cp(C_TITLE) | curses.A_BOLD)
+        if query:
+            elapsed_str = f" [{total_elapsed:.0f}s]"
+            safe_addstr(win, 0, 14, f" ← {query[: cols - 22]}", cp(C_DIM))
+            safe_addstr(win, 0, max(14, cols - len(elapsed_str) - 1), elapsed_str, cp(C_WARN))
+        safe_addstr(win, 1, 1, "─" * max(1, cols - 2), cp(C_DIM))
+
+        n_cols   = len(KANBAN_COLS)
+        col_w    = max(10, (cols - 2) // n_cols)
+        header_y = 2
+        cards_y  = 4
+
+        # Column headers
+        for ci, (col_id, col_label) in enumerate(KANBAN_COLS):
+            x = 1 + ci * col_w
+            color = _KANBAN_COL_COLOR.get(col_id, C_DIM)
+            hdr = col_label.center(col_w - 1)[: col_w - 1]
+            safe_addstr(win, header_y, x, hdr, cp(color) | curses.A_BOLD)
+            safe_addstr(win, header_y + 1, x, "─" * (col_w - 1), cp(C_DIM))
+
+        # Agent cards per column
+        col_counts: dict[str, int] = {c: 0 for c, _ in KANBAN_COLS}
+        for alias, info in AGENT_INFO.items():
+            state   = agents[alias]
+            col_id  = state["col"]
+            color   = _KANBAN_COL_COLOR.get(col_id, C_DIM)
+            ci      = next((i for i, (c, _) in enumerate(KANBAN_COLS) if c == col_id), 0)
+            x       = 1 + ci * col_w
+            y       = cards_y + col_counts[col_id] * 3
+            elapsed = now - state.get("col_since", now)
+
+            if y + 2 >= rows - 1:
+                continue
+
+            # Line 1: alias/role + elapsed time right-aligned inside col_w
+            name_part    = f" {alias}/{info}"
+            elapsed_part = f"{elapsed:.0f}s "
+            pad = col_w - 1 - len(name_part) - len(elapsed_part)
+            card_name = (name_part + " " * max(0, pad) + elapsed_part)[: col_w - 1]
+            safe_addstr(win, y, x, card_name, cp(color) | curses.A_BOLD)
+
+            # Line 2: tool count + last tool
+            if state["tool_count"]:
+                detail = f" ⚙{state['tool_count']} {state['last_tool']}"
+            else:
+                detail = ""
+            safe_addstr(win, y + 1, x, detail[: col_w - 1], cp(C_DIM))
+            safe_addstr(win, y + 2, x, "·" * (col_w - 2), cp(C_DIM))
+
+            col_counts[col_id] += 1
+
+        safe_addstr(win, rows - 1, 2, "[R] Refresh  (otomatis update saat AI Chat aktif)", cp(C_MENU))
+
+
 class AIScreen(Screen):
     """Interactive AI chat powered by NetOps multi-agent."""
 
@@ -861,6 +897,7 @@ class AIScreen(Screen):
             self.data["input_buf"] = ""
             self.data["input_mode"] = True
             self.data["pending_approval"] = None
+            self.data["exec_start"] = None
         self._agent: Any = None
         self._agent_config: dict[str, Any] = {}
         if _HAS_AGENT and _agent_mod is not None:
@@ -905,11 +942,16 @@ class AIScreen(Screen):
             app._wake.set()
             return
 
+        _kanban_reset(user_msg)
+        t_start = time.time()
+        with self._lock:
+            self.data["exec_start"] = t_start
         ai_chunks: list[str] = []
         try:
             for event_type, content in _agent_mod.stream_agent_response(
                 self._agent, self._agent_config, user_msg
             ):
+                _kanban_update(event_type, content)
                 ts = dt.datetime.now().strftime("%H:%M:%S")
                 with self._lock:
                     if event_type in ("routing", "tool_call", "tool_result"):
@@ -939,19 +981,31 @@ class AIScreen(Screen):
                 if event_type == "approval_required":
                     return
 
+            elapsed = time.time() - t_start
             final = "\n".join(ai_chunks).strip()
             with self._lock:
                 if final:
                     self.data["history"].append({"role": "assistant", "content": final})
+                self.data["history"].append({
+                    "role": "agent_event",
+                    "content": f"[⏱ selesai dalam {elapsed:.1f}s]",
+                })
                 self.data["state"] = "IDLE"
+                self.data["exec_start"] = None
                 self.data["scroll"] = 999999
         except Exception as exc:
+            elapsed = time.time() - t_start
             with self._lock:
                 self.data["history"].append({
                     "role": "assistant",
                     "content": f"⚠ Agent error: {exc}",
                 })
+                self.data["history"].append({
+                    "role": "agent_event",
+                    "content": f"[⏱ gagal setelah {elapsed:.1f}s]",
+                })
                 self.data["state"] = "IDLE"
+                self.data["exec_start"] = None
         app._wake.set()
 
     def _submit_approval(self, decision: str, app: "App") -> None:
@@ -1197,11 +1251,14 @@ class AIScreen(Screen):
             return
         elif state == "WAITING":
             spin = SPINNER[int(time.time() * 8) % len(SPINNER)]
+            with self._lock:
+                exec_start = self.data.get("exec_start")
+            live_elapsed = f"  {time.time() - exec_start:.0f}s" if exec_start else ""
             safe_addstr(
                 win,
                 input_row,
                 2,
-                f"{spin} Agent sedang bekerja...",
+                f"{spin} Agent sedang bekerja...{live_elapsed}",
                 cp(C_WARN) | curses.A_BOLD,
             )
         else:
@@ -1243,7 +1300,7 @@ class AIScreen(Screen):
         else:
             safe_addstr(
                 win, hint_row, 1,
-                "[I] Insert  [C] Hapus riwayat  [J/K] Scroll  [1-7] Menu  [7] Aktivitas",
+                "[I] Insert  [C] Hapus riwayat  [J/K] Scroll  [1-8] Menu  [8] Kanban",
                 cp(C_MENU),
             )
 
@@ -1253,15 +1310,15 @@ class App:
 
     def __init__(self) -> None:
         LAPORAN_DIR.mkdir(parents=True, exist_ok=True)
-        OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
         self.screens: list[Screen] = [
             DashboardScreen(),
-            JadwalScreen(),
-            CollectScreen(),
+            SkillsScreen(),
+            ReachabilityScreen(),
             LaporanScreen(),
             LogScreen(),
             AIScreen(),
             AgentActivityScreen(),
+            KanbanScreen(),
         ]
         self.current = 0
         self._wake = threading.Event()
@@ -1367,7 +1424,7 @@ class App:
         if ch in ("q", "Q"):
             return False
 
-        if ch and ch in "1234567":
+        if ch and ch in "12345678":
             idx = int(ch) - 1
             if idx != self.current:
                 self.current = idx
@@ -1494,7 +1551,7 @@ class App:
 
     def _draw_footer(self, rows: int, cols: int) -> None:
         """Draw footer with key hints."""
-        hints = " [1-6] Menu  [↑↓] Nav  [Q] Keluar  [R] Refresh "
+        hints = " [1-8] Menu  [↑↓] Nav  [Q] Keluar  [R] Refresh "
         safe_addstr(
             self.stdscr,
             rows - 1,

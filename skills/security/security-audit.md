@@ -56,7 +56,7 @@ Ambil log dengan `get_router_log` menggunakan filter topic `system`. Cari:
 - `login failure` berulang → kemungkinan brute force
 - `user added` atau `user removed` → perubahan akun yang mungkin tidak sah
 
-### Langkah 5: Cek Firewall (Opsional)
+### Langkah 5: Cek Firewall
 Jika ada kekhawatiran tentang akses manajemen, gunakan `run_command` atau `run_command_all`
 dengan `/ip/firewall/filter/print where chain=input` untuk melihat aturan yang mengontrol
 akses ke router.
