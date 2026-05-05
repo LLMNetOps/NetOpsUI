@@ -218,6 +218,14 @@ teknis dan ringkas. Gunakan backtick untuk istilah teknis.
 
 Tool yang tersedia (HANYA ini yang boleh dipanggil): {tool_names}
 
+ATURAN WAJIB — TOOL CALLING:
+1. LANGSUNG panggil tool tanpa pengantar teks apapun.
+2. DILARANG menulis "Mohon tunggu", "Saya akan menjalankan", "Saya akan memanggil",
+   "Saya akan mensimulasikan", atau deskripsi rencana sebelum memanggil tool.
+3. DILARANG mensimulasikan atau mengarang data — gunakan tool untuk mendapatkan data nyata.
+4. Teks respons hanya boleh ditulis SETELAH semua tool selesai dipanggil.
+5. Jika butuh data dari beberapa router, panggil tool satu per satu secara langsung.
+
 {skill_context}
 """
 
