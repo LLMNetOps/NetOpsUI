@@ -5,6 +5,40 @@ Semua perubahan penting pada proyek ini akan didokumentasikan di file ini.
 Format mengikuti [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 dan proyek ini menggunakan [Semantic Versioning](https://semver.org/lang/id/).
 
+## [v1.2.0] - 2026-05-08 (branch: refactor_agent_skill_tool)
+
+### Added
+- **Agent Definition System** (Ultralight Orchestration): 6 file `agents/definitions/*.md` sebagai single source of truth untuk tiap agent — tools, skills, LLM params, dan system prompt semuanya ada di satu file
+- **`agents/loader.py`** (`AgentLoader` + `AgentDefinition`): memuat dan memvalidasi definition files saat startup; mengecek `agent.tools ⊆ TOOL_MAP`, `agent.skills ⊆ SkillLibrary`, dan `skill.tools ⊆ agent.tools`
+- **Per-agent LLM parameters** di frontmatter definition: `num_ctx`, `num_predict`, `context_window`, `timeout` — supervisor pakai 4096/256/6/60, document_agent pakai 24576/4096/20/600
+- **Skill baru**: `skills/monitoring/network-traffic-analysis.md` (analisis bandwidth dan top talkers)
+- **`document_agent`** ditambahkan ke graph topology dan tool matrix
+
+### Changed
+- **`agents/tools.py`**: hapus per-agent tool lists (`MONITOR_TOOLS`, `DIAGNOSE_TOOLS`, dll); ganti dengan `TOOL_MAP` flat dari semua 34 tools
+- **`agents/nodes.py`**: semua hardcoded data (tool lists, role descriptions, alias map, LLM params) dihapus dan dibaca dari `AgentLoader`; `_make_llm()` menerima `num_ctx`, `num_predict`, `timeout` sebagai parameter
+- **7 skill direname** ke konvensi `[domain]-[capability-noun]`:
+  - `config-backup-procedure` → `config-backup`
+  - `diagnose-dhcp-client` → `dhcp-client-diagnostics`
+  - `utbk-client-monitor` → `utbk-session-monitoring`
+  - `write-report` → `document-writing`
+  - `router-unreachable` → `network-reachability`
+  - `network-report` → `network-status-report`
+  - `ospf-neighbor-down` → `ospf-diagnostics`
+- **4 skill tool lists diperbarui** untuk menutup gap coverage: `network-health-check` (+`get_interface_stats`), `config-backup` (+`backup_router_config`), `document-writing` (+`write_skill`, `get_report_section`, `get_report_toc`), `monitor_agent` (+`network-traffic-analysis`)
+
+### Fixed
+- 3 tool mismatch di `agents/tools.py`: `search_device` dan `run_command` ditambahkan ke monitor; `get_router_config` ditambahkan ke diagnose
+- Supervisor body tidak lagi hardcode daftar agent (kini dinamis dari `AgentLoader`)
+- `defn.model` kini benar-benar digunakan di setiap node (sebelumnya semua pakai `OLLAMA_MODEL` env var)
+
+### Documentation
+- `docs/ARCHITECTURE.md` v2.0: tambah Section 6 (Agent Definition System), perbarui directory structure, tool matrix, dan skill listing
+- `docs/SKILL_AUTHORING_GUIDE.md` v1.1: tambah konvensi penamaan skill, perbarui contoh dan file listing
+- `docs/RESEARCH_SKILL_TOOL_ARCHITECTURE.md`: riset referensi framework (Evonic, OpenAI Agents SDK, GStack, Ultralight Orchestration, GetStream)
+
+---
+
 ## [v1.1.0] - 2026-05-04 (branch: netops)
 
 ### Added

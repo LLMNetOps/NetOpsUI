@@ -1,7 +1,7 @@
 # Skill Authoring Guide — NetOps AI
 
-**Versi:** 1.0  
-**Tanggal:** 2026-04-27  
+**Versi:** 1.1  
+**Tanggal:** 2026-05-08  
 **Audience:** Operator Jaringan
 
 ---
@@ -21,19 +21,47 @@ Setiap skill adalah satu file `.md` di dalam direktori `skills/`.
 ```
 skills/
 ├── dhcp/
-│   ├── diagnose-dhcp-client.md
-│   └── dhcp-pool-audit.md
+│   ├── dhcp-client-diagnostics.md
+│   ├── dhcp-pool-audit.md
+│   └── utbk-session-monitoring.md
 ├── routing/
+│   ├── ospf-diagnostics.md
 │   └── bgp-diagnostics.md
 ├── monitoring/
-│   └── network-health-check.md
+│   ├── network-health-check.md
+│   ├── network-reachability.md
+│   ├── network-traffic-analysis.md
+│   └── network-status-report.md
 ├── security/
 │   └── security-audit.md
-└── config/
-    └── config-backup-procedure.md
+├── config/
+│   └── config-backup.md
+└── documents/
+    └── document-writing.md
 ```
 
-Subdirektori berfungsi sebagai **domain kategori** — nama subdirektori bebas, digunakan untuk organisasi saja.
+Subdirektori berfungsi sebagai **domain kategori** dan digunakan sebagai nilai `domain:` default.
+
+---
+
+## Konvensi Penamaan
+
+Nama skill mengikuti pola **`[domain]-[capability-noun]`**:
+
+```
+✓  dhcp-client-diagnostics    ← domain + kemampuan (noun)
+✓  network-traffic-analysis   ← domain + kemampuan (noun)
+✓  ospf-diagnostics           ← domain + kemampuan (noun)
+
+✗  router-unreachable         ← event/symptom, bukan capability
+✗  ospf-neighbor-down         ← terlalu spesifik ke satu kondisi
+✗  diagnose-dhcp-client       ← menggunakan kata kerja (diagnose)
+```
+
+**Kenapa penting?** Nama yang mengikuti pola ini:
+- Konsisten di seluruh library skill
+- Mudah dicari dan dibaca di file listing
+- Lebih mudah di-maintain jika satu skill mencakup beberapa skenario terkait
 
 ---
 
@@ -186,7 +214,9 @@ Hal-hal penting, edge cases, atau peringatan.
 
 ## Tools yang Tersedia
 
-Daftar tool yang dapat didefinisikan di frontmatter `tools:`:
+Daftar tool yang dapat didefinisikan di frontmatter `tools:`.
+
+> **Catatan:** Tool yang tersedia untuk satu skill harus merupakan subset dari tool yang dimiliki agent yang menggunakan skill tersebut. Lihat `agents/definitions/<agent_name>.md` untuk daftar tool per agent. `AgentLoader.validate()` akan memperingatkan jika ada skill yang membutuhkan tool yang tidak dimiliki agent.
 
 ### Monitoring & Status
 | Tool | Deskripsi |
@@ -255,6 +285,15 @@ Daftar tool yang dapat didefinisikan di frontmatter `tools:`:
 | `get_report_section` | Baca section tertentu dari laporan |
 | `get_report_toc` | Daftar isi laporan |
 
+### Dokumen & Template
+| Tool | Deskripsi |
+|---|---|
+| `list_templates` | Daftar template tersedia |
+| `read_template` | Baca isi template |
+| `write_document` | Simpan dokumen laporan ke file |
+| `create_template` | Buat template baru |
+| `write_skill` | Tulis skill baru ke file |
+
 ---
 
 ## Tips Menulis Skill yang Baik
@@ -280,13 +319,14 @@ Daftar tool yang dapat didefinisikan di frontmatter `tools:`:
 
 ```markdown
 ---
-name: ospf-neighbor-down
+name: ospf-diagnostics
 domain: routing
 triggers:
   - OSPF neighbor down
   - adjacency hilang
   - routing OSPF bermasalah
   - OSPF tidak full
+  - OSPF flap
 tools:
   - get_routing_full
   - get_router_config
@@ -297,7 +337,7 @@ approval_required: false
 enabled: true
 ---
 
-# Diagnosa OSPF Neighbor Down
+# Diagnosa OSPF
 
 ## Konteks
 Gunakan skill ini saat ada laporan OSPF adjacency tidak terbentuk

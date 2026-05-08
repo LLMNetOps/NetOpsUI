@@ -1,7 +1,7 @@
 # Architecture Document — NetOps AI
 
-**Versi:** 1.0  
-**Tanggal:** 2026-04-27  
+**Versi:** 2.0  
+**Tanggal:** 2026-05-08  
 **Status:** Selesai
 
 ---
@@ -19,9 +19,9 @@ NetOps AI adalah platform operasional jaringan kampus berbasis multi-agent LangG
 ┌─────────────────────────▼───────────────────────────────────┐
 │                    agent.py (Orchestration)                  │
 │                                                             │
-│   SkillLibrary          LangGraph StateGraph                │
-│   (hot reload)    ───►  Supervisor ──► Specialist           │
-│   skills/*.md           Agent          Agents               │
+│   SkillLibrary     AgentLoader       LangGraph StateGraph   │
+│   (hot reload) ─┐  definitions/*.md  Supervisor ──► Spec.  │
+│   skills/*.md   └──────────────────► Agent      Agents     │
 └──────────────────────────────────────────┬──────────────────┘
                                            │ call tools
 ┌──────────────────────────────────────────▼──────────────────┐
@@ -38,49 +38,62 @@ NetOps AI adalah platform operasional jaringan kampus berbasis multi-agent LangG
 
 ```
 llmnetops/
-├── agent.py                    ← Public API + NetworkOpsState + SkillLibrary singleton (178 baris)
-├── tui.py                      ← UI only (zero LLM logic, 1592 baris)
-├── generate_reports.py         ← Standalone DHCP report generator (tidak diubah)
+├── agent.py                    ← Public API + NetworkOpsState + SkillLibrary singleton
+├── tui.py                      ← UI only (zero LLM logic)
+├── generate_reports.py         ← Standalone DHCP report generator
 │
-├── tools/                      ← 28 atomic SSH operations
+├── tools/                      ← 34 atomic SSH operations
 │   ├── base.py                 ← SSH helper, config loader, _validate_router
-│   ├── reachability.py         ← ICMP ping check
+│   ├── reachability.py         ← ICMP ping, SSH access check
 │   ├── system.py               ← CPU, RAM, uptime
-│   ├── routing.py              ← Route table, OSPF, BGP
+│   ├── routing.py              ← Route table, OSPF, BGP, router config
 │   ├── interface.py            ← Interface stats, errors
-│   ├── traffic.py              ← TX/RX rates, top talkers, queue stats
-│   ├── dhcp.py                 ← DHCP lease queries, search device
+│   ├── traffic.py              ← TX/RX rates, top talkers, queue stats, traffic_all
+│   ├── dhcp.py                 ← DHCP lease queries, search device, audit_dhcp
 │   ├── log.py                  ← Router log pull
-│   ├── config_read.py          ← Config sections (read-only)
+│   ├── config_read.py          ← Run command (read-only), run_command_all
 │   ├── config_backup.py        ← Export + save, diff, list backups
 │   ├── security.py             ← User audit, firewall, NTP check
 │   ├── diagnostic.py           ← Ping/traceroute dari router
-│   ├── report.py               ← List/read laporan Markdown
+│   ├── report.py               ← List/read/section/toc laporan Markdown
+│   ├── document.py             ← list/read/write template, write_document, write_skill
 │   └── utility.py              ← list_routers, get_current_time
 │
 ├── skills/                     ← Operator-defined Markdown knowledge files
 │   ├── __init__.py             ← from skills.library import Skill, SkillLibrary
 │   ├── library.py              ← SkillLibrary class + Skill dataclass + hot reload
 │   ├── dhcp/
-│   │   ├── diagnose-dhcp-client.md
-│   │   ├── dhcp-pool-audit.md
-│   │   └── utbk-client-monitor.md
+│   │   ├── dhcp-client-diagnostics.md   ← diagnosa client gagal dapat IP
+│   │   ├── dhcp-pool-audit.md           ← audit utilisasi pool DHCP
+│   │   └── utbk-session-monitoring.md   ← monitoring peserta UTBK
 │   ├── routing/
-│   │   ├── ospf-neighbor-down.md
-│   │   └── bgp-diagnostics.md
+│   │   ├── ospf-diagnostics.md          ← diagnosa OSPF neighbor/state
+│   │   └── bgp-diagnostics.md           ← diagnosa BGP session/prefix
 │   ├── monitoring/
-│   │   ├── network-health-check.md
-│   │   └── router-unreachable.md
+│   │   ├── network-health-check.md      ← health check menyeluruh
+│   │   ├── network-reachability.md      ← investigasi router unreachable
+│   │   ├── network-traffic-analysis.md  ← analisis bandwidth & top talkers
+│   │   └── network-status-report.md     ← ringkasan status jaringan
 │   ├── security/
-│   │   └── security-audit.md
-│   └── config/
-│       └── config-backup-procedure.md
+│   │   └── security-audit.md            ← audit postur keamanan router
+│   ├── config/
+│   │   └── config-backup.md             ← prosedur backup konfigurasi
+│   └── documents/
+│       └── document-writing.md          ← penulisan laporan ke file
 │
 ├── agents/                     ← Multi-agent LangGraph
 │   ├── __init__.py             ← from agents.graph import build_graph
 │   ├── graph.py                ← StateGraph builder (START→supervisor→specialists→END)
-│   ├── nodes.py                ← supervisor_node + 4 specialist nodes + config_node
-│   └── tools.py                ← Tool registries per agent domain (TOOL_MAP)
+│   ├── nodes.py                ← supervisor_node + 5 specialist nodes (loader-driven)
+│   ├── tools.py                ← TOOL_MAP (flat, semua 34 tools)
+│   ├── loader.py               ← AgentLoader + AgentDefinition dataclass
+│   └── definitions/            ← Agent definition files (single source of truth)
+│       ├── supervisor.md
+│       ├── monitor_agent.md
+│       ├── diagnose_agent.md
+│       ├── config_agent.md
+│       ├── security_agent.md
+│       └── document_agent.md
 │
 ├── docs/                       ← Project documentation
 ├── backups/                    ← Config backups (gitignored)
@@ -104,23 +117,28 @@ START
   │                                                     │
   ├──► [monitor_agent]   → tools: system, routing,     │
   │                        interface, traffic, dhcp,    │
-  │                        log, report                  │
+  │                        log, report (23 tools)       │
   │         │                                           │
   │         └─────────────────────────────────────────►┤
   │                                                     │
   ├──► [diagnose_agent]  → tools: reachability,        │
   │                        diagnostic, log, dhcp,       │
-  │                        routing                      │
+  │                        routing (13 tools)           │
   │         │                                           │
   │         └─────────────────────────────────────────►┤
   │                                                     │
   ├──► [config_agent]    → tools: config_read,         │
-  │                        config_backup                │
+  │                        config_backup (10 tools)     │
   │         │           ← interrupt() jika backup      │
   │         └─────────────────────────────────────────►┤
   │                                                     │
-  └──► [security_agent]  → tools: security, log,       │
-                           config_read                  │
+  ├──► [security_agent]  → tools: security, log,       │
+  │                        config_read (6 tools)        │
+  │         │                                           │
+  │         └─────────────────────────────────────────►┤
+  │                                                     │
+  └──► [document_agent]  → tools: document, report,    │
+                           template (20 tools)          │
             │                                           │
             └───────────────────────────────────────── ┘
                                                         │
@@ -180,13 +198,28 @@ class NetworkOpsState(TypedDict):
 
 ## 5. Skill System
 
-### 5.1 Skill File Format
+### 5.1 Skill Naming Convention
+
+Nama skill mengikuti pola **`[domain]-[capability-noun]`**:
+
+```
+monitoring/network-health-check.md     ← ✓ domain-capability
+dhcp/dhcp-client-diagnostics.md        ← ✓ domain-capability
+routing/ospf-diagnostics.md            ← ✓ domain-capability
+
+monitoring/router-unreachable.md       ← ✗ terlalu spesifik (lama)
+routing/ospf-neighbor-down.md          ← ✗ event bukan capability (lama)
+```
+
+Domain yang tersedia: `monitoring`, `dhcp`, `routing`, `security`, `config`, `documents`.
+
+### 5.2 Skill File Format
 
 Setiap skill adalah file `.md` dengan struktur:
 
 ```markdown
 ---
-name: diagnose-dhcp-client
+name: dhcp-client-diagnostics
 domain: dhcp
 triggers:
   - client tidak dapat IP
@@ -216,7 +249,24 @@ enabled: true
 **Frontmatter YAML** → dibaca runtime untuk routing dan tool-loading.  
 **Body Markdown** → di-inject sebagai system context ke specialist agent.
 
-### 5.2 SkillLibrary
+### 5.3 Daftar Skill (12 skill aktif)
+
+| Skill | Domain | Agent | Keterangan |
+|-------|--------|-------|------------|
+| `network-health-check` | monitoring | monitor | Health check menyeluruh semua router |
+| `network-reachability` | monitoring | monitor | Investigasi router unreachable |
+| `network-traffic-analysis` | monitoring | monitor | Analisis bandwidth & top talkers |
+| `network-status-report` | monitoring | monitor | Ringkasan status jaringan |
+| `dhcp-pool-audit` | dhcp | monitor | Audit utilisasi DHCP pool |
+| `dhcp-client-diagnostics` | dhcp | diagnose | Diagnosa client gagal dapat IP |
+| `utbk-session-monitoring` | dhcp | monitor | Monitoring peserta UTBK |
+| `bgp-diagnostics` | routing | diagnose | Diagnosa BGP session/prefix |
+| `ospf-diagnostics` | routing | diagnose | Diagnosa OSPF neighbor/state |
+| `security-audit` | security | security | Audit postur keamanan router |
+| `config-backup` | config | config | Prosedur backup konfigurasi |
+| `document-writing` | documents | document | Penulisan laporan ke file |
+
+### 5.4 SkillLibrary
 
 File: `skills/library.py`. Singleton `_skill_lib` dibuat di `agent.py` saat modul di-import.
 
@@ -237,7 +287,7 @@ class SkillLibrary:
     def inject_context(self, skills: list[Skill]) -> str  # gabungkan body Markdown
 ```
 
-### 5.3 Hot Reload Mechanism
+### 5.5 Hot Reload Mechanism
 
 ```
 Operator: edit/tambah/hapus skills/**/*.md
@@ -249,7 +299,7 @@ Operator: edit/tambah/hapus skills/**/*.md
      skill tersedia di request berikutnya
 ```
 
-### 5.4 Skill Selection
+### 5.6 Skill Selection
 
 ```
 Query: "kenapa Lab5 tidak dapat IP?"
@@ -271,7 +321,95 @@ Query: "/skill bgp-diagnostics DTI"
 
 ---
 
-## 6. Human-in-the-Loop (Approval)
+## 6. Agent Definition System
+
+### 6.1 Konsep: Single Source of Truth
+
+Setiap agent didefinisikan dalam satu file Markdown di `agents/definitions/`. File ini menjadi **single source of truth** untuk:
+- Tools yang dimiliki agent
+- Skills yang digunakan agent
+- LLM parameters (model, context window, max tokens, timeout)
+- System prompt (body Markdown)
+- Agent mana yang boleh di-handoff
+
+### 6.2 Format Definition File
+
+```markdown
+---
+name: monitor_agent
+alias: eko
+description: >
+  Status jaringan kampus, health check semua router, DHCP overview,
+  interface stats, dan traffic monitoring.
+model: gemma4:e4b
+num_ctx: 16384        # token context window LLM
+num_predict: 2048     # max output tokens
+context_window: 10    # jumlah pesan history yang dimasukkan ke LLM
+timeout: 300          # timeout LLM (detik)
+tools:
+  - list_routers
+  - check_reachability
+  - ...
+skills:
+  - network-health-check
+  - network-traffic-analysis
+  - ...
+handoff_to:
+  - document_agent
+---
+Kamu adalah Eko, agen monitoring jaringan kampus universitas.
+[system prompt body...]
+```
+
+### 6.3 LLM Parameters per Agent
+
+| Agent | num_ctx | num_predict | context_window | timeout | Alasan |
+|-------|---------|-------------|----------------|---------|--------|
+| supervisor | 4096 | 256 | 6 | 60s | Output hanya JSON routing pendek |
+| monitor_agent | 16384 | 2048 | 10 | 300s | Tool results dari 5+ router menumpuk |
+| diagnose_agent | 8192 | 2048 | 10 | 300s | Logs + routing table + analisis RCA |
+| config_agent | 8192 | 2048 | 10 | 180s | Config export per router |
+| security_agent | 8192 | 2048 | 10 | 300s | Audit results + log parsing |
+| document_agent | 24576 | 4096 | 20 | 600s | Seluruh history percakapan + template |
+
+### 6.4 AgentLoader
+
+File: `agents/loader.py`. Instance `_agent_loader` dibuat di `agents/nodes.py` saat modul di-import.
+
+```python
+@dataclass
+class AgentDefinition:
+    name: str; alias: str; description: str; model: str
+    tools: list[str]; skills: list[str]; handoff_to: list[str]
+    approval_required_tools: list[str]; body: str; path: Path
+    num_ctx: int; num_predict: int; context_window: int; timeout: int
+
+class AgentLoader:
+    def __init__(self, definitions_dir: Path)
+    def _load_all(self) -> None          # scan agents/definitions/*.md
+    def reload(self) -> None             # re-read dari disk
+    def validate(tool_map, skill_library) -> list[str]  # validasi bindings
+    def get(name: str) -> AgentDefinition | None
+    def all() -> list[AgentDefinition]
+    def tool_list(agent_name: str) -> list[str]
+    def skill_list(agent_name: str) -> list[str]
+    def system_prompt(agent_name: str) -> str
+```
+
+### 6.5 Validasi Binding
+
+`AgentLoader.validate()` dijalankan saat startup dan memeriksa tiga hal:
+1. `agent.tools` → semua ada di `TOOL_MAP`
+2. `agent.skills` → semua ada di `SkillLibrary`
+3. `skill.tools ⊆ agent.tools` → agent punya semua tool yang dibutuhkan skill-nya
+
+### 6.6 Menambah Agent Baru
+
+Cukup buat file `agents/definitions/nama_agent.md` dengan frontmatter yang benar — tidak perlu menyentuh `nodes.py` atau `tools.py`.
+
+---
+
+## 7. Human-in-the-Loop (Approval)
 
 ### 6.1 Flow
 
@@ -301,7 +439,7 @@ config_agent memutuskan perlu backup
 
 ---
 
-## 7. Public API (agent.py → tui.py)
+## 8. Public API (agent.py → tui.py)
 
 ```python
 # Inisialisasi
@@ -331,7 +469,7 @@ def get_agent_status() -> dict
 
 ---
 
-## 8. TUI Interface Changes
+## 9. TUI Interface Changes
 
 ### 8.1 Perubahan AIScreen
 
@@ -366,44 +504,52 @@ def get_agent_status() -> dict
 
 ---
 
-## 9. Tools per Agent (Tool Access Matrix)
+## 10. Tools per Agent (Tool Access Matrix)
 
-| Tool | monitor | diagnose | config | security |
-|---|:---:|:---:|:---:|:---:|
-| `list_routers` | ✓ | ✓ | ✓ | ✓ |
-| `check_reachability` | ✓ | ✓ | | |
-| `get_system_info` | ✓ | ✓ | | |
-| `get_routing_full` | ✓ | ✓ | | |
-| `get_interface_stats` | ✓ | | | |
-| `get_interface_traffic` | ✓ | | | |
-| `get_traffic_summary` | ✓ | | | |
-| `get_top_talkers` | ✓ | | | |
-| `get_queue_stats` | ✓ | | | |
-| `get_traffic_all` | ✓ | | | |
-| `get_dhcp_leases` | ✓ | ✓ | | |
-| `get_router_leases` | ✓ | ✓ | | |
-| `audit_dhcp` | ✓ | | | |
-| `search_device` | | ✓ | | |
-| `get_router_log` | ✓ | ✓ | | ✓ |
-| `run_command` | | ✓ | ✓ | ✓ |
-| `run_command_all` | ✓ | | ✓ | ✓ |
-| `get_router_config` | | | ✓ | |
-| `backup_router_config` | | | ✓ | |
-| `list_backups` | | | ✓ | |
-| `diff_config` | | | ✓ | |
-| `audit_security` | | | | ✓ |
-| `run_diagnostic` | | ✓ | | |
-| `list_reports` | ✓ | | ✓ | |
-| `get_report` | ✓ | | ✓ | |
-| `get_report_section` | ✓ | | | |
-| `get_report_toc` | ✓ | | | |
-| `get_current_time` | ✓ | ✓ | ✓ | ✓ |
+| Tool | monitor | diagnose | config | security | document |
+|---|:---:|:---:|:---:|:---:|:---:|
+| `list_routers` | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `check_reachability` | ✓ | ✓ | | | ✓ |
+| `check_ssh_access` | ✓ | ✓ | | | |
+| `get_system_info` | ✓ | ✓ | | | ✓ |
+| `get_routing_full` | ✓ | ✓ | | | |
+| `get_router_config` | | ✓ | ✓ | | |
+| `get_interface_stats` | ✓ | | | | ✓ |
+| `get_interface_traffic` | ✓ | | | | |
+| `get_traffic_summary` | ✓ | | | | ✓ |
+| `get_top_talkers` | ✓ | | | | |
+| `get_queue_stats` | ✓ | | | | |
+| `get_traffic_all` | ✓ | | | | |
+| `get_dhcp_leases` | ✓ | ✓ | | | ✓ |
+| `get_router_leases` | ✓ | ✓ | | | |
+| `audit_dhcp` | ✓ | | | | ✓ |
+| `search_device` | ✓ | ✓ | | | |
+| `get_router_log` | ✓ | ✓ | | ✓ | ✓ |
+| `run_command` | ✓ | ✓ | ✓ | ✓ | |
+| `run_command_all` | ✓ | | ✓ | ✓ | ✓ |
+| `backup_router_config` | | | ✓ ⚠ | | |
+| `list_backups` | | | ✓ | | |
+| `diff_config` | | | ✓ | | |
+| `audit_security` | | | | ✓ | ✓ |
+| `run_diagnostic` | | ✓ | | | |
+| `list_reports` | ✓ | | ✓ | | ✓ |
+| `get_report` | ✓ | | ✓ | | ✓ |
+| `get_report_section` | ✓ | | | | ✓ |
+| `get_report_toc` | ✓ | | | | ✓ |
+| `list_templates` | | | | | ✓ |
+| `read_template` | | | | | ✓ |
+| `write_document` | | | | | ✓ |
+| `create_template` | | | | | ✓ |
+| `write_skill` | | | | | ✓ |
+| `get_current_time` | ✓ | ✓ | ✓ | ✓ | ✓ |
 
-**Total: 28 tool atomic** (20 dari Phase 2 + 5 traffic + 3 config_backup dari Phase 5)
+⚠ `backup_router_config` memerlukan persetujuan operator (interrupt gate).
+
+**Total: 34 tool atomic** | Source of truth: `agents/definitions/*.md` + `AgentLoader.validate()`
 
 ---
 
-## 10. Dependencies Baru
+## 11. Dependencies Baru
 
 ```
 # Tambahan dari branch main
