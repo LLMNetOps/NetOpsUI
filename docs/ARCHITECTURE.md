@@ -407,11 +407,205 @@ class AgentLoader:
 
 Cukup buat file `agents/definitions/nama_agent.md` dengan frontmatter yang benar — tidak perlu menyentuh `nodes.py` atau `tools.py`.
 
+### 6.7 Metodologi Penentuan LLM Parameters
+
+#### Konsep: Token
+
+Token adalah satuan terkecil yang diproses LLM. Estimasi kasar:
+
+| Tipe Konten | Estimasi Token |
+|-------------|---------------|
+| 1 karakter Latin/Indonesia | ~0.25 token |
+| 1 kata rata-rata | ~1.3 token |
+| 1 KB teks biasa | ~250 token |
+| 1 KB JSON/structured | ~200 token |
+
+#### Formula num_ctx
+
+```
+num_ctx ≥ T_system + T_history + T_tools + num_predict
+
+T_system  = agent_body + tool_list + rules + skill_context
+T_history = context_window × avg_message_tokens
+T_tools   = max_iterations × avg_tool_result_tokens
+```
+
+> `num_ctx` harus mencakup **seluruh input** sekaligus **ruang output** (`num_predict`).
+> Gunakan kelipatan 2048 untuk efisiensi KV-cache. Tambah safety margin ~30%.
+
+#### Estimasi Ukuran Komponen Sistem
+
+| Komponen | Token |
+|----------|-------|
+| Agent body (300-500 kata) | 200–500 |
+| Tool list per tool (nama saja) | ~5 |
+| Aturan wajib tool calling (5 baris) | ~150 |
+| Skill context (1 skill body) | 300–800 |
+| Human message rata-rata | 30–100 |
+| AI message rata-rata | 100–500 |
+
+#### Estimasi Ukuran Tool Result
+
+| Tool | Kondisi | Token |
+|------|---------|-------|
+| `check_reachability` | 1 router | ~50 |
+| `check_ssh_access` | 1 router | ~30 |
+| `get_system_info` | 1 router | ~200 |
+| `get_interface_stats` | semua interface | ~500 |
+| `get_interface_traffic` | 1 interface | ~100 |
+| `get_traffic_summary` | semua interface | ~400 |
+| `get_top_talkers` | top 10 IP | ~300 |
+| `get_queue_stats` | semua queue | ~400 |
+| `get_traffic_all` | 5 router | ~1000 |
+| `get_dhcp_leases` | 500 client | ~2500 |
+| `get_router_leases` | 200 client | ~1000 |
+| `audit_dhcp` | 5 router | ~2000 |
+| `search_device` | 1 device | ~100 |
+| `get_routing_full` | 20 route + OSPF | ~1500 |
+| `get_router_config` | full export | 2000–5000 |
+| `get_router_log` | 100 baris | ~800 |
+| `run_command` | output singkat | 100–500 |
+| `audit_security` | 1 router | ~600 |
+| `run_diagnostic` | ping/traceroute | ~300 |
+| `read_template` | template MD | ~1500 |
+| `get_report` | laporan penuh | 2000–4000 |
+
+#### Contoh: monitor_agent (worst case — health check 5 router)
+
+```
+T_system:
+  agent body               =  400 token
+  tool list (23 × 5)       =  115 token
+  aturan wajib             =  150 token
+  skill context (1 skill)  =  400 token
+                           ─────────────
+  Subtotal                 = 1065 token
+
+T_history:
+  10 pesan × 150 token/msg = 1500 token
+
+T_tools (worst-case sequence):
+  check_reachability × 5   =  250 token
+  get_system_info × 5      = 1000 token
+  audit_dhcp × 1           = 2000 token
+  get_traffic_all × 1      = 1000 token
+                           ─────────────
+  Subtotal                 = 4250 token
+
+num_predict (output)       = 2048 token
+                           ═════════════
+Total                      = 8863 token
+→ Pilih 16384  (kelipatan 2048 ke atas, safety margin ~85%)
+```
+
+#### Contoh: supervisor (single call, no tools)
+
+```
+T_system:
+  supervisor body          =  300 token
+  agent descriptions (5)   =  250 token
+  skill list (12 skill)    =  200 token
+  JSON format instructions =  150 token
+                           ─────────────
+  Subtotal                 =  900 token
+
+T_history:
+  6 pesan × 100 token/msg  =  600 token
+
+T_tools                    =    0 token  (supervisor tidak panggil tool)
+
+num_predict (JSON output)  =  256 token
+                           ═════════════
+Total                      = 1756 token
+→ Pilih 4096  (kelipatan 2048, safety margin ~133%)
+```
+
+#### Contoh: document_agent (worst case — kompilasi laporan panjang)
+
+```
+T_system:
+  agent body               =  500 token
+  tool list (20 × 5)       =  100 token
+  aturan wajib             =  150 token
+  skill context (1 skill)  =  600 token
+                           ─────────────
+  Subtotal                 = 1350 token
+
+T_history:
+  20 pesan × 500 token/msg = 10000 token
+  (termasuk output semua agent sebelumnya)
+
+T_tools:
+  read_template × 1        = 1500 token
+  get_report × 1           = 3000 token
+                           ─────────────
+  Subtotal                 = 4500 token
+
+num_predict (dokumen penuh)= 4096 token
+                           ═════════════
+Total                      = 19946 token
+→ Pilih 24576  (kelipatan 2048, safety margin ~23%)
+```
+
+#### Metodologi num_predict
+
+Estimasi panjang output yang diharapkan, lalu beri margin 2–3×:
+
+| Output | Estimasi Aktual | num_predict |
+|--------|----------------|-------------|
+| JSON routing supervisor | ~50 token | 256 |
+| Health check report (5 router) | 500–1000 token | 2048 |
+| RCA analysis + evidence | 500–2000 token | 2048 |
+| Config summary + diff | 500–1500 token | 2048 |
+| Audit report (4 area) | 800–2000 token | 2048 |
+| Laporan operasional lengkap | 2000–4000 token | 4096 |
+
+#### Metodologi timeout
+
+```
+timeout ≥ max_iterations × (t_inference + t_tool_call)
+
+t_inference  ≈ 5–25 detik  (tergantung num_predict dan hardware)
+t_tool_call  ≈ 1–3 detik   (SSH ke MikroTik + parsing)
+```
+
+| Agent | max_iter | t_per_iter | Estimasi | timeout |
+|-------|----------|------------|----------|---------|
+| supervisor | 1 | ~10s | ~10s | 60s |
+| monitor_agent | 12 | ~15s | ~180s | 300s |
+| diagnose_agent | 12 | ~15s | ~180s | 300s |
+| config_agent | 12 | ~12s | ~144s | 180s |
+| security_agent | 12 | ~15s | ~180s | 300s |
+| document_agent | 12 | ~30s | ~360s | 600s |
+
+> `document_agent` lebih lama karena `num_predict=4096` — inferensi teks panjang lebih berat.
+
+#### Metodologi context_window
+
+Pilih jumlah pesan history yang cukup untuk memahami task saat ini tanpa membawa noise dari percakapan jauh sebelumnya:
+
+| Pola Kerja | context_window |
+|------------|----------------|
+| Single-shot routing (supervisor) | 6 |
+| Task dalam satu giliran (specialist) | 10 |
+| Sintesis lintas agent (document_agent) | 20 |
+| Investigasi panjang / troubleshooting | 15–20 |
+
+#### Tanda Perlu Penyesuaian
+
+| Gejala | Penyebab | Solusi |
+|--------|----------|--------|
+| Output terpotong di tengah kalimat | `num_predict` terlalu kecil | Naikkan `num_predict` |
+| Error "context length exceeded" | `num_ctx` kurang | Naikkan `num_ctx` atau turunkan `context_window` |
+| Agent "lupa" instruksi awal saat tools banyak | `num_ctx` hampir penuh | Naikkan `num_ctx` |
+| Timeout error di saat beban ringan | `timeout` terlalu pendek | Naikkan `timeout` |
+| Respons sangat lambat walau output pendek | `num_predict` terlalu besar | Turunkan `num_predict` |
+
 ---
 
 ## 7. Human-in-the-Loop (Approval)
 
-### 6.1 Flow
+### 7.1 Flow
 
 ```
 config_agent memutuskan perlu backup
@@ -429,7 +623,7 @@ config_agent memutuskan perlu backup
     config_agent lanjut / batalkan
 ```
 
-### 6.2 Risk Levels
+### 7.2 Risk Levels
 
 | Level | Contoh Aksi | Default |
 |---|---|---|
@@ -471,7 +665,7 @@ def get_agent_status() -> dict
 
 ## 9. TUI Interface Changes
 
-### 8.1 Perubahan AIScreen
+### 9.1 Perubahan AIScreen
 
 **Sebelum:**
 - `AIScreen` berisi `_call_agent()`, `_call_ollama()`, LangGraph imports
@@ -482,7 +676,7 @@ def get_agent_status() -> dict
 - Handle event types yang di-yield
 - Zero LLM logic di `tui.py`
 
-### 8.2 Screen Baru: AgentActivityScreen (Menu item 7)
+### 9.2 Screen Baru: AgentActivityScreen (Menu item 7)
 
 ```
 ┌─ Agent Activity ──────────────────────────────────────────┐
