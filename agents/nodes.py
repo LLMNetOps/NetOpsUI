@@ -216,13 +216,22 @@ def supervisor_node(state: "NetworkOpsState") -> dict:
             for m in recent
         )
         if not has_ai_reply:
-            _sup_alias = _supervisor_defn.alias if _supervisor_defn else "supervisor"
-            llm_chat = _make_llm(temperature=0.5, model=_supervisor_model)
-            chat_sys = SystemMessage(content=(
-                f"Kamu adalah {_sup_alias.capitalize()}, supervisor operasional jaringan kampus universitas. "
-                "Balas sapaan atau pertanyaan umum dengan ramah dan singkat dalam Bahasa Indonesia. "
-                "Sebutkan bahwa kamu siap membantu kebutuhan operasional jaringan kampus."
-            ))
+            _chat_prompt = (
+                _supervisor_defn.chat_prompt if _supervisor_defn and _supervisor_defn.chat_prompt
+                else (
+                    f"Kamu adalah {_supervisor_defn.alias.capitalize() if _supervisor_defn else 'Supervisor'}, "
+                    "supervisor operasional jaringan kampus universitas. "
+                    "Balas sapaan atau pertanyaan umum dengan ramah dan singkat dalam Bahasa Indonesia."
+                )
+            )
+            llm_chat = _make_llm(
+                temperature=0.5,
+                model=_supervisor_model,
+                num_ctx=_supervisor_defn.num_ctx if _supervisor_defn else 4096,
+                num_predict=512,
+                timeout=_supervisor_defn.timeout if _supervisor_defn else 60,
+            )
+            chat_sys = SystemMessage(content=_chat_prompt)
             try:
                 reply = llm_chat.invoke([chat_sys] + recent)
                 base_result["messages"] = [reply]

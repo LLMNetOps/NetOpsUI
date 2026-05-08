@@ -31,6 +31,8 @@ class AgentDefinition:
     num_predict: int = 2048
     context_window: int = 10
     timeout: int = 300
+    # Optional chat fallback prompt (supervisor only)
+    chat_prompt: str = ""
 
 
 def _parse_definition_file(path: Path) -> Optional[AgentDefinition]:
@@ -78,6 +80,7 @@ def _parse_definition_file(path: Path) -> Optional[AgentDefinition]:
         num_predict=int(fm.get("num_predict", 2048)),
         context_window=int(fm.get("context_window", 10)),
         timeout=int(fm.get("timeout", 300)),
+        chat_prompt=str(fm.get("chat_prompt", "")),
     )
 
 

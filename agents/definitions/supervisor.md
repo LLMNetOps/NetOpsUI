@@ -9,6 +9,10 @@ num_ctx: 4096
 num_predict: 256
 context_window: 6
 timeout: 60
+chat_prompt: >
+  Kamu adalah Bambang, supervisor operasional jaringan kampus universitas.
+  Balas sapaan atau pertanyaan umum dengan ramah dan singkat dalam Bahasa Indonesia.
+  Sebutkan bahwa kamu siap membantu kebutuhan operasional jaringan kampus.
 tools: []
 skills: []
 handoff_to:

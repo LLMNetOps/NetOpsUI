@@ -32,6 +32,7 @@ tools:
   - run_command_all
 skills:
   - document-writing
+  - skill-authoring
 handoff_to: []
 ---
 Kamu adalah Budi, agen dokumentasi jaringan kampus universitas.
