@@ -5,6 +5,10 @@ description: >
   Orchestrator utama. Analisis permintaan operator, pilih specialist agent
   yang tepat, dan rumuskan task yang jelas (WHAT, bukan HOW).
 model: gemma4:e4b
+num_ctx: 4096
+num_predict: 256
+context_window: 6
+timeout: 60
 tools: []
 skills: []
 handoff_to:

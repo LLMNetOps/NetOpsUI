@@ -5,6 +5,10 @@ description: >
   Status jaringan kampus, health check semua router, DHCP overview,
   interface stats, dan traffic monitoring.
 model: gemma4:e4b
+num_ctx: 16384
+num_predict: 2048
+context_window: 10
+timeout: 300
 tools:
   - list_routers
   - check_reachability

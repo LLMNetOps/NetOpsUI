@@ -26,6 +26,11 @@ class AgentDefinition:
     approval_required_tools: list[str]
     body: str
     path: Path
+    # LLM tuning params (per-agent, from frontmatter)
+    num_ctx: int = 8192
+    num_predict: int = 2048
+    context_window: int = 10
+    timeout: int = 300
 
 
 def _parse_definition_file(path: Path) -> Optional[AgentDefinition]:
@@ -69,6 +74,10 @@ def _parse_definition_file(path: Path) -> Optional[AgentDefinition]:
         approval_required_tools=[str(t) for t in (fm.get("approval_required_tools") or [])],
         body=body,
         path=path,
+        num_ctx=int(fm.get("num_ctx", 8192)),
+        num_predict=int(fm.get("num_predict", 2048)),
+        context_window=int(fm.get("context_window", 10)),
+        timeout=int(fm.get("timeout", 300)),
     )
 
 

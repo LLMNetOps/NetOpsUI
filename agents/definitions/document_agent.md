@@ -5,6 +5,10 @@ description: >
   Tulis dokumen laporan ke file, kelola template, dan kurasi hasil
   dari agent lain menjadi laporan operasional yang tersimpan.
 model: gemma4:e4b
+num_ctx: 24576
+num_predict: 4096
+context_window: 20
+timeout: 600
 tools:
   - list_routers
   - get_current_time

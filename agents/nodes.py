@@ -47,14 +47,17 @@ def _make_llm(
     temperature: float = 0.3,
     json_mode: bool = False,
     model: str | None = None,
+    num_ctx: int = 8192,
+    num_predict: int = 2048,
+    timeout: int = 300,
 ) -> ChatOllama:
     kwargs: dict[str, Any] = dict(
         base_url=OLLAMA_BASE_URL,
         model=model or OLLAMA_MODEL,
         temperature=temperature,
-        num_predict=4096,
-        num_ctx=16384,
-        timeout=300,
+        num_predict=num_predict,
+        num_ctx=num_ctx,
+        timeout=timeout,
     )
     if json_mode:
         kwargs["format"] = "json"
@@ -173,11 +176,19 @@ def supervisor_node(state: "NetworkOpsState") -> dict:
         skill_list=skill_list,
         valid_agents=valid_agents_str,
     ))
-    recent = [m for m in messages if isinstance(m, (HumanMessage, AIMessage))][-6:]
+    _sup_ctx_window = _supervisor_defn.context_window if _supervisor_defn else 6
+    recent = [m for m in messages if isinstance(m, (HumanMessage, AIMessage))][-_sup_ctx_window:]
 
     _supervisor_defn = _agent_loader.get("supervisor")
     _supervisor_model = _supervisor_defn.model if _supervisor_defn else None
-    llm = _make_llm(temperature=0.1, json_mode=True, model=_supervisor_model)
+    llm = _make_llm(
+        temperature=0.1,
+        json_mode=True,
+        model=_supervisor_model,
+        num_ctx=_supervisor_defn.num_ctx if _supervisor_defn else 4096,
+        num_predict=_supervisor_defn.num_predict if _supervisor_defn else 256,
+        timeout=_supervisor_defn.timeout if _supervisor_defn else 60,
+    )
     try:
         resp = llm.invoke([sys_msg] + recent)
         data = json.loads(_clean(resp.content))
@@ -244,14 +255,19 @@ ATURAN WAJIB — TOOL CALLING:
 """
 
 
-def _make_specialist_node(agent_name: str, context_window: int = 10):
+def _make_specialist_node(agent_name: str):
     defn = _agent_loader.get(agent_name)
     tools = _resolve_tools(agent_name)
     tool_map_local = {t.name: t for t in tools}
     tool_names_str = ", ".join(t.name for t in tools)
     agent_body = defn.body if defn else ""
+    context_window = defn.context_window if defn else 10
     llm_with_tools = _make_llm(
-        temperature=0.3, model=defn.model if defn else None
+        temperature=0.3,
+        model=defn.model if defn else None,
+        num_ctx=defn.num_ctx if defn else 8192,
+        num_predict=defn.num_predict if defn else 2048,
+        timeout=defn.timeout if defn else 300,
     ).bind_tools(tools)
 
     def _node(state: "NetworkOpsState") -> dict:
@@ -301,7 +317,11 @@ _config_defn = _agent_loader.get("config_agent")
 _CONFIG_TOOLS = _resolve_tools("config_agent")
 _CONFIG_TOOLS_MAP = {t.name: t for t in _CONFIG_TOOLS}
 _CONFIG_LLM = _make_llm(
-    temperature=0.3, model=_config_defn.model if _config_defn else None
+    temperature=0.3,
+    model=_config_defn.model if _config_defn else None,
+    num_ctx=_config_defn.num_ctx if _config_defn else 8192,
+    num_predict=_config_defn.num_predict if _config_defn else 2048,
+    timeout=_config_defn.timeout if _config_defn else 180,
 ).bind_tools(_CONFIG_TOOLS)
 _APPROVAL_REQUIRED_TOOLS = set(
     _config_defn.approval_required_tools if _config_defn else ["backup_router_config"]
@@ -395,5 +415,5 @@ def config_node(state: dict) -> dict:
 monitor_node  = _make_specialist_node("monitor_agent")
 diagnose_node = _make_specialist_node("diagnose_agent")
 security_node = _make_specialist_node("security_agent")
-document_node = _make_specialist_node("document_agent", context_window=20)
+document_node = _make_specialist_node("document_agent")
 # config_node defined above with interrupt() support

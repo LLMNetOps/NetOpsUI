@@ -5,6 +5,10 @@ description: >
   Baca dan verifikasi konfigurasi router, backup config, dan diff perubahan.
   Operasi backup memerlukan persetujuan operator.
 model: gemma4:e4b
+num_ctx: 8192
+num_predict: 2048
+context_window: 10
+timeout: 180
 tools:
   - list_routers
   - run_command

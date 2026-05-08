@@ -5,6 +5,10 @@ description: >
   Audit postur keamanan router: user accounts, NTP sync, logging,
   akses remote, dan hardening konfigurasi MikroTik.
 model: gemma4:e4b
+num_ctx: 8192
+num_predict: 2048
+context_window: 10
+timeout: 300
 tools:
   - list_routers
   - audit_security

@@ -5,6 +5,10 @@ description: >
   Investigasi dan diagnosis masalah jaringan: konektivitas, DHCP client gagal,
   routing OSPF/BGP bermasalah, packet loss, dan root cause analysis.
 model: gemma4:e4b
+num_ctx: 8192
+num_predict: 2048
+context_window: 10
+timeout: 300
 tools:
   - list_routers
   - check_reachability
