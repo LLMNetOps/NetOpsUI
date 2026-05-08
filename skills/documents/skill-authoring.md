@@ -12,6 +12,7 @@ triggers:
   - create new skill
   - write skill
 tools:
+  - fetch_url
   - write_skill
 approval_required: false
 enabled: true
@@ -26,7 +27,17 @@ restart — berkat hot-reload via watchfiles.
 
 ## Prosedur
 
-### Langkah 1: Kumpulkan Informasi dari Operator
+### Langkah 1: Ambil Referensi (jika ada URL)
+Jika operator menyertakan URL referensi (GitHub, dokumentasi vendor, dll), ambil lebih dulu:
+
+```
+fetch_url("https://raw.githubusercontent.com/user/repo/main/file.md")
+```
+
+Tips URL GitHub: gunakan `raw.githubusercontent.com` agar langsung dapat plain text tanpa HTML.
+Baca konten, identifikasi bagian yang relevan, gunakan sebagai dasar prosedur skill.
+
+### Langkah 3: Kumpulkan Informasi dari Operator
 Jika belum jelas dari percakapan, tanyakan:
 - **Masalah apa** yang ingin ditangani skill ini?
 - **Domain** mana yang paling sesuai: `dhcp`, `routing`, `monitoring`, `security`, `config`, atau `documents`?
@@ -34,7 +45,7 @@ Jika belum jelas dari percakapan, tanyakan:
 
 Jika operator sudah menjelaskan cukup, lanjut langsung ke Langkah 2.
 
-### Langkah 2: Tentukan Nama dan Triggers
+### Langkah 4: Tentukan Nama dan Triggers
 
 **Penamaan** mengikuti pola `[domain]-[capability-noun]`:
 ```
@@ -50,7 +61,7 @@ Jika operator sudah menjelaskan cukup, lanjut langsung ke Langkah 2.
 - Variasi singkat dan panjang
 - Istilah teknis yang relevan
 
-### Langkah 3: Pilih Tools
+### Langkah 5: Pilih Tools
 
 Pilih tools yang relevan dari daftar berikut berdasarkan domain skill:
 
@@ -65,7 +76,7 @@ Pilih tools yang relevan dari daftar berikut berdasarkan domain skill:
 
 Tools yang dicantumkan di frontmatter skill **harus dimiliki oleh agent** yang menggunakan skill ini.
 
-### Langkah 4: Susun Body Skill
+### Langkah 6: Susun Body Skill
 
 Tulis body mengikuti struktur ini:
 
@@ -88,7 +99,7 @@ Tulis body mengikuti struktur ini:
 [Edge cases, peringatan, atau perbedaan RouterOS v6 vs v7 jika relevan.]
 ```
 
-### Langkah 5: Simpan dengan write_skill
+### Langkah 7: Simpan dengan write_skill
 
 Panggil `write_skill(domain, name, content)`:
 - `domain` = subfolder (contoh: `routing`, `dhcp`)
@@ -104,7 +115,7 @@ write_skill(
 )
 ```
 
-### Langkah 6: Konfirmasi ke Operator
+### Langkah 8: Konfirmasi ke Operator
 
 Setelah berhasil, sampaikan:
 - Nama file yang disimpan (`skills/{domain}/{name}.md`)

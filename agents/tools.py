@@ -16,6 +16,7 @@ from tools.diagnostic import run_diagnostic
 from tools.report import list_reports, get_report, get_report_section, get_report_toc
 from tools.utility import list_routers, get_current_time
 from tools.document import list_templates, read_template, write_document, create_template, write_skill
+from tools.web import fetch_url
 
 _ALL_TOOLS = [
     list_routers, get_current_time,
@@ -32,6 +33,7 @@ _ALL_TOOLS = [
     run_diagnostic,
     list_reports, get_report, get_report_section, get_report_toc,
     list_templates, read_template, write_document, create_template, write_skill,
+    fetch_url,
 ]
 
 # Flat map: tool name → callable

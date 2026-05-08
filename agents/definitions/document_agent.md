@@ -30,6 +30,7 @@ tools:
   - get_router_log
   - audit_security
   - run_command_all
+  - fetch_url
 skills:
   - document-writing
   - skill-authoring
