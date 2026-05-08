@@ -11,9 +11,8 @@ from typing import TYPE_CHECKING, Any
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_ollama import ChatOllama
 
-from agents.tools import (
-    MONITOR_TOOLS, DIAGNOSE_TOOLS, CONFIG_TOOLS, SECURITY_TOOLS, DOCUMENT_TOOLS,
-)
+from agents.loader import AgentLoader
+from agents.tools import TOOL_MAP
 
 if TYPE_CHECKING:
     from agent import NetworkOpsState
@@ -25,16 +24,22 @@ OLLAMA_MODEL    = os.getenv("OLLAMA_MODEL", "gemma4:e4b")
 
 WIB = timezone(timedelta(hours=7))
 
-# ── Agent alias mapping (display only — tidak mempengaruhi routing/kode) ──────
+# ── Agent loader (single source of truth for tools, skills, system prompts) ───
 
-AGENT_ALIAS: dict[str, str] = {
-    "supervisor":    "bambang",
-    "monitor_agent": "eko",
-    "diagnose_agent": "agus",
-    "config_agent":  "joko",
-    "security_agent": "satria",
-    "document_agent": "budi",
-}
+_agent_loader = AgentLoader()
+
+# Alias map derived from definitions (display only)
+AGENT_ALIAS: dict[str, str] = {d.name: d.alias for d in _agent_loader.all()}
+
+
+def _resolve_tools(agent_name: str) -> list:
+    """Return callable tool list for an agent from its definition."""
+    names = _agent_loader.tool_list(agent_name)
+    tools = [TOOL_MAP[n] for n in names if n in TOOL_MAP]
+    missing = [n for n in names if n not in TOOL_MAP]
+    if missing:
+        logger.warning("Agent '%s' references unknown tools: %s", agent_name, missing)
+    return tools
 
 # ── LLM factory ───────────────────────────────────────────────────────────────
 
@@ -115,19 +120,10 @@ def _react_loop(
 # ── Supervisor node ───────────────────────────────────────────────────────────
 
 _SUPERVISOR_SYS = """\
-Kamu adalah supervisor operasional jaringan kampus. Tugasmu menganalisis permintaan \
-operator dan memutuskan agent yang menanganinya.
+{supervisor_body}
 
 Agent tersedia:
-- monitor_agent  [eko]    : status jaringan, health check, DHCP overview, interface stats
-- diagnose_agent [agus]   : masalah konektivitas, ping/traceroute, DHCP client gagal, packet loss
-- config_agent   [joko]   : baca konfigurasi router, config backup, eksport config
-- security_agent [satria] : audit keamanan, user accounts, NTP sync, firewall check
-- document_agent [budi]   : tulis dokumen laporan ke file, baca/buat template, kurasi hasil agent lain
-
-Untuk laporan komprehensif yang butuh data multi-domain: gunakan monitor_agent atau
-security_agent terlebih dahulu untuk mengumpulkan data, baru route ke document_agent
-untuk kompilasi dan penulisan dokumen ke file.
+{agent_descriptions}
 
 Skill tersedia (nama → trigger):
 {skill_list}
@@ -136,7 +132,7 @@ Balas HANYA dengan JSON valid, tanpa teks lain sebelum atau sesudah JSON.
 Contoh format yang benar:
 {{"next_agent":"monitor_agent","relevant_skills":[],"reasoning":"query status jaringan"}}
 
-Field next_agent harus salah satu: monitor_agent, diagnose_agent, config_agent, security_agent, document_agent, END
+Field next_agent harus salah satu: {valid_agents}, END
 Gunakan END jika pertanyaan sudah dijawab AI sebelumnya dalam percakapan ini.
 """
 
@@ -154,12 +150,25 @@ def supervisor_node(state: "NetworkOpsState") -> dict:
             "agent_log": [_log("supervisor", "routing", "→ END (respons sudah ada)")],
         }
 
+    specialist_defs = [d for d in _agent_loader.all() if d.name != "supervisor"]
+    agent_descriptions = "\n".join(
+        f"- {d.name:20s} [{d.alias}] : {d.description}"
+        for d in specialist_defs
+    )
+    valid_agent_names = {d.name for d in specialist_defs}
+    valid_agents_str = ", ".join(sorted(valid_agent_names))
+
     skill_list = "\n".join(
         f"  {s.name}: {', '.join(s.triggers[:3])}"
         for s in _skill_lib.list_enabled()
     ) or "  (tidak ada skill aktif)"
 
-    sys_msg = SystemMessage(content=_SUPERVISOR_SYS.format(skill_list=skill_list))
+    sys_msg = SystemMessage(content=_SUPERVISOR_SYS.format(
+        supervisor_body=_agent_loader.system_prompt("supervisor"),
+        agent_descriptions=agent_descriptions,
+        skill_list=skill_list,
+        valid_agents=valid_agents_str,
+    ))
     recent = [m for m in messages if isinstance(m, (HumanMessage, AIMessage))][-6:]
 
     llm = _make_llm(temperature=0.1, json_mode=True)
@@ -171,7 +180,7 @@ def supervisor_node(state: "NetworkOpsState") -> dict:
         data = {"next_agent": "monitor_agent", "relevant_skills": [], "reasoning": str(exc)}
 
     next_agent = data.get("next_agent", "monitor_agent")
-    if next_agent not in ("monitor_agent", "diagnose_agent", "config_agent", "security_agent", "document_agent", "END"):
+    if next_agent not in valid_agent_names | {"END"}:
         next_agent = "monitor_agent"
 
     skills = data.get("relevant_skills", [])
@@ -212,9 +221,7 @@ def route_from_supervisor(state: dict) -> str:
 # ── Specialist node factory ───────────────────────────────────────────────────
 
 _SPECIALIST_SYS = """\
-Kamu adalah {role} untuk jaringan kampus universitas.
-Infrastruktur menggunakan MikroTik RouterOS v6/v7. Jawab dalam Bahasa Indonesia,
-teknis dan ringkas. Gunakan backtick untuk istilah teknis.
+{agent_body}
 
 Tool yang tersedia (HANYA ini yang boleh dipanggil): {tool_names}
 
@@ -229,18 +236,12 @@ ATURAN WAJIB — TOOL CALLING:
 {skill_context}
 """
 
-_AGENT_ROLES = {
-    "monitor_agent":  "agen monitoring jaringan — bertugas menganalisis status, health, dan statistik jaringan",
-    "diagnose_agent": "agen diagnostik jaringan — bertugas menginvestigasi dan mendiagnosa masalah konektivitas",
-    "config_agent":   "agen konfigurasi — bertugas membaca dan memverifikasi konfigurasi router",
-    "security_agent": "agen keamanan jaringan — bertugas mengaudit postur keamanan router dan akun",
-    "document_agent": "agen dokumentasi — bertugas membuat laporan terstruktur, mengelola template, dan mengkurasi hasil agent lain menjadi dokumen laporan yang tersimpan di file",
-}
 
-
-def _make_specialist_node(agent_name: str, tools: list, context_window: int = 10):
+def _make_specialist_node(agent_name: str, context_window: int = 10):
+    tools = _resolve_tools(agent_name)
     tool_map_local = {t.name: t for t in tools}
     tool_names_str = ", ".join(t.name for t in tools)
+    agent_body = _agent_loader.system_prompt(agent_name)
     llm_with_tools = _make_llm(temperature=0.3).bind_tools(tools)
 
     def _node(state: "NetworkOpsState") -> dict:
@@ -251,7 +252,7 @@ def _make_specialist_node(agent_name: str, tools: list, context_window: int = 10
         skill_ctx = _skill_lib.inject_context(skill_objs) if skill_objs else ""
 
         sys_content = _SPECIALIST_SYS.format(
-            role=_AGENT_ROLES[agent_name],
+            agent_body=agent_body,
             tool_names=tool_names_str,
             skill_context=skill_ctx,
         ).strip()
@@ -286,11 +287,13 @@ def _make_specialist_node(agent_name: str, tools: list, context_window: int = 10
 
 # ── Config node with human-in-the-loop approval ───────────────────────────────
 
-# Tools that require operator approval before execution
-_APPROVAL_REQUIRED_TOOLS = {"backup_router_config"}
-
-_CONFIG_TOOLS_MAP = {t.name: t for t in CONFIG_TOOLS}
-_CONFIG_LLM = _make_llm(temperature=0.3).bind_tools(CONFIG_TOOLS)
+_CONFIG_TOOLS = _resolve_tools("config_agent")
+_CONFIG_TOOLS_MAP = {t.name: t for t in _CONFIG_TOOLS}
+_CONFIG_LLM = _make_llm(temperature=0.3).bind_tools(_CONFIG_TOOLS)
+_APPROVAL_REQUIRED_TOOLS = set(
+    _agent_loader.get("config_agent").approval_required_tools
+    if _agent_loader.get("config_agent") else ["backup_router_config"]
+)
 
 
 def config_node(state: dict) -> dict:
@@ -302,9 +305,9 @@ def config_node(state: dict) -> dict:
     skill_objs = [s for n in skill_names if (s := _skill_lib.get_by_name(n))]
     skill_ctx = _skill_lib.inject_context(skill_objs) if skill_objs else ""
 
-    _config_tool_names = ", ".join(t.name for t in CONFIG_TOOLS)
+    _config_tool_names = ", ".join(t.name for t in _CONFIG_TOOLS)
     sys_msg = SystemMessage(content=_SPECIALIST_SYS.format(
-        role=_AGENT_ROLES["config_agent"],
+        agent_body=_agent_loader.system_prompt("config_agent"),
         tool_names=_config_tool_names,
         skill_context=skill_ctx,
     ).strip())
@@ -377,8 +380,8 @@ def config_node(state: dict) -> dict:
 
 # ── Exported node functions ───────────────────────────────────────────────────
 
-monitor_node  = _make_specialist_node("monitor_agent",  MONITOR_TOOLS)
-diagnose_node = _make_specialist_node("diagnose_agent", DIAGNOSE_TOOLS)
-security_node = _make_specialist_node("security_agent", SECURITY_TOOLS)
-document_node = _make_specialist_node("document_agent", DOCUMENT_TOOLS, context_window=20)
+monitor_node  = _make_specialist_node("monitor_agent")
+diagnose_node = _make_specialist_node("diagnose_agent")
+security_node = _make_specialist_node("security_agent")
+document_node = _make_specialist_node("document_agent", context_window=20)
 # config_node defined above with interrupt() support
