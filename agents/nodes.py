@@ -43,10 +43,14 @@ def _resolve_tools(agent_name: str) -> list:
 
 # ── LLM factory ───────────────────────────────────────────────────────────────
 
-def _make_llm(temperature: float = 0.3, json_mode: bool = False) -> ChatOllama:
+def _make_llm(
+    temperature: float = 0.3,
+    json_mode: bool = False,
+    model: str | None = None,
+) -> ChatOllama:
     kwargs: dict[str, Any] = dict(
         base_url=OLLAMA_BASE_URL,
-        model=OLLAMA_MODEL,
+        model=model or OLLAMA_MODEL,
         temperature=temperature,
         num_predict=4096,
         num_ctx=16384,
@@ -171,7 +175,9 @@ def supervisor_node(state: "NetworkOpsState") -> dict:
     ))
     recent = [m for m in messages if isinstance(m, (HumanMessage, AIMessage))][-6:]
 
-    llm = _make_llm(temperature=0.1, json_mode=True)
+    _supervisor_defn = _agent_loader.get("supervisor")
+    _supervisor_model = _supervisor_defn.model if _supervisor_defn else None
+    llm = _make_llm(temperature=0.1, json_mode=True, model=_supervisor_model)
     try:
         resp = llm.invoke([sys_msg] + recent)
         data = json.loads(_clean(resp.content))
@@ -192,16 +198,17 @@ def supervisor_node(state: "NetworkOpsState") -> dict:
         "agent_log": [_log("supervisor", "routing", log_msg)],
     }
 
-    # Bambang menjawab langsung jika END tapi belum ada respons AI (sapaan, pertanyaan umum)
+    # Supervisor menjawab langsung jika END tapi belum ada respons AI (sapaan, pertanyaan umum)
     if next_agent == "END":
         has_ai_reply = any(
             isinstance(m, AIMessage) and _clean(m.content or "")
             for m in recent
         )
         if not has_ai_reply:
-            llm_chat = _make_llm(temperature=0.5)
+            _sup_alias = _supervisor_defn.alias if _supervisor_defn else "supervisor"
+            llm_chat = _make_llm(temperature=0.5, model=_supervisor_model)
             chat_sys = SystemMessage(content=(
-                "Kamu adalah Bambang, supervisor operasional jaringan kampus universitas. "
+                f"Kamu adalah {_sup_alias.capitalize()}, supervisor operasional jaringan kampus universitas. "
                 "Balas sapaan atau pertanyaan umum dengan ramah dan singkat dalam Bahasa Indonesia. "
                 "Sebutkan bahwa kamu siap membantu kebutuhan operasional jaringan kampus."
             ))
@@ -238,11 +245,14 @@ ATURAN WAJIB — TOOL CALLING:
 
 
 def _make_specialist_node(agent_name: str, context_window: int = 10):
+    defn = _agent_loader.get(agent_name)
     tools = _resolve_tools(agent_name)
     tool_map_local = {t.name: t for t in tools}
     tool_names_str = ", ".join(t.name for t in tools)
-    agent_body = _agent_loader.system_prompt(agent_name)
-    llm_with_tools = _make_llm(temperature=0.3).bind_tools(tools)
+    agent_body = defn.body if defn else ""
+    llm_with_tools = _make_llm(
+        temperature=0.3, model=defn.model if defn else None
+    ).bind_tools(tools)
 
     def _node(state: "NetworkOpsState") -> dict:
         from agent import _skill_lib  # noqa: PLC0415
@@ -287,12 +297,14 @@ def _make_specialist_node(agent_name: str, context_window: int = 10):
 
 # ── Config node with human-in-the-loop approval ───────────────────────────────
 
+_config_defn = _agent_loader.get("config_agent")
 _CONFIG_TOOLS = _resolve_tools("config_agent")
 _CONFIG_TOOLS_MAP = {t.name: t for t in _CONFIG_TOOLS}
-_CONFIG_LLM = _make_llm(temperature=0.3).bind_tools(_CONFIG_TOOLS)
+_CONFIG_LLM = _make_llm(
+    temperature=0.3, model=_config_defn.model if _config_defn else None
+).bind_tools(_CONFIG_TOOLS)
 _APPROVAL_REQUIRED_TOOLS = set(
-    _agent_loader.get("config_agent").approval_required_tools
-    if _agent_loader.get("config_agent") else ["backup_router_config"]
+    _config_defn.approval_required_tools if _config_defn else ["backup_router_config"]
 )
 
 
