@@ -1,5 +1,5 @@
 ---
-name: diagnose-dhcp-client
+name: dhcp-client-diagnostics
 domain: dhcp
 triggers:
   - client tidak dapat IP

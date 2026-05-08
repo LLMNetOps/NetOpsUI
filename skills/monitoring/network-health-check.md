@@ -12,6 +12,7 @@ triggers:
 tools:
   - check_reachability
   - get_system_info
+  - get_interface_stats
   - audit_dhcp
   - list_routers
   - run_command_all

@@ -1,5 +1,5 @@
 ---
-name: utbk-client-monitor
+name: utbk-session-monitoring
 domain: dhcp
 triggers:
   - monitor UTBK

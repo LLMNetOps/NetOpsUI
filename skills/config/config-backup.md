@@ -1,5 +1,5 @@
 ---
-name: config-backup-procedure
+name: config-backup
 domain: config
 triggers:
   - backup konfigurasi
@@ -10,6 +10,7 @@ triggers:
   - config backup
   - simpan konfigurasi
 tools:
+  - backup_router_config
   - list_backups
   - diff_config
 approval_required: true

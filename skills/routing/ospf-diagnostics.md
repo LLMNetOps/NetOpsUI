@@ -1,5 +1,5 @@
 ---
-name: ospf-neighbor-down
+name: ospf-diagnostics
 domain: routing
 triggers:
   - OSPF neighbor down

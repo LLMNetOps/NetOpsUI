@@ -1,5 +1,5 @@
 ---
-name: network-report
+name: network-status-report
 domain: monitoring
 triggers:
   - buat laporan jaringan

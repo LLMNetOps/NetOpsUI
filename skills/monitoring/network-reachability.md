@@ -1,5 +1,5 @@
 ---
-name: router-unreachable
+name: network-reachability
 domain: monitoring
 triggers:
   - router tidak bisa dihubungi

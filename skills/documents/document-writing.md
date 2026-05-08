@@ -1,5 +1,5 @@
 ---
-name: write-report
+name: document-writing
 domain: documents
 triggers:
   - simpan laporan
@@ -18,6 +18,11 @@ tools:
   - read_template
   - write_document
   - create_template
+  - write_skill
+  - list_reports
+  - get_report
+  - get_report_section
+  - get_report_toc
   - list_reports
   - get_report
 approval_required: false
