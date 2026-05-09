@@ -1,7 +1,7 @@
 # Architecture Document — NetOps AI
 
-**Versi:** 2.0  
-**Tanggal:** 2026-05-08  
+**Versi:** 2.1  
+**Tanggal:** 2026-05-09  
 **Status:** Selesai
 
 ---
@@ -363,14 +363,20 @@ Kamu adalah Eko, agen monitoring jaringan kampus universitas.
 
 ### 6.3 LLM Parameters per Agent
 
+Model aktif: **qwen3.5:9b** (lihat Section 6.8 untuk alasan pemilihan model).
+
 | Agent | num_ctx | num_predict | context_window | timeout | Alasan |
 |-------|---------|-------------|----------------|---------|--------|
-| supervisor | 4096 | 256 | 6 | 60s | Output hanya JSON routing pendek |
-| monitor_agent | 16384 | 2048 | 10 | 300s | Tool results dari 5+ router menumpuk |
-| diagnose_agent | 8192 | 2048 | 10 | 300s | Logs + routing table + analisis RCA |
-| config_agent | 8192 | 2048 | 10 | 180s | Config export per router |
-| security_agent | 8192 | 2048 | 10 | 300s | Audit results + log parsing |
+| supervisor | 8192 | 2048 | 6 | 60s | Output JSON routing; qwen tokenizer 2.2× lebih verbose |
+| monitor_agent | 16384 | 2048 | 10 | 300s | Tool results 17+ router menumpuk di context |
+| diagnose_agent | 16384 | 2048 | 10 | 300s | Logs + routing table + analisis RCA |
+| config_agent | 16384 | 2048 | 10 | 180s | Config export per router |
+| security_agent | 16384 | 2048 | 10 | 300s | Audit results + log parsing |
 | document_agent | 24576 | 4096 | 20 | 600s | Seluruh history percakapan + template |
+
+> **Catatan tokenizer:** qwen3.5:9b menghasilkan ~2.2× lebih banyak token dibanding gemma4:e4b
+> untuk teks yang sama (diukur: 1791 vs 817 token untuk system prompt supervisor yang identik).
+> Semua nilai `num_ctx` sudah disesuaikan dengan faktor ini.
 
 ### 6.4 AgentLoader
 
@@ -601,6 +607,108 @@ Pilih jumlah pesan history yang cukup untuk memahami task saat ini tanpa membawa
 | Timeout error di saat beban ringan | `timeout` terlalu pendek | Naikkan `timeout` |
 | Respons sangat lambat walau output pendek | `num_predict` terlalu besar | Turunkan `num_predict` |
 
+### 6.8 Model Selection & VRAM Constraint
+
+#### Constraint Hardware
+
+Server Ollama (`rogbox.local.id`) menggunakan GPU dengan **12GB VRAM**. Dengan constraint ini,
+hanya **satu model lokal** yang dapat dimuat sekaligus — tidak ada ruang untuk dua model
+secara bersamaan. Jika agent berbeda menggunakan model berbeda, Ollama harus unload lalu
+load model baru → overhead **~5 detik per swap**.
+
+Arsitektur yang optimal: **semua agent menggunakan model yang sama** agar model selalu hot
+di VRAM tanpa swap overhead.
+
+#### Model yang Tersedia
+
+| Model | VRAM | Parameters | Quantization | Status |
+|-------|------|------------|--------------|--------|
+| `gemma4:e4b` | 8.9 GB | 8.0B | Q4_K_M | tidak dipakai |
+| `gemma4:e2b` | 6.7 GB | 5.1B | Q4_K_M | tidak dipakai |
+| `qwen3.5:9b` | 6.1 GB | 9.7B | Q4_K_M | **aktif** |
+| `kimi-k2.5:cloud` | 0 GB | — | cloud | tersedia |
+
+#### Alasan Memilih qwen3.5:9b
+
+| Kriteria | gemma4:e4b | qwen3.5:9b | Keunggulan |
+|----------|-----------|-----------|------------|
+| VRAM | 8.9 GB | **6.1 GB** | 2.8 GB lebih hemat |
+| VRAM headroom | 3.1 GB | **5.9 GB** | KV cache lebih lega |
+| Parameters | 8.0B | **9.7B** | Model lebih capable |
+| JSON output | ❌ sering kosong | ✅ reliabel | Routing supervisor benar |
+| Token per output (JSON) | 57–72 | **36** | Lebih efisien |
+| Tool calling (17 router) | perlu 2–3 pass | **1 pass** | Tidak loop |
+| Forced summary | perlu | tidak perlu | Lebih bersih |
+
+#### Perbandingan Karakteristik Model: Gemma 4 vs Qwen 3.5
+
+##### Arsitektur & Keluarga Model
+
+| Aspek | Gemma 4 (Google DeepMind) | Qwen 3.5 (Alibaba) |
+|-------|--------------------------|---------------------|
+| Arsitektur | Transformer + thinking mode | Transformer + thinking mode |
+| Varian tersedia | e2b (5.1B), e4b (8.0B) | 9b (9.7B) |
+| Quantization (lokal) | Q4_K_M | Q4_K_M |
+| Bahasa utama | English-first, multilingual | Multilingual kuat (termasuk ID) |
+| Lisensi | Gemma Terms of Use | Apache 2.0 |
+
+##### Thinking Mode
+
+Kedua model adalah **thinking model** — menghasilkan token reasoning internal sebelum output.
+Perbedaan penting dalam konteks sistem ini:
+
+| Perilaku | Gemma 4 | Qwen 3.5 |
+|----------|---------|----------|
+| Thinking tokens masuk `content` | ❌ tidak (tersembunyi) | ✅ sebagian (dalam `<think>` tags) |
+| Token thinking habiskan `num_predict` | ✅ ya | ✅ ya |
+| Token output setelah thinking | Sering 0 jika `num_predict` kecil | Konsisten ada output |
+| Minimum `num_predict` untuk JSON | ~2048 (thinking 90%+ token) | ~256 (thinking lebih efisien) |
+
+**Gemma 4 problem:** Dengan `num_predict=256`, model menghabiskan semua token untuk berpikir
+internal tanpa pernah menulis output. Terdeteksi via: `done_reason: 'length'`, `content: ''`,
+`eval_count == num_predict`.
+
+**Qwen 3.5 behavior:** Thinking lebih efisien, output JSON supervisor hanya butuh 36 token,
+jauh di bawah limit `num_predict=2048`.
+
+##### Tokenizer
+
+| Metrik | Gemma 4 e4b | Qwen 3.5 9b |
+|--------|-------------|-------------|
+| Prompt supervisor (token) | 817 | 1791 |
+| Rasio verbositas | 1.0× (baseline) | **2.2×** |
+| Dampak ke `num_ctx` | baseline | perlu ~2× lebih besar |
+
+Tokenizer Qwen lebih verbose karena perbedaan vocabulary size dan subword splitting.
+Teks bahasa Indonesia cenderung ter-tokenize lebih detail di Qwen vs Gemma.
+
+##### Kemampuan Tool Calling
+
+| Skenario | Gemma 4 e4b | Qwen 3.5 9b |
+|----------|-------------|-------------|
+| Panggil 1 tool | ✅ | ✅ |
+| Panggil tool berurutan (17 router) | ✅ tapi sering loop | ✅ 1 pass selesai |
+| Batch tool calls (1 LLM call, N tools) | Jarang | Lebih sering |
+| Response setelah banyak tool results | Sering kosong | Konsisten ada isi |
+| Kebutuhan forced summary fallback | Ya | Tidak |
+
+##### Kapan Mempertimbangkan Kembali ke Gemma
+
+- Jika `qwen3.5:9b` ditarik dari Ollama registry atau tidak tersedia
+- Jika ada Gemma 4 versi yang lebih besar (misal 27B) dengan VRAM yang cukup
+- Jika task membutuhkan karakteristik khusus Gemma (vision, dll)
+
+#### VRAM Budget dengan qwen3.5:9b
+
+```
+Model weights:          6.1 GB
+KV cache (num_ctx max): ~2.0 GB  (estimate untuk 24576 token document_agent)
+Overhead sistem:        ~0.5 GB
+─────────────────────────────────
+Total estimate:         ~8.6 GB  (dari 12 GB tersedia)
+Headroom:               ~3.4 GB
+```
+
 ---
 
 ## 7. Human-in-the-Loop (Approval)
@@ -759,3 +867,132 @@ pyyaml
 requests
 paramiko            ← via mikrotik_agent.py
 ```
+
+---
+
+## 12. Learning Loop — Sistem Pembelajaran Berkelanjutan
+
+### 12.1 Konsep: Two-Tier Intelligence
+
+Sistem menggunakan dua model dengan peran berbeda:
+
+| | qwen3.5:9b (lokal) | Claude (Claude Code) |
+|---|---|---|
+| **Peran** | Runtime operasional | Quality gatekeeper |
+| **Kecepatan** | Cepat (~2-5s/call) | Lambat (interaktif) |
+| **Privasi** | Fully local | Session lokal, tidak kirim ke API |
+| **Kualitas** | Terbatas (9.7B params) | Tinggi |
+| **Kapan aktif** | Setiap request harian | Saat development / review |
+
+Data jaringan sensitif (log, IP, credential) tidak pernah dikirim ke luar — qwen3.5:9b menangani semua operasional. Claude hanya membaca file lokal dalam session Claude Code.
+
+### 12.2 Loop Pembelajaran
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  1. OPERASIONAL  (qwen3.5:9b)                           │
+│                                                         │
+│  Operator request → Supervisor route → Specialist       │
+│  → Tool calls (SSH ke router) → Response ke operator   │
+└───────────────────────────┬─────────────────────────────┘
+                            │ jika output salah / kurang baik
+                            ▼
+┌─────────────────────────────────────────────────────────┐
+│  2. KNOWLEDGE GROWTH  (qwen3.5:9b draft, Claude review) │
+│                                                         │
+│  Operator: "buat skill untuk X"                         │
+│  qwen3.5 → write_skill() → skills/.pending/X.md        │
+│                          ↓                              │
+│  python tests/review.py show X   ← buka di Claude Code │
+│  Claude: cek checklist, syntax RouterOS, logika         │
+│                          ↓                              │
+│  python tests/review.py approve X  → skill live        │
+│  python tests/eval.py              → verifikasi regresi │
+└───────────────────────────┬─────────────────────────────┘
+                            │ catat temuan
+                            ▼
+┌─────────────────────────────────────────────────────────┐
+│  3. INSTITUTIONAL MEMORY  (docs/teaching-log.md)        │
+│                                                         │
+│  Format per entri:                                      │
+│    Apa yang gagal → Root cause → Perubahan → Hasil      │
+│                                                         │
+│  Tujuan: agar keputusan desain tidak hilang dan         │
+│  kesalahan yang sama tidak terulang di sesi berikutnya  │
+└─────────────────────────────────────────────────────────┘
+```
+
+### 12.3 Komponen Sistem Pembelajaran
+
+#### Scenario Library (`tests/scenarios/*.yaml`)
+
+File YAML yang mendefinisikan skenario evaluasi. Setiap skenario punya:
+- `input` — pesan user yang akan dikirim ke agent
+- `expected_agents` — agent yang harus dipilih supervisor
+- `expected_tools` — tools yang harus dipanggil specialist
+- `acceptance_criteria` — daftar checks yang harus pass
+
+Skenario tersedia (per v1.3.0):
+
+| ID | Domain | Agent Target |
+|----|--------|-------------|
+| `bgp-ospf-report` | Routing | diagnose_agent + document_agent |
+| `health-check` | Monitoring | monitor_agent |
+| `brute-force-detect` | Security | security_agent |
+| `dhcp-exhaustion` | DHCP | monitor_agent |
+| `interface-flapping` | Diagnosa | diagnose_agent |
+| `skill-authoring` | Meta | document_agent |
+
+#### Evaluator (`tests/eval.py`)
+
+```bash
+python tests/eval.py                  # semua scenarios, mock mode
+python tests/eval.py health-check     # satu scenario
+python tests/eval.py --lab            # tool asli (butuh containerlab)
+python tests/eval.py -v               # verbose events
+```
+
+**Mock mode** (default): TOOL_MAP di-patch dengan fixture data dari `tests/mocks/fixtures.py`.
+LLM tetap jalan sungguhan — yang di-mock hanya koneksi SSH ke router.
+Cocok untuk regresi cepat tanpa infrastruktur nyata.
+
+**Lab mode** (`--lab`): menggunakan koneksi nyata ke containerlab. Untuk validasi akhir
+sebelum deploy ke produksi.
+
+#### Pending Review Queue (`skills/.pending/`)
+
+Skill yang digenerate agent via `write_skill` masuk ke `skills/.pending/` — tidak langsung live.
+
+```bash
+python tests/review.py                      # list pending
+python tests/review.py show <name>          # tampilkan + checklist 9 item
+python tests/review.py approve <name>       # pindah ke production, hot-reload
+python tests/review.py reject <name>        # hapus dari pending
+```
+
+Checklist review (`tests/review.py show`) memverifikasi:
+- Naming convention `[domain]-[capability-noun]`
+- Field frontmatter wajib lengkap
+- Tool disebutkan eksplisit di body
+- Ada contoh output (code block)
+- Tidak ada instruksi ambigu
+- Panjang < 150 baris
+
+#### Teaching Log (`docs/teaching-log.md`)
+
+Log per sesi dengan format:
+```
+## [YYYY-MM-DD] — [topik]
+Apa yang gagal → root cause → perubahan → hasil
+```
+
+Berbeda dengan git log (yang mencatat *apa* yang berubah), teaching log mencatat
+*mengapa* keputusan diambil — konteks yang hilang setelah kode ditulis.
+
+### 12.4 Prinsip Skill untuk Model Kecil
+
+Lihat `skills/documents/skill-authoring.md` — Section "Prinsip untuk Model Kecil (qwen3.5:9b)".
+
+Ringkasan: qwen3.5:9b bekerja jauh lebih baik dengan instruksi prosedural eksplisit
+(sebutkan tool secara eksplisit, berikan contoh output) daripada instruksi deskriptif
+("analisis dengan bijak", "pertimbangkan faktor yang relevan").

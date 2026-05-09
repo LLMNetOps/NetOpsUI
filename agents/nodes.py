@@ -50,7 +50,9 @@ def _make_llm(
     num_ctx: int = 8192,
     num_predict: int = 2048,
     timeout: int = 300,
+    agent_name: str | None = None,
 ) -> ChatOllama:
+    from agents.metrics import TokenMetricsCallback  # noqa: PLC0415
     kwargs: dict[str, Any] = dict(
         base_url=OLLAMA_BASE_URL,
         model=model or OLLAMA_MODEL,
@@ -58,6 +60,7 @@ def _make_llm(
         num_predict=num_predict,
         num_ctx=num_ctx,
         timeout=timeout,
+        callbacks=[TokenMetricsCallback(agent_name or "unknown", num_ctx, num_predict)],
     )
     if json_mode:
         kwargs["format"] = "json"
@@ -86,7 +89,7 @@ def _react_loop(
     messages: list,
     tool_map: dict,
     agent_name: str,
-    max_iters: int = 12,
+    max_iters: int = 20,
 ) -> tuple[list, list]:
     """
     Run a ReAct tool-calling loop. Returns (updated_messages, log_entries).
@@ -124,6 +127,56 @@ def _react_loop(
     return messages, logs
 
 
+# ── Supervisor helpers ────────────────────────────────────────────────────────
+
+import re as _re
+
+_KEYWORD_ROUTES: list[tuple[list[str], str]] = [
+    (["status", "monitor", "ping", "reachability", "traffic", "bandwidth",
+      "interface", "brief", "ringkasan", "uptime", "latency", "packet loss",
+      "cek jaringan", "cek router", "kondisi jaringan"], "monitor_agent"),
+    (["diagnos", "troubleshoot", "error", "down", "gangguan", "masalah",
+      "ospf", "bgp", "routing", "neighbor", "tidak bisa", "putus", "lambat",
+      "analisis"], "diagnose_agent"),
+    (["backup", "restore", "konfigurasi", "config", "setting", "ubah",
+      "ganti", "terapkan"], "config_agent"),
+    (["security", "keamanan", "firewall", "intrusion", "audit keamanan",
+      "serangan", "vulnerability", "port scan"], "security_agent"),
+    (["laporan", "report", "dokumen", "tulis laporan", "buat laporan",
+      "dokumentasi", "skill"], "document_agent"),
+]
+
+
+def _keyword_route(messages: list, valid_agents: set[str]) -> str | None:
+    """Keyword fallback routing dari pesan user terakhir. None jika tidak cocok."""
+    last_human = next(
+        (m.content for m in reversed(messages) if isinstance(m, HumanMessage)), ""
+    )
+    text = last_human.lower()
+    for keywords, agent in _KEYWORD_ROUTES:
+        if any(k in text for k in keywords) and agent in valid_agents:
+            return agent
+    return None
+
+
+def _parse_supervisor_response(raw: str) -> dict | None:
+    """Extract JSON dari respons supervisor, toleran terhadap think-tags dan teks extra."""
+    text = _re.sub(r"<think>.*?</think>", "", raw, flags=_re.DOTALL).strip()
+    if not text:
+        return None
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+    match = _re.search(r'\{[^{}]+\}', text, _re.DOTALL)
+    if match:
+        try:
+            return json.loads(match.group())
+        except json.JSONDecodeError:
+            pass
+    return None
+
+
 # ── Supervisor node ───────────────────────────────────────────────────────────
 
 _SUPERVISOR_SYS = """\
@@ -151,6 +204,51 @@ def supervisor_node(state: "NetworkOpsState") -> dict:
 
     last = messages[-1] if messages else None
     if isinstance(last, AIMessage) and _clean(last.content or ""):
+        _early_save_kw = {"simpan", "tulis file", "buat laporan", "buatkan laporan",
+                          "buat dokumen", "buatkan dokumen", "catat ke file",
+                          "write report", "save", "write file", "laporan routing",
+                          "laporan bgp", "laporan ospf", "laporan jaringan"}
+        _early_human = next((m for m in reversed(messages) if isinstance(m, HumanMessage)), None)
+        _early_wants_file = bool(_early_human and any(
+            kw in (_early_human.content or "").lower() for kw in _early_save_kw
+        ))
+        _early_prev = state.get("active_agent", "")
+        # Jika data-agent baru selesai dan user minta file → langsung route ke document_agent
+        if _early_wants_file and _early_prev in ("monitor_agent", "security_agent", "diagnose_agent"):
+            _doc_log = f"→ document_agent  skills: ['document-writing']  | file-save: {_early_prev} selesai, route ke document_agent"
+            # Deteksi tipe laporan untuk memilih template yang tepat
+            _orig_req = (_early_human.content or "").lower() if _early_human else ""
+            if any(kw in _orig_req for kw in ("bgp", "ospf", "routing")):
+                _template_hint = "routing-bgp-ospf"
+                _router_hint = ""
+                # Cari nama router dari permintaan asli
+                import re as _re
+                _rm = _re.search(r'(gate-\S+|router\s+(\S+))', _orig_req, _re.IGNORECASE)
+                if _rm:
+                    _router_hint = f" untuk router {_rm.group(0).strip()}"
+                _doc_content = (
+                    f"Analisis routing BGP/OSPF dari Agus sudah lengkap{_router_hint}. "
+                    "Buat laporan file menggunakan template `routing-bgp-ospf`. "
+                    "WAJIB panggil: get_current_time(), get_system_info(), get_bgp_sessions(), get_ospf_neighbors() "
+                    "untuk mendapatkan data tabel yang akurat. "
+                    "Gunakan analisis di atas (cross-reference, root cause, rekomendasi) untuk bagian teks analisis. "
+                    "Simpan dengan write_document() — file HARUS tersimpan ke disk."
+                )
+            else:
+                _doc_content = (
+                    "Data dari agent sebelumnya sudah lengkap. "
+                    "Simpan sekarang ke file menggunakan tool `write_document`. "
+                    "Mulai dengan `list_templates`, pilih template yang sesuai, lalu panggil `write_document`. "
+                    "JANGAN hanya menulis teks — file HARUS tersimpan ke disk."
+                )
+            _doc_instruction = HumanMessage(content=_doc_content)
+            return {
+                "next_agent": "document_agent",
+                "active_agent": "supervisor",
+                "injected_skills": ["document-writing"],
+                "messages": [_doc_instruction],
+                "agent_log": [_log("supervisor", "routing", _doc_log)],
+            }
         return {
             "next_agent": "END",
             "active_agent": "supervisor",
@@ -170,6 +268,9 @@ def supervisor_node(state: "NetworkOpsState") -> dict:
         for s in _skill_lib.list_enabled()
     ) or "  (tidak ada skill aktif)"
 
+    _supervisor_defn = _agent_loader.get("supervisor")
+    _supervisor_model = _supervisor_defn.model if _supervisor_defn else None
+
     sys_msg = SystemMessage(content=_SUPERVISOR_SYS.format(
         supervisor_body=_agent_loader.system_prompt("supervisor"),
         agent_descriptions=agent_descriptions,
@@ -178,9 +279,6 @@ def supervisor_node(state: "NetworkOpsState") -> dict:
     ))
     _sup_ctx_window = _supervisor_defn.context_window if _supervisor_defn else 6
     recent = [m for m in messages if isinstance(m, (HumanMessage, AIMessage))][-_sup_ctx_window:]
-
-    _supervisor_defn = _agent_loader.get("supervisor")
-    _supervisor_model = _supervisor_defn.model if _supervisor_defn else None
     llm = _make_llm(
         temperature=0.1,
         json_mode=True,
@@ -188,17 +286,48 @@ def supervisor_node(state: "NetworkOpsState") -> dict:
         num_ctx=_supervisor_defn.num_ctx if _supervisor_defn else 4096,
         num_predict=_supervisor_defn.num_predict if _supervisor_defn else 256,
         timeout=_supervisor_defn.timeout if _supervisor_defn else 60,
+        agent_name="supervisor",
     )
     try:
         resp = llm.invoke([sys_msg] + recent)
-        data = json.loads(_clean(resp.content))
+        logger.debug("Supervisor raw content: %r | metadata: %s",
+                     resp.content[:300] if resp.content else "(empty)",
+                     getattr(resp, "response_metadata", {}))
+        data = _parse_supervisor_response(resp.content) or {}
+        if not data:
+            raise ValueError("empty or unparseable supervisor response")
     except Exception as exc:
         logger.warning("Supervisor routing parse error: %s", exc)
-        data = {"next_agent": "monitor_agent", "relevant_skills": [], "reasoning": str(exc)}
+        keyword_agent = _keyword_route(messages, valid_agent_names)
+        fallback = keyword_agent or "END"
+        data = {"next_agent": fallback, "relevant_skills": [],
+                "reasoning": f"keyword-fallback({fallback}): {exc}"}
 
-    next_agent = data.get("next_agent", "monitor_agent")
+    next_agent = data.get("next_agent", "END")
     if next_agent not in valid_agent_names | {"END"}:
-        next_agent = "monitor_agent"
+        next_agent = _keyword_route(messages, valid_agent_names) or "END"
+
+    _save_kw = {"simpan", "tulis file", "buat laporan", "buatkan laporan",
+                "buat dokumen", "buatkan dokumen", "catat ke file",
+                "write report", "save", "write file", "laporan routing",
+                "laporan bgp", "laporan ospf", "laporan jaringan"}
+    _last_human = next((m for m in reversed(messages) if isinstance(m, HumanMessage)), None)
+    _wants_file = bool(_last_human and any(
+        kw in (_last_human.content or "").lower() for kw in _save_kw
+    ))
+    _prev_agent = state.get("active_agent", "")
+
+    # Override END → document_agent jika user minta simpan file dan data-agent baru selesai
+    if next_agent == "END" and "document_agent" in valid_agent_names:
+        if _wants_file and _prev_agent in ("monitor_agent", "security_agent", "diagnose_agent"):
+            next_agent = "document_agent"
+            data["reasoning"] = f"file-save override: {_prev_agent} returned data, routing to document_agent"
+
+    # Override → END jika document_agent baru selesai (cegah loop)
+    # document_agent selalu terminal (handoff_to: []) — apapun yang ditulis, selalu END
+    if next_agent != "END" and _prev_agent == "document_agent":
+        next_agent = "END"
+        data["reasoning"] = "document_agent selesai, routing ke END"
 
     skills = data.get("relevant_skills", [])
     log_msg = f"→ {next_agent}  skills: {skills}  | {data.get('reasoning','')}"
@@ -211,9 +340,14 @@ def supervisor_node(state: "NetworkOpsState") -> dict:
 
     # Supervisor menjawab langsung jika END tapi belum ada respons AI (sapaan, pertanyaan umum)
     if next_agent == "END":
+        # Cari posisi HumanMessage terakhir — cek AI reply hanya setelah itu
+        last_human_idx = max(
+            (i for i, m in enumerate(recent) if isinstance(m, HumanMessage)),
+            default=-1,
+        )
         has_ai_reply = any(
             isinstance(m, AIMessage) and _clean(m.content or "")
-            for m in recent
+            for m in recent[last_human_idx + 1:]
         )
         if not has_ai_reply:
             _chat_prompt = (
@@ -227,9 +361,10 @@ def supervisor_node(state: "NetworkOpsState") -> dict:
             llm_chat = _make_llm(
                 temperature=0.5,
                 model=_supervisor_model,
-                num_ctx=_supervisor_defn.num_ctx if _supervisor_defn else 4096,
-                num_predict=512,
+                num_ctx=_supervisor_defn.num_ctx if _supervisor_defn else 8192,
+                num_predict=_supervisor_defn.num_predict if _supervisor_defn else 2048,
                 timeout=_supervisor_defn.timeout if _supervisor_defn else 60,
+                agent_name="supervisor",
             )
             chat_sys = SystemMessage(content=_chat_prompt)
             try:
@@ -271,12 +406,17 @@ def _make_specialist_node(agent_name: str):
     tool_names_str = ", ".join(t.name for t in tools)
     agent_body = defn.body if defn else ""
     context_window = defn.context_window if defn else 10
+    _model = defn.model if defn else None
+    _num_ctx = defn.num_ctx if defn else 8192
+    _num_predict = defn.num_predict if defn else 2048
+    _timeout = defn.timeout if defn else 300
     llm_with_tools = _make_llm(
         temperature=0.3,
-        model=defn.model if defn else None,
-        num_ctx=defn.num_ctx if defn else 8192,
-        num_predict=defn.num_predict if defn else 2048,
-        timeout=defn.timeout if defn else 300,
+        model=_model,
+        num_ctx=_num_ctx,
+        num_predict=_num_predict,
+        timeout=_timeout,
+        agent_name=agent_name,
     ).bind_tools(tools)
 
     def _node(state: "NetworkOpsState") -> dict:
@@ -302,10 +442,28 @@ def _make_specialist_node(agent_name: str):
         )
 
         final_msg = all_msgs[-1]
+        need_summary = True
         if isinstance(final_msg, AIMessage):
             content = _clean(final_msg.content or "")
             if content:
                 final_msg = AIMessage(content=content)
+                need_summary = False
+
+        if need_summary:
+            # AIMessage kosong ATAU ToolMessage (max_iters tercapai) — force summary
+            try:
+                llm_plain = _make_llm(
+                    temperature=0.3, model=_model,
+                    num_ctx=_num_ctx, num_predict=_num_predict, timeout=_timeout,
+                    agent_name=agent_name,
+                )
+                summary = llm_plain.invoke(all_msgs)
+                summary_content = _clean(summary.content or "")
+                if summary_content:
+                    final_msg = AIMessage(content=summary_content)
+                    logs.append(_log(agent_name, "tool_result", "(forced summary generated)"))
+            except Exception as exc:
+                logger.warning("Forced summary failed for %s: %s", agent_name, exc)
 
         logs.append(_log(agent_name, "routing", "← kembali ke supervisor"))
 
@@ -331,6 +489,7 @@ _CONFIG_LLM = _make_llm(
     num_ctx=_config_defn.num_ctx if _config_defn else 8192,
     num_predict=_config_defn.num_predict if _config_defn else 2048,
     timeout=_config_defn.timeout if _config_defn else 180,
+    agent_name="config_agent",
 ).bind_tools(_CONFIG_TOOLS)
 _APPROVAL_REQUIRED_TOOLS = set(
     _config_defn.approval_required_tools if _config_defn else ["backup_router_config"]
@@ -371,10 +530,20 @@ def config_node(state: dict) -> dict:
 
             if name in _APPROVAL_REQUIRED_TOOLS:
                 router = args.get("router_name", "router")
+                if name == "backup_router_config":
+                    action_desc = f"Backup config router '{router}'"
+                    risk = "medium"
+                elif name == "run_command_write":
+                    cmd = args.get("command", "")
+                    action_desc = f"Write command di '{router}': {cmd}"
+                    risk = "high"
+                else:
+                    action_desc = f"Operasi write di '{router}' via {name}"
+                    risk = "medium"
                 approval_req = {
                     "agent": "config_agent",
-                    "action": f"Backup config router '{router}'",
-                    "risk_level": "medium",
+                    "action": action_desc,
+                    "risk_level": risk,
                     "details": args,
                 }
                 logs.append(_log("config_agent", "approval_required",
@@ -387,7 +556,7 @@ def config_node(state: dict) -> dict:
                     messages.append(ToolMessage(content=result, tool_call_id=tc["id"]))
                     continue
 
-                logs.append(_log("config_agent", "tool_result", "Operator menyetujui — eksekusi backup..."))
+                logs.append(_log("config_agent", "tool_result", f"Operator menyetujui — eksekusi {name}..."))
 
             tool_fn = _CONFIG_TOOLS_MAP.get(name)
             if tool_fn is None:

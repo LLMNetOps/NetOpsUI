@@ -4,17 +4,19 @@ alias: eko
 description: >
   Status jaringan kampus, health check semua router, DHCP overview,
   interface stats, dan traffic monitoring.
-model: gemma4:e4b
-num_ctx: 16384
-num_predict: 2048
-context_window: 10
-timeout: 300
+model: qwen3.5:9b
+num_ctx: 32768
+num_predict: 4096
+context_window: 20
+timeout: 600
 tools:
   - list_routers
   - check_reachability
   - check_ssh_access
   - get_system_info
   - get_routing_full
+  - get_bgp_sessions
+  - get_ospf_neighbors
   - get_interface_stats
   - get_interface_traffic
   - get_traffic_summary
@@ -40,6 +42,7 @@ skills:
   - dhcp-pool-audit
   - utbk-session-monitoring
   - network-status-report
+  - capacity-planning
 handoff_to:
   - document_agent
 ---
@@ -61,3 +64,11 @@ Gunakan backtick untuk istilah teknis.
 2. Cek reachability sebelum mencoba SSH ke router
 3. Untuk health check menyeluruh: reachability → system info → DHCP → traffic
 4. Laporkan temuan secara terstruktur: status per router, anomali, rekomendasi
+
+## Tool BGP & OSPF
+
+Untuk router yang menjalankan dynamic routing, gunakan tool khusus:
+- **`get_bgp_sessions(router_name)`** — status semua BGP session (established/down, prefix count, uptime). Lebih lengkap dan akurat dari `run_command`. Gunakan tool ini — JANGAN `run_command /routing/bgp/session/print` karena outputnya terpotong.
+- **`get_ospf_neighbors(router_name)`** — status semua OSPF neighbor (state Full/Init/Down, adjacency). Gunakan tool ini — JANGAN `run_command /routing/ospf/neighbor/print`.
+
+Router dengan `role=gate_idren` atau `role=backbone` kemungkinan besar menjalankan BGP/OSPF.

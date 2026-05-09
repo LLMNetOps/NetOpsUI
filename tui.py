@@ -64,6 +64,7 @@ MENU = [
     ("6", "AI Chat"),
     ("7", "Aktivitas Agent"),
     ("8", "Status Agent"),
+    ("9", "Token Metrics"),
 ]
 
 # ── Agent module ─────────────────────────────────────────────────────────────
@@ -885,6 +886,108 @@ class KanbanScreen(Screen):
         safe_addstr(win, rows - 1, 2, "[R] Refresh  (otomatis update saat AI Chat aktif)", cp(C_MENU))
 
 
+class TokenMetricsScreen(Screen):
+    """Token utilization monitor — ctx%, predict%, tps, done_reason per agent."""
+
+    def handle_key(self, key: int, app: "App") -> bool:
+        ch = chr(key) if 0 < key < 256 else ""
+        if ch in ("r", "R"):
+            return True
+        if ch in ("c", "C"):
+            if _HAS_AGENT and _agent_mod is not None:
+                try:
+                    from agents.metrics import METRICS_PATH  # noqa: PLC0415
+                    if METRICS_PATH.exists():
+                        METRICS_PATH.unlink()
+                except Exception:
+                    pass
+            return True
+        return False
+
+    def draw(self, win: Any, rows: int, cols: int) -> None:
+        safe_addstr(win, 0, 1, "Token Utilization", cp(C_TITLE) | curses.A_BOLD)
+        safe_addstr(win, 1, 1, "─" * max(1, cols - 2), cp(C_DIM))
+
+        entries: list[dict] = []
+        if _HAS_AGENT and _agent_mod is not None and hasattr(_agent_mod, "get_token_metrics"):
+            try:
+                entries = _agent_mod.get_token_metrics(100)
+            except Exception:
+                pass
+
+        if not entries:
+            safe_addstr(win, 3, 2, "Belum ada data. Kirim pesan di [6] AI Chat untuk mulai merekam.", cp(C_DIM))
+            safe_addstr(win, rows - 1, 2, "[R] Refresh   [C] Hapus data", cp(C_MENU))
+            return
+
+        # ── Per-agent summary ─────────────────────────────────────────────────
+        row = 2
+        safe_addstr(win, row, 1, "Per-Agent Summary", cp(C_DIM) | curses.A_BOLD)
+        row += 1
+
+        hdr = f"{'Agent':<20} {'Calls':>5}  {'ctx_avg':>7}  {'predict_avg':>11}  {'tps_avg':>7}  {'⚠':>3}"
+        safe_addstr(win, row, 2, hdr[: cols - 4], cp(C_DIM) | curses.A_UNDERLINE)
+        row += 1
+
+        # Aggregate per agent
+        from collections import defaultdict  # noqa: PLC0415
+        agg: dict[str, dict] = defaultdict(lambda: {"n": 0, "ctx": 0.0, "pred": 0.0, "tps": 0.0, "warn": 0})
+        for e in entries:
+            a = e.get("agent", "?")
+            agg[a]["n"]    += 1
+            agg[a]["ctx"]  += e.get("ctx_util", 0)
+            agg[a]["pred"] += e.get("predict_util", 0)
+            agg[a]["tps"]  += e.get("tps", 0)
+            if e.get("done_reason") == "length":
+                agg[a]["warn"] += 1
+
+        for agent, d in sorted(agg.items()):
+            n = d["n"]
+            ctx_avg  = d["ctx"]  / n
+            pred_avg = d["pred"] / n
+            tps_avg  = d["tps"]  / n
+            warn     = d["warn"]
+            color = C_ERR if warn else C_OK
+            warn_s = f"{warn} ⚠" if warn else "  -"
+            line = f"{agent:<20} {n:>5}  {ctx_avg:>6.1f}%  {pred_avg:>10.1f}%  {tps_avg:>7.1f}  {warn_s:>4}"
+            safe_addstr(win, row, 2, line[: cols - 4], cp(color))
+            row += 1
+            if row >= rows - 7:
+                break
+
+        row += 1
+        safe_addstr(win, row, 1, "─" * max(1, cols - 2), cp(C_DIM))
+        row += 1
+
+        # ── Recent calls ──────────────────────────────────────────────────────
+        safe_addstr(win, row, 1, "Recent Calls", cp(C_DIM) | curses.A_BOLD)
+        row += 1
+
+        col_hdr = f"{'Time':<8}  {'Agent':<20} {'ctx%':>5}  {'predict%':>8}  {'reason':<9}  {'tps':>5}  {'ms':>6}"
+        safe_addstr(win, row, 2, col_hdr[: cols - 4], cp(C_DIM) | curses.A_UNDERLINE)
+        row += 1
+
+        recent = entries[-max(1, rows - row - 2):]
+        for e in reversed(recent):
+            if row >= rows - 1:
+                break
+            ts          = e.get("ts", "")[-8:]   # HH:MM:SS
+            agent       = e.get("agent", "?")
+            ctx_u       = e.get("ctx_util", 0)
+            pred_u      = e.get("predict_util", 0)
+            done        = e.get("done_reason", "?")
+            tps         = e.get("tps", 0)
+            ms          = e.get("total_ms", 0)
+            is_warn     = done == "length"
+            color       = C_ERR if is_warn else C_OK
+            reason_s    = f"{done} ⚠" if is_warn else done
+            line = f"{ts:<8}  {agent:<20} {ctx_u:>4.1f}%  {pred_u:>7.1f}%  {reason_s:<9}  {tps:>5.1f}  {ms:>6.0f}"
+            safe_addstr(win, row, 2, line[: cols - 4], cp(color))
+            row += 1
+
+        safe_addstr(win, rows - 1, 2, "[R] Refresh   [C] Hapus data", cp(C_MENU))
+
+
 class AIScreen(Screen):
     """Interactive AI chat powered by NetOps multi-agent."""
 
@@ -968,6 +1071,12 @@ class AIScreen(Screen):
                         })
                     elif event_type == "ai":
                         ai_chunks.append(content)
+                    elif event_type == "error":
+                        self.data["history"].append({
+                            "role": "assistant",
+                            "content": f"⚠ Agent error: {content}",
+                        })
+                        self.data["scroll"] = 999999
                     elif event_type == "approval_required":
                         self.data["pending_approval"] = content
                         self.data["state"] = "APPROVAL"
@@ -1319,6 +1428,7 @@ class App:
             AIScreen(),
             AgentActivityScreen(),
             KanbanScreen(),
+            TokenMetricsScreen(),
         ]
         self.current = 0
         self._wake = threading.Event()
@@ -1424,7 +1534,7 @@ class App:
         if ch in ("q", "Q"):
             return False
 
-        if ch and ch in "12345678":
+        if ch and ch in "123456789":
             idx = int(ch) - 1
             if idx != self.current:
                 self.current = idx
@@ -1639,10 +1749,81 @@ class App:
             pass
 
 
+def _run_headless(args: list[str]) -> None:
+    """
+    Headless mode — tanpa curses, cocok untuk dijalankan dari non-interactive shell.
+
+    Satu pesan:   python tui.py --headless "status jaringan"
+    Interaktif:   python tui.py --headless          (baca dari stdin, Ctrl+D untuk keluar)
+    Debug mode:   python tui.py --headless --debug "pesan"
+    """
+    import json as _json
+    import logging
+    import sys
+
+    debug = "--debug" in args
+    if debug:
+        args = [a for a in args if a != "--debug"]
+        logging.basicConfig(
+            level=logging.DEBUG,
+            format="%(name)s %(levelname)s: %(message)s",
+            stream=sys.stdout,
+        )
+        logging.getLogger("agents.nodes").setLevel(logging.DEBUG)
+    else:
+        logging.basicConfig(level=logging.WARNING, stream=sys.stderr)
+
+    if not _HAS_AGENT or _agent_mod is None:
+        print("ERROR: agent module tidak tersedia. Pastikan dependencies terinstall.", flush=True)
+        return
+
+    graph, config = _agent_mod.create_agent(thread_id="headless")
+
+    def _send(msg: str) -> None:
+        print(f"\n>>> {msg}", flush=True)
+        for event_type, content in _agent_mod.stream_agent_response(graph, config, msg):
+            if event_type == "ai":
+                print(f"\nAI: {content}\n", flush=True)
+            elif event_type in ("routing", "tool_call", "tool_result"):
+                icon = {"routing": "→", "tool_call": "⚙", "tool_result": "✓"}.get(event_type, "·")
+                preview = content[:120] + "…" if len(content) > 120 else content
+                print(f"  [{icon}] {preview}", flush=True)
+            elif event_type == "error":
+                print(f"\nERROR: {content}\n", flush=True)
+            elif event_type == "approval_required":
+                try:
+                    data = _json.loads(content)
+                    action = data.get("action", content)
+                except Exception:
+                    action = content
+                print(f"\nAPPROVAL_REQUIRED: {action}", flush=True)
+                decision = input("Ketik 'approved' atau 'rejected': ").strip()
+                _agent_mod.submit_approval(graph, config, decision or "rejected")
+
+    if args:
+        _send(" ".join(args))
+    else:
+        print("NetOps AI — Headless Mode  (Ctrl+D atau 'exit' untuk keluar)", flush=True)
+        while True:
+            try:
+                msg = input("\n> ").strip()
+            except EOFError:
+                break
+            if msg.lower() in ("exit", "quit", "keluar"):
+                break
+            if msg:
+                _send(msg)
+
+
 if __name__ == "__main__":
     import locale
     import logging
     import sys
+
+    if "--headless" in sys.argv:
+        args = [a for a in sys.argv[1:] if a != "--headless"]
+        _run_headless(args)
+        sys.exit(0)
 
     # Redirect stderr ke log file — mencegah traceback paramiko/library lain
     # merusak tampilan curses di terminal.

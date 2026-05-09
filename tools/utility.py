@@ -6,7 +6,7 @@ from datetime import datetime, timezone, timedelta
 
 from langchain_core.tools import tool
 
-from tools.base import get_all_routers, get_router_entries, get_router_names
+from tools.base import get_router_entries, get_router_names
 
 
 @tool
@@ -17,17 +17,15 @@ def list_routers() -> str:
     memanggil tool lain. Tidak memerlukan argumen.
     """
     lines = ["Router yang tersedia:\n"]
-    seen: dict[str, list[str]] = {}
-    for e in get_all_routers():
-        seen.setdefault(e["name"], []).append(e["dhcp_server"])
-    for name in sorted(seen):
+    for name in get_router_names():
         entries = get_router_entries(name)
         host = entries[0]["host"]
         ros  = entries[0]["ros_version"]
         role = entries[0].get("role", "backbone")
-        servers = ", ".join(seen[name])
+        servers = [e["dhcp_server"] for e in entries if e["dhcp_server"] is not None]
+        servers_str = ", ".join(servers) if servers else "—"
         lines.append(
-            f"  {name:<14} {host:<16} ROS v{ros}  role={role}  servers: {servers}"
+            f"  {name:<14} {host:<16} ROS v{ros}  role={role}  servers: {servers_str}"
         )
     return "\n".join(lines)
 

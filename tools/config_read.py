@@ -9,7 +9,7 @@ from typing import Any
 from langchain_core.tools import tool
 
 from tools.base import (
-    validate_router, get_router_entries, get_all_routers,
+    validate_router, get_router_entries, get_unique_router_entries,
     ssh_creds, ssh_run_command,
 )
 
@@ -90,7 +90,7 @@ def run_command_all(command: str) -> str:
 
     seen_names: set[str] = set()
     unique_entries: list[dict[str, Any]] = []
-    for entry in get_all_routers():
+    for entry in get_unique_router_entries():
         if entry["name"] not in seen_names:
             seen_names.add(entry["name"])
             unique_entries.append(entry)

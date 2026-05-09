@@ -168,14 +168,32 @@ def submit_approval(
     graph.invoke(Command(resume=decision), config=config)
 
 
+def get_token_metrics(n: int = 100) -> list[dict]:
+    """Return last n entries from data/metrics.jsonl, newest last."""
+    from agents.metrics import METRICS_PATH  # noqa: PLC0415
+    if not METRICS_PATH.exists():
+        return []
+    lines = METRICS_PATH.read_text(encoding="utf-8").splitlines()
+    entries = []
+    for line in lines[-n:]:
+        try:
+            entries.append(json.loads(line))
+        except Exception:
+            pass
+    return entries
+
+
 def get_available_skills() -> list[dict]:
     """Return list of enabled skill summaries for TUI display."""
     return [s.summary() for s in _skill_lib.list_enabled()]
 
 
 def get_agent_status() -> dict:
+    from agents.nodes import _agent_loader  # noqa: PLC0415
+    defn = _agent_loader.get("supervisor")
+    model = defn.model if defn else os.getenv("OLLAMA_MODEL", "gemma4:e4b")
     return {
         "skills_loaded": len(_skill_lib),
-        "model": os.getenv("OLLAMA_MODEL", "gemma4:e4b"),
+        "model": model,
         "ollama_url": os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
     }

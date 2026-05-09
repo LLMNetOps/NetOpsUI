@@ -9,11 +9,15 @@ triggers:
   - ringkasan kondisi jaringan
   - semua router baik-baik saja
   - jaringan normal
+  - cek kondisi semua router
 tools:
   - check_reachability
   - get_system_info
   - get_interface_stats
   - audit_dhcp
+  - get_bgp_sessions
+  - get_ospf_neighbors
+  - get_router_log
   - list_routers
   - run_command_all
 approval_required: false
@@ -33,40 +37,85 @@ ada laporan umum "jaringan bermasalah" tanpa detail spesifik.
 Gunakan `check_reachability` pada setiap router yang terdaftar. Identifikasi router yang
 tidak merespons — ini adalah prioritas investigasi pertama.
 
+Kategorikan hasil:
+- Router tidak reachable sama sekali → ✗ KRITIS — eskalasi segera
+- Router reachable tapi lambat (latency > 100ms) → ⚠ investigasi
+
 ### Langkah 2: Cek Resource Router yang Aktif
 Untuk router yang reachable, gunakan `get_system_info` untuk memeriksa:
-- CPU usage > 80% → router dalam kondisi berat, perlu investigasi
-- Memory usage > 90% → risiko crash, perlu perhatian segera
-- Uptime < 10 menit → router baru restart, perlu dicari penyebabnya
+- **CPU > 80%** → router dalam kondisi berat, perlu investigasi traffic atau script loop
+- **Memory > 90%** → risiko crash, perlu perhatian segera
+- **Uptime < 10 menit** → router baru restart — cari penyebabnya di log
+- **Uptime < 1 jam** → restart dalam 1 jam terakhir — catat sebagai anomali
 
-### Langkah 3: Audit DHCP
+### Langkah 3: Cek Error Interface
+Gunakan `get_interface_stats(router_name)` untuk router aktif. Identifikasi:
+- **Rx/Tx errors > 0** → ada masalah fisik atau duplex mismatch
+- **Drops tinggi** → antrian penuh, indikasi congestion atau overload
+- **Interface yang harusnya up tapi down** → koneksi fisik putus atau port mati
+
+Interface yang perlu diperhatikan: uplink WAN, inter-router link, link ke distribution switch.
+
+### Langkah 4: Cek Status Routing (Gateway/Border Router)
+Untuk router yang berperan sebagai gateway atau edge (GATE-*, BORDER-*):
+
+**BGP:**
+```
+get_bgp_sessions(router_name)
+```
+- Session DOWN → koneksi ke provider/peer terputus — dampak ke reachability Internet
+- Prefix count turun signifikan dibanding biasanya → routing tidak lengkap
+
+**OSPF:**
+```
+get_ospf_neighbors(router_name)
+```
+- Neighbor tidak Full (Init/2-Way/Exstart) → koneksi internal bermasalah
+- State-changes tinggi (SC > 20) → riwayat instabilitas — monitor lebih lanjut
+
+### Langkah 5: Audit DHCP
 Jalankan `audit_dhcp` untuk mendapatkan status DHCP di seluruh jaringan. Identifikasi:
-- Pool yang utilisasinya > 85%
+- Pool dengan utilisasi > 85% → segera tambah range atau investigasi exhaustion
 - Router dengan DHCP yang gagal dihubungi
 - Perubahan signifikan jumlah client dibanding baseline normal
 
-### Langkah 4: Cek Sinkronisasi Waktu
+### Langkah 6: Cek Sinkronisasi Waktu
 Jalankan `run_command_all` dengan perintah `/system/clock/print` untuk memastikan semua
 router memiliki waktu yang sinkron. Jam yang tidak sinkron bisa menyebabkan masalah
 autentikasi dan logging.
+
+### Langkah 7: Cek Log Anomali Singkat
+Untuk router yang menunjukkan tanda masalah (CPU tinggi, interface error, restart),
+jalankan `get_router_log(router_name, lines=20)` untuk melihat event terbaru.
+
+Cari:
+- `critical` atau `error` — masalah aktif
+- `interface changed state` — link flapping
+- `BGP` atau `OSPF` state change — routing instability
+- `login failure` berulang — kemungkinan serangan
 
 ## Output yang Diharapkan
 Laporan ringkas berformat:
 
 ```
 NETWORK HEALTH — [tanggal jam]
-═══════════════════════════════════
+═══════════════════════════════════════════════
 Reachability : X/Y router up (Z down: nama-router)
 CPU          : semua normal | ⚠ ROUTER-A: 87%
 Memory       : semua normal | ⚠ ROUTER-B: 91%
-DHCP         : X client aktif total, Y pool > 80% utilisasi
+Interface    : semua normal | ⚠ ROUTER-C: eth1 4 rx-errors
+BGP          : semua established | ✗ GATE-X: 1 session DOWN
+OSPF         : semua Full | ⚠ GATE-X: 1 neighbor Init
+DHCP         : X client aktif, Y pool > 80% utilisasi
 NTP          : semua sinkron | ⚠ Z router tidak sinkron
 
-Status       : ✓ NORMAL / ⚠ PERLU PERHATIAN / ✗ ADA MASALAH
+Status Overall: ✓ NORMAL / ⚠ PERLU PERHATIAN / ✗ ADA MASALAH
 ```
 
 ## Catatan
 - Health check menyeluruh bisa memakan waktu 2-5 menit karena berjalan paralel
 - Lakukan health check sebelum melaporkan status jaringan ke atasan atau NOC pusat
-- Jika router tidak reachable, lanjutkan ke skill `router-unreachable` untuk investigasi
-  lebih dalam
+- Jika router tidak reachable → skill `network-reachability` untuk investigasi lebih dalam
+- Jika BGP/OSPF bermasalah → skill `bgp-diagnostics` atau `ospf-diagnostics`
+- Jika interface error → skill `link-diagnostics`
+- Jika DHCP hampir penuh → skill `dhcp-pool-audit`

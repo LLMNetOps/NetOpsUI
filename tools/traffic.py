@@ -8,7 +8,7 @@ from typing import Any
 from langchain_core.tools import tool
 
 from tools.base import (
-    validate_router, get_router_entries, get_all_routers,
+    validate_router, get_router_entries, get_unique_router_entries,
     ssh_creds, ssh_run_command,
 )
 
@@ -178,8 +178,7 @@ def get_traffic_all(metric: str = "stats") -> str:
             "err": err if not ok else "",
         }
 
-    seen: set[str] = set()
-    unique = [e for e in get_all_routers() if not (e["name"] in seen or seen.add(e["name"]))]  # type: ignore
+    unique = get_unique_router_entries()
 
     results: list[dict[str, Any]] = []
     with ThreadPoolExecutor(max_workers=8) as executor:

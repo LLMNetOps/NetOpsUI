@@ -5,6 +5,57 @@ Semua perubahan penting pada proyek ini akan didokumentasikan di file ini.
 Format mengikuti [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 dan proyek ini menggunakan [Semantic Versioning](https://semver.org/lang/id/).
 
+## [v1.3.0] - 2026-05-09 (branch: refactor_agent_skill_tool)
+
+### Added
+- **Write operations** (`tools/config_write.py`): tool `run_command_write` untuk eksekusi perintah
+  destruktif di router — selalu memerlukan approval operator via interrupt gate; hard-blocked untuk
+  `format`, `factory-reset`, `reset-configuration`
+- **`agents/metrics.py`**: `TokenMetricsCallback` — catat stats Ollama (prompt/eval tokens,
+  duration) ke `data/metrics.jsonl` sebagai JSONL append-only; `get_token_metrics()` di public API
+- **6 skill baru**:
+  - `skills/config/config-change.md` — prosedur ubah konfigurasi spesifik dengan backup-first
+  - `skills/dhcp/static-lease-management.md` — kelola DHCP static lease
+  - `skills/interface/link-diagnostics.md` — diagnosa interface error dan flapping
+  - `skills/maintenance/router-maintenance.md` — upgrade dan reboot terjadwal
+  - `skills/routing/static-route-management.md` — tambah/hapus static route
+  - `skills/security/brute-force-response.md` — blokir IP penyerang (response dari deteksi)
+  - `skills/security/firewall-management.md` — kelola firewall rules MikroTik
+- **2 template laporan baru**:
+  - `skills/documents/templates/network-status.md`
+  - `skills/documents/templates/routing-bgp-ospf.md`
+- **Routing tools baru** (`tools/routing.py`): `get_bgp_sessions`, `get_ospf_neighbors`,
+  `get_interface_stats` — SSH ke router, parse output, format sebagai tabel ringkas
+- **Sistem evaluasi** (`tests/`):
+  - `tests/eval.py` — evaluator script: patch TOOL_MAP dengan mock, jalankan agent, verifikasi
+    expected_agents/expected_tools/acceptance_criteria; support `--lab` untuk koneksi nyata
+  - `tests/mocks/fixtures.py` — mock data realistis kampus UB per tool (17 router)
+  - `tests/scenarios/*.yaml` — 5 skenario evaluasi: `bgp-ospf-report`, `health-check`,
+    `brute-force-detect`, `dhcp-exhaustion`, `interface-flapping`
+- **`docs/teaching-log.md`** — log institutional memory: apa yang gagal, root cause, perubahan,
+  hasil; 7 entri dari sesi pengembangan (gemma4 num_predict bug, max_iters, forced summary, dll)
+- **`tui.py`** headless + debug mode: `--headless "pesan"` untuk non-interactive, `--debug`
+  untuk tampilkan raw supervisor response dan token metadata
+
+### Changed
+- **`supervisor.md`**: `chat_prompt` dibaca dari definition file (bukan hardcode di nodes.py);
+  tabel routing diperbarui untuk mencakup skill write operations
+- **`config_agent.md`**: ditambah 7 skill write-capable + tabel quick-reference skill → tools
+- **`document_agent.md`**: skill `skill-authoring` diperbarui dengan `fetch_url` untuk referensi URL
+- **`skills/documents/skill-authoring.md`**: tambah section **Prinsip untuk Model Kecil**
+  (tabel what-works vs what-doesn't, 5 aturan utama) dan **Checklist Review Sebelum Commit** (9 item)
+- **`skills/routing/bgp-diagnostics.md`** dan **`ospf-diagnostics.md`**: diperbarui signifikan
+  dengan contoh output tool dan interpretasi eksplisit
+- **`skills/security/security-audit.md`**: diperbarui dengan prosedur brute force detection
+- **`tools/base.py`**: refactor SSH helpers; tambah `get_unique_router_entries()`
+- **`tui.py`**: refactor UI layer, pemisahan concern TUI vs agent logic
+
+### Fixed
+- `config_agent` system prompt sekarang punya skill quick-reference table — agent tidak bingung
+  saat supervisor menginjeksi skill tertentu dari 7 pilihan
+
+---
+
 ## [v1.2.0] - 2026-05-08 (branch: refactor_agent_skill_tool)
 
 ### Added

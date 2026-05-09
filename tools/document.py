@@ -17,6 +17,7 @@ _WIB = timezone(timedelta(hours=7))
 
 _VALID_DOMAINS = {"dhcp", "routing", "monitoring", "security", "config", "documents"}
 _REQUIRED_FRONTMATTER = {"name", "domain", "triggers", "tools", "enabled"}
+_PENDING_DIR = _BASE / "skills" / ".pending"
 
 
 def _safe_path(base: Path, name: str) -> Path | None:
@@ -159,8 +160,8 @@ def create_template(name: str, content: str) -> str:
 @tool
 def write_skill(domain: str, name: str, content: str) -> str:
     """
-    Tulis atau perbarui file skill Markdown di skills/{domain}/{name}.md.
-    Skill yang ditulis langsung aktif (hot-reload otomatis tanpa restart).
+    Tulis skill baru ke antrian review di skills/.pending/{domain}/{name}.md.
+    Skill TIDAK langsung aktif — harus disetujui oleh operator via 'python tests/review.py approve'.
 
     File skill HARUS diawali frontmatter YAML dengan field wajib:
       name, domain, triggers (list), tools (list), enabled (bool).
@@ -219,28 +220,33 @@ def write_skill(domain: str, name: str, content: str) -> str:
     if not isinstance(fm.get("tools"), list):
         return "Error: 'tools' harus berupa list"
 
-    # Write file
+    # Write ke pending queue
     safe_name = Path(name).stem + ".md"
     if re.search(r'[/\\]', safe_name):
         return "Error: nama file tidak boleh mengandung path separator"
 
-    domain_dir = _SKILLS_DIR / domain
-    domain_dir.mkdir(parents=True, exist_ok=True)
+    pending_domain_dir = _PENDING_DIR / domain
+    pending_domain_dir.mkdir(parents=True, exist_ok=True)
 
-    target = domain_dir / safe_name
+    target = pending_domain_dir / safe_name
     try:
-        target.resolve().relative_to(_SKILLS_DIR.resolve())
+        target.resolve().relative_to(_PENDING_DIR.resolve())
     except ValueError:
         return "Error: path traversal terdeteksi."
 
-    action = "diperbarui" if target.exists() else "dibuat"
+    # Tambah metadata review di baris pertama comment
+    timestamp = datetime.now(_WIB).strftime("%Y-%m-%dT%H:%M:%S WIB")
+    annotated = f"<!-- pending-review: generated {timestamp} -->\n{content}"
+
     try:
-        target.write_text(content, encoding="utf-8")
+        target.write_text(annotated, encoding="utf-8")
     except OSError as e:
-        return f"Gagal menyimpan skill: {e}"
+        return f"Gagal menyimpan skill ke pending: {e}"
 
     return (
-        f"Skill '{fm['name']}' berhasil {action}: skills/{domain}/{safe_name}\n"
+        f"Skill '{fm['name']}' masuk antrian review: skills/.pending/{domain}/{safe_name}\n"
         f"Domain: {domain}  |  Triggers: {len(fm['triggers'])}  |  Tools: {len(fm.get('tools', []))}\n"
-        f"Skill langsung aktif — hot-reload otomatis."
+        f"⏳ Belum aktif — operator harus review dan approve:\n"
+        f"   python tests/review.py show {safe_name[:-3]}\n"
+        f"   python tests/review.py approve {safe_name[:-3]}"
     )

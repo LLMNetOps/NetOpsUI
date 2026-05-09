@@ -112,20 +112,27 @@ def load_config() -> None:
             "timeout": int(cfg["ssh"].get("timeout", 15)),
             "port": int(cfg["ssh"].get("port", 22)),
         }
-        flat: list[dict[str, Any]] = []
+        dhcp_flat: list[dict[str, Any]] = []
+        name_to_entries: dict[str, list[dict[str, Any]]] = {}
         for r in cfg.get("routers", []):
-            for srv in r.get("dhcp_servers", []):
-                flat.append({
-                    "name": r["name"],
-                    "host": r["host"],
-                    "ros_version": int(r.get("ros_version", 7)),
-                    "dhcp_server": srv,
-                    "role": str(r.get("role", "backbone")),
-                })
-        _ROUTERS = flat
-        _NAME_TO_ENTRIES = {}
-        for entry in flat:
-            _NAME_TO_ENTRIES.setdefault(entry["name"], []).append(entry)
+            base_entry = {
+                "name": r["name"],
+                "host": r["host"],
+                "ros_version": int(r.get("ros_version", 7)),
+                "role": str(r.get("role", "backbone")),
+            }
+            dhcp_servers = r.get("dhcp_servers", [])
+            if dhcp_servers:
+                for srv in dhcp_servers:
+                    entry = {**base_entry, "dhcp_server": srv}
+                    dhcp_flat.append(entry)
+                    name_to_entries.setdefault(r["name"], []).append(entry)
+            else:
+                # Router tanpa DHCP server — tetap terdaftar untuk non-DHCP tools
+                entry = {**base_entry, "dhcp_server": None}
+                name_to_entries.setdefault(r["name"], []).append(entry)
+        _ROUTERS = dhcp_flat          # hanya entries dengan dhcp_server nyata
+        _NAME_TO_ENTRIES = name_to_entries
         VALID_ROUTER_NAMES = frozenset(_NAME_TO_ENTRIES.keys())
     except FileNotFoundError:
         print(f"[base] config.yaml tidak ditemukan: {CONFIG_FILE}", file=sys.stderr)
@@ -169,8 +176,18 @@ def get_router_entries(router_name: str) -> list[dict[str, Any]]:
 
 
 def get_all_routers() -> list[dict[str, Any]]:
-    """Return flat list semua router entries (satu entry per DHCP server)."""
+    """Return flat list router entries dengan DHCP server (satu entry per DHCP server).
+    Gunakan untuk operasi DHCP. Router tanpa dhcp_servers tidak termasuk."""
     return list(_ROUTERS)
+
+
+def get_unique_router_entries() -> list[dict[str, Any]]:
+    """Return satu entry per router (termasuk router tanpa DHCP server).
+    Gunakan untuk operasi non-DHCP (traffic, config, reachability bulk)."""
+    return sorted(
+        (entries[0] for entries in _NAME_TO_ENTRIES.values()),
+        key=lambda e: e["name"],
+    )
 
 
 def get_router_names() -> list[str]:
