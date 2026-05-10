@@ -15,6 +15,7 @@ triggers:
 tools:
   - backup_router_config
   - run_command
+  - run_command_write
   - check_reachability
   - get_router_log
   - list_backups
@@ -56,8 +57,7 @@ Jika perubahan HIGH/CRITICAL dan tidak ada akses konsol standby → tunda dulu.
 ### Langkah 1: Backup Konfigurasi
 Jalankan `backup_router_config(router_name)` sebelum perubahan apapun.
 Catat nama file backup — dibutuhkan jika perlu rollback.
-
-Konfirmasi ke operator: "Backup tersimpan di `backups/<router>/<timestamp>.rsc`. Lanjut?"
+Setelah backup selesai, LANGSUNG lanjut ke Langkah 2.
 
 ### Langkah 2: Dokumentasikan Rencana Perubahan
 Sebelum eksekusi, jelaskan ke operator secara eksplisit:
@@ -75,11 +75,12 @@ Rollback: /system/ntp/client/set servers=<server-lama>
 ```
 
 ### Langkah 3: Eksekusi Perubahan
-Gunakan `run_command(router_name, "<perintah>")`.
+Gunakan `run_command_write(router_name, "<perintah>")` untuk semua operasi write.
+Sistem akan meminta approval operator secara otomatis untuk setiap perintah write.
+Setelah approval dan eksekusi, LANGSUNG lanjut ke perubahan berikutnya tanpa menunggu
+konfirmasi manual — interrupt gate sudah menangani ini.
 
 **Prinsip eksekusi aman:**
-- Ubah satu hal sekaligus, bukan batch banyak perubahan sekaligus
-- Tunggu konfirmasi setiap perubahan sebelum lanjut ke berikutnya
 - Jika perintah menyebabkan timeout/disconnect → jangan panik, tunggu 30 detik
 
 **Perubahan yang bisa memutus koneksi sementara:**

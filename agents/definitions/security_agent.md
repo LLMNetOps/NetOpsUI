@@ -6,7 +6,7 @@ description: >
   deteksi brute force, akses remote, dan hardening konfigurasi MikroTik.
 model: qwen3.5:9b
 num_ctx: 32768
-num_predict: 4096
+num_predict: 8192
 context_window: 20
 timeout: 600
 tools:

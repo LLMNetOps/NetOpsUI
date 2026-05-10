@@ -40,6 +40,6 @@ def get_interface_stats(router_name: str) -> str:
 
     output = out.strip()
     header = f"Interface Stats — {router_name} ({entry['host']})\n{'─'*60}\n"
-    if len(output) > 4000:
-        output = output[:4000] + f"\n...[terpotong, total {len(out)} karakter]..."
+    if len(output) > 8000:
+        output = output[:8000] + f"\n...[terpotong, total {len(out)} karakter]..."
     return header + output

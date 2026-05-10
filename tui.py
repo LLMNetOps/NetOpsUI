@@ -1135,10 +1135,51 @@ class AIScreen(Screen):
         ).start()
 
     def _resume_after_approval(self, decision: str, app: "App") -> None:
+        t_start = time.time()
+        ai_chunks: list[str] = []
         try:
-            _agent_mod.submit_approval(self._agent, self._agent_config, decision)
+            for event_type, content in _agent_mod.resume_after_approval(
+                self._agent, self._agent_config, decision
+            ):
+                _kanban_update(event_type, content)
+                ts = dt.datetime.now().strftime("%H:%M:%S")
+                with self._lock:
+                    if event_type in ("routing", "tool_call", "tool_result"):
+                        icon = {"routing": "→", "tool_call": "⚙", "tool_result": "✓"}.get(event_type, "·")
+                        self.data["history"].append({
+                            "role": "agent_event",
+                            "content": f"[{icon} {content}]",
+                        })
+                        self.data["scroll"] = 999999
+                    elif event_type == "ai":
+                        ai_chunks.append(content)
+                    elif event_type == "error":
+                        self.data["history"].append({
+                            "role": "assistant",
+                            "content": f"⚠ Agent error: {content}",
+                        })
+                        self.data["scroll"] = 999999
+                    elif event_type == "approval_required":
+                        self.data["pending_approval"] = content
+                        self.data["state"] = "APPROVAL"
+                        self.data["scroll"] = 999999
+                app._wake.set()
+                if event_type == "approval_required":
+                    return  # tunggu approval berikutnya dari operator
+
+            elapsed = time.time() - t_start
             with self._lock:
+                if ai_chunks:
+                    final = "\n".join(ai_chunks).strip()
+                    if final:
+                        self.data["history"].append({"role": "assistant", "content": final})
+                self.data["history"].append({
+                    "role": "agent_event",
+                    "content": f"[⏱ selesai dalam {elapsed:.1f}s]",
+                })
                 self.data["state"] = "IDLE"
+                self.data["exec_start"] = None
+                self.data["scroll"] = 999999
         except Exception as exc:
             with self._lock:
                 self.data["history"].append({

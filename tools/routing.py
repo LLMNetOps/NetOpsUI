@@ -197,8 +197,8 @@ def get_routing_full(router_name: str) -> str:
             lines.append("  (tidak ada konfigurasi)")
         else:
             output = out.strip()
-            if len(output) > 800:
-                output = output[:800] + f"\n  ...[+{len(out)-800} karakter]"
+            if len(output) > 5000:
+                output = output[:5000] + f"\n  ...[+{len(out)-5000} karakter]"
             lines.append(output)
             has_any = True
 

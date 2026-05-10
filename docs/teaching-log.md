@@ -228,3 +228,59 @@ if next_agent != "END" and _prev_agent == "document_agent":
 document_agent selalu terminal (`handoff_to: []`), jadi setelah selesai selalu END — apapun yang ditulis.
 
 **Hasil:** Loop hilang. Waktu eksekusi turun dari 249.7s → 76.7s. Scenario skill-authoring PASS.
+
+---
+
+## 2026-05-09 — Loop supervisor ∞ setelah specialist selesai
+
+**Apa yang gagal:** Request "buatkan top 10 interface dengan trafik tertinggi" menyebabkan
+monitor_agent (eko) loop terus-menerus. Trace: eko call get_traffic_all → kembali ke supervisor
+→ supervisor `keyword-fallback(monitoragent): empty or unparseable` → eko lagi → repeat.
+Agent berjalan 512s+ tanpa selesai.
+
+**Root cause (dua bug terpisah):**
+
+1. **`_make_specialist_node` safety net hilang:** Jika `need_summary` dan forced summary
+   menghasilkan empty content (atau exception), `final_msg` tetap sebagai `ToolMessage`.
+   State terakhir berisi ToolMessage, bukan AIMessage.
+
+2. **Supervisor early-exit tidak terpicu:** `supervisor_node` cek `isinstance(last, AIMessage)`.
+   Jika last message adalah ToolMessage → early-exit tidak jalan → supervisor LLM dipanggil
+   → context panjang + reasoning tokens exhausted num_predict → empty JSON → keyword-fallback
+   → monitor_agent lagi → loop infinite.
+
+3. **Root cause fungsional:** `get_traffic_all(metric="stats")` output dipotong 200 char per
+   router. Untuk query "top 10 interface lintas semua router", data ini tidak cukup untuk
+   dianalisis secara akurat oleh LLM.
+
+**Perubahan:**
+- `agents/nodes.py` `_make_specialist_node`: tambah safety net setelah forced summary —
+  jika `final_msg` masih bukan AIMessage berisi content, ekstrak `ToolMessage` terakhir
+  sebagai fallback AIMessage. Memastikan early-exit supervisor SELALU terpicu.
+- `agents/nodes.py` `supervisor_node`: tambah loop guard — jika `next_agent == _prev_agent`
+  (akan route ke specialist yang sama yang baru selesai), paksa ke END.
+- `tools/traffic.py`: tambah tool `get_top_interfaces_all(limit)` — query semua router
+  paralel, parse `_parse_iface_stats`, sort global by RX, return tabel top-N.
+- `skills/monitoring/network-traffic-analysis.md`: instruksi eksplisit gunakan
+  `get_top_interfaces_all` untuk permintaan top-N lintas router.
+
+**Hasil:** Loop cegah oleh dua safety net berlapis. Query top-10 interface sekarang
+ditangani oleh satu tool call paralel (bukan 18 sequential calls).
+
+---
+
+## 2026-05-09 — monitor_agent num_predict exhaustion (reason: length)
+
+**Apa yang gagal:** monitor_agent berhenti di tengah health check — Token Utilization panel
+menunjukkan `predict: 100.0%`, `done_reason: length`, durasi 96145ms (~96s), 43.9 tps.
+43.9 tps × 96s ≈ 4,220 token = persis menabrak batas `num_predict: 4096`.
+
+**Root cause:** qwen3.5:9b menghitung reasoning/thinking tokens dalam `num_predict`. Health
+check 17 router menghasilkan banyak token reasoning sebelum output selesai. Dengan `num_predict=4096`,
+output terpotong di tengah — response tidak selesai, laporan tidak lengkap.
+
+**Perubahan:** `num_predict` monitor_agent dinaikkan dari 4096 → 8192 di definition file.
+
+**Hasil:** monitor_agent punya ruang 2× lebih besar untuk reasoning + output. Health check
+17 router seharusnya tidak lagi terpotong. Trade-off: worst-case memory naik ~100MB VRAM,
+masih aman untuk GPU 12GB dengan total beban saat ini.

@@ -164,8 +164,46 @@ def submit_approval(
     config: RunnableConfig,
     decision: str,
 ) -> None:
-    """Resume a paused graph after human approval. decision: 'approved' | 'rejected'."""
+    """Resume a paused graph after human approval. decision: 'approved' | 'rejected'.
+    Headless / non-streaming variant — use resume_after_approval for TUI streaming."""
     graph.invoke(Command(resume=decision), config=config)
+
+
+def resume_after_approval(
+    graph: Any,
+    config: RunnableConfig,
+    decision: str,
+) -> Iterator[tuple[str, str]]:
+    """Resume after approval, streaming events back to caller.
+    Yields same (event_type, content) tuples as stream_agent_response.
+    May yield another 'approval_required' if a subsequent tool also needs approval.
+    """
+    try:
+        for chunk in graph.stream(
+            Command(resume=decision),
+            config=config,
+            stream_mode="updates",
+        ):
+            for node_name, node_output in chunk.items():
+                if node_name == "__interrupt__":
+                    payload = node_output[0].value if node_output else {}
+                    yield "approval_required", json.dumps(payload)
+                    return
+
+                for entry in node_output.get("agent_log") or []:
+                    yield entry["event_type"], f"[{entry['source']}] {entry['content']}"
+
+                for msg in node_output.get("messages") or []:
+                    from langchain_core.messages import AIMessage  # noqa: PLC0415
+                    if isinstance(msg, AIMessage) and msg.content:
+                        import re
+                        content = re.sub(r"<think>.*?</think>", "", msg.content,
+                                         flags=re.DOTALL).strip()
+                        if content:
+                            yield "ai", content
+
+    except Exception as exc:
+        yield "error", str(exc)
 
 
 def get_token_metrics(n: int = 100) -> list[dict]:

@@ -176,7 +176,7 @@ def diff_config(router_name: str, file_a: str = "", file_b: str = "") -> str:
         f"  Δ     : +{added} baris / -{removed} baris\n"
         f"{'─'*60}\n"
     )
-    diff_text = "\n".join(diff[:200])
-    if len(diff) > 200:
+    diff_text = "\n".join(diff[:500])
+    if len(diff) > 500:
         diff_text += f"\n...[terpotong, total {len(diff)} baris diff]"
     return header + diff_text

@@ -15,6 +15,7 @@ triggers:
   - filter firewall
 tools:
   - run_command
+  - run_command_write
   - backup_router_config
   - check_reachability
   - get_router_log

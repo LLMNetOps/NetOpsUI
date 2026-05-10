@@ -60,6 +60,6 @@ def run_command_write(router_name: str, command: str) -> str:
 
     output = out.strip() if out.strip() else "(perintah berhasil, tidak ada output)"
     header = f"Output dari {router_name} ({entry['host']}) — `{command}`\n{'─'*60}\n"
-    if len(output) > 4000:
-        output = output[:4000] + f"\n...[terpotong, total {len(out)} karakter]..."
+    if len(output) > 8000:
+        output = output[:8000] + f"\n...[terpotong, total {len(out)} karakter]..."
     return header + output

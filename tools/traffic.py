@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
@@ -11,6 +12,37 @@ from tools.base import (
     validate_router, get_router_entries, get_unique_router_entries,
     ssh_creds, ssh_run_command,
 )
+
+
+def _human_bytes(n: int) -> str:
+    for unit in ("B", "KB", "MB", "GB", "TB", "PB"):
+        if n < 1024:
+            return f"{n:.1f} {unit}" if unit != "B" else f"{n} B"
+        n /= 1024
+    return f"{n:.1f} PB"
+
+
+def _parse_iface_stats(raw: str) -> list[dict]:
+    """Parse output /interface print stats ROS v7 → list of dicts."""
+    entries = []
+    comment = ""
+    for line in raw.splitlines():
+        if ";;;" in line:
+            comment = line.split(";;;", 1)[1].strip()
+            continue
+        # Baris data: "  0 RS ether1   14 768 998 935"
+        # Nama interface tidak punya spasi; bytes pakai spasi ribuan
+        m = re.match(r'^\s*\d+\s+[A-Z]+\s+(\S+)\s+([\d ]+)\s*$', line)
+        if not m:
+            continue
+        name = m.group(1)
+        try:
+            rx = int(m.group(2).replace(" ", ""))
+        except ValueError:
+            continue
+        entries.append({"name": name, "rx": rx, "comment": comment})
+        comment = ""
+    return entries
 
 
 def _fetch(host: str, command: str, ros: int) -> tuple[bool, str, str]:
@@ -31,28 +63,55 @@ def _fetch(host: str, command: str, ros: int) -> tuple[bool, str, str]:
 @tool
 def get_interface_traffic(router_name: str, interface: str = "") -> str:
     """
-    Ambil statistik TX/RX rate realtime per interface dari router.
+    Ambil statistik RX bytes per interface dari router, diurutkan dari tertinggi.
+    Interface dengan 0 bytes dikelompokkan terpisah di bagian bawah.
     Args:
         router_name: Nama router. Gunakan list_routers() untuk daftar valid.
         interface:   Nama interface spesifik (contoh: ether1, sfp1).
-                     Kosongkan untuk semua interface.
+                     Kosongkan untuk semua interface aktif.
     """
     router_name = validate_router(router_name)
     entry = get_router_entries(router_name)[0]
 
     if interface:
         cmd = f"/interface/monitor-traffic {interface} once"
-    else:
-        cmd = "/interface/print stats"
+        ok, out, err = _fetch(entry["host"], cmd, entry["ros_version"])
+        if not ok:
+            return f"Gagal ambil traffic {interface} dari {router_name}: {err}"
+        return f"Traffic {interface} — {router_name}\n{'─'*60}\n{out.strip()}"
 
-    ok, out, err = _fetch(entry["host"], cmd, entry["ros_version"])
+    ok, out, err = _fetch(entry["host"], "/interface/print stats where running=yes",
+                          entry["ros_version"])
     if not ok:
         return f"Gagal ambil traffic stats dari {router_name}: {err}"
     if not out.strip():
         return f"Tidak ada data traffic dari {router_name}."
 
-    header = f"Traffic stats — {router_name} ({entry['host']})\n{'─'*60}\n"
-    return header + out.strip()[:3000]
+    ifaces = _parse_iface_stats(out)
+    if not ifaces:
+        # Fallback: kembalikan raw output tanpa truncation
+        return f"Traffic stats — {router_name} ({entry['host']})\n{'─'*60}\n{out.strip()}"
+
+    active   = sorted([i for i in ifaces if i["rx"] > 0], key=lambda x: x["rx"], reverse=True)
+    inactive = [i for i in ifaces if i["rx"] == 0]
+
+    lines = [
+        f"Traffic stats — {router_name} ({entry['host']})",
+        f"Interface aktif: {len(active)}  |  Zero-traffic: {len(inactive)}",
+        "─" * 60,
+        f"{'Interface':<45} {'RX':>12}  Keterangan",
+        "─" * 60,
+    ]
+    for i in active:
+        keterangan = f"  {i['comment']}" if i["comment"] else ""
+        lines.append(f"{i['name']:<45} {_human_bytes(i['rx']):>12}{keterangan}")
+
+    if inactive:
+        lines.append("")
+        lines.append(f"Zero-traffic ({len(inactive)} interface):")
+        lines.append("  " + ", ".join(i["name"] for i in inactive))
+
+    return "\n".join(lines)
 
 
 @tool
@@ -74,7 +133,7 @@ def get_traffic_summary(router_name: str) -> str:
         f"Traffic Summary — {router_name} ({entry['host']})\n"
         f"{'─'*60}\n"
     )
-    return header + (out.strip()[:3000] if out.strip() else "(tidak ada data)")
+    return header + (out.strip() if out.strip() else "(tidak ada data)")
 
 
 @tool
@@ -106,14 +165,13 @@ def get_top_talkers(router_name: str, limit: int = 10) -> str:
         )
 
     lines_raw = out2.strip().split("\n")
-    # Show first `limit` lines
     preview = "\n".join(lines_raw[:limit * 3])  # each entry ~3 lines
     header = (
         f"Connection Tracking — {router_name} ({entry['host']})\n"
         f"Total connections: {conn_count}\n"
         f"{'─'*60}\n"
     )
-    return header + preview[:2500]
+    return header + preview
 
 
 @tool
@@ -132,14 +190,14 @@ def get_queue_stats(router_name: str) -> str:
     # Simple queues
     ok, out, _ = _fetch(entry["host"], "/queue/simple/print stats", entry["ros_version"])
     if ok and out.strip():
-        results.append("=== Simple Queues ===\n" + out.strip()[:1500])
+        results.append("=== Simple Queues ===\n" + out.strip())
     elif ok:
         results.append("=== Simple Queues: (tidak ada) ===")
 
     # Queue tree
     ok2, out2, _ = _fetch(entry["host"], "/queue/tree/print stats", entry["ros_version"])
     if ok2 and out2.strip():
-        results.append("=== Queue Tree ===\n" + out2.strip()[:1500])
+        results.append("=== Queue Tree ===\n" + out2.strip())
     elif ok2:
         results.append("=== Queue Tree: (tidak ada) ===")
 
@@ -148,6 +206,72 @@ def get_queue_stats(router_name: str) -> str:
 
     header = f"Queue Stats — {router_name} ({entry['host']})\n{'─'*60}\n"
     return header + "\n\n".join(results)
+
+
+@tool
+def get_top_interfaces_all(limit: int = 10) -> str:
+    """
+    Ambil top N interface dengan RX bytes tertinggi dari SEMUA router secara paralel.
+    Berguna untuk identifikasi interface paling sibuk secara global di seluruh kampus.
+    Lebih akurat dari get_traffic_all untuk pencarian top-N karena data tidak dipotong.
+    Args:
+        limit: Jumlah interface teratas yang ditampilkan (default 10, max 30).
+    """
+    limit = min(int(limit), 30)
+
+    def _check_one(entry: dict[str, Any]) -> dict[str, Any]:
+        ok, out, err = _fetch(entry["host"], "/interface/print stats where running=yes",
+                              entry["ros_version"])
+        if not ok or not out.strip():
+            return {"name": entry["name"], "host": entry["host"], "ifaces": [], "error": err}
+        return {"name": entry["name"], "host": entry["host"],
+                "ifaces": _parse_iface_stats(out), "error": ""}
+
+    unique = get_unique_router_entries()
+    results: list[dict[str, Any]] = []
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        futures = {executor.submit(_check_one, e): e for e in unique}
+        for future in as_completed(futures, timeout=120):
+            try:
+                results.append(future.result())
+            except Exception as exc:
+                entry = futures[future]
+                results.append({"name": entry["name"], "host": entry["host"],
+                                 "ifaces": [], "error": str(exc)})
+
+    all_ifaces = []
+    for r in results:
+        for iface in r["ifaces"]:
+            all_ifaces.append({
+                "router": r["name"],
+                "iface": iface["name"],
+                "rx": iface["rx"],
+                "comment": iface["comment"],
+            })
+
+    if not all_ifaces:
+        return "Tidak ada data interface dari router manapun."
+
+    top = sorted(all_ifaces, key=lambda x: x["rx"], reverse=True)[:limit]
+    ok_count   = sum(1 for r in results if not r["error"])
+    fail_count = sum(1 for r in results if r["error"])
+
+    lines = [
+        f"Top {limit} Interface — seluruh kampus ({len(results)} router)",
+        f"Berhasil: {ok_count} router  |  Gagal: {fail_count} router",
+        "─" * 72,
+        f"{'#':<4} {'Router':<22} {'Interface':<28} {'RX':>12}  Keterangan",
+        "─" * 72,
+    ]
+    for i, iface in enumerate(top, 1):
+        ket = f"  {iface['comment']}" if iface["comment"] else ""
+        lines.append(
+            f"{i:<4} {iface['router']:<22} {iface['iface']:<28} {_human_bytes(iface['rx']):>12}{ket}"
+        )
+    if fail_count:
+        failed = [r["name"] for r in results if r["error"]]
+        lines.append(f"\nRouter gagal ({fail_count}): {', '.join(failed)}")
+    return "\n".join(lines)
 
 
 @tool
@@ -207,8 +331,8 @@ def get_traffic_all(metric: str = "stats") -> str:
         elif not r["out"]:
             lines.append("  (tidak ada data)")
         else:
-            preview = r["out"][:200]
-            if len(r["out"]) > 200:
-                preview += f"  ...[+{len(r['out'])-200} karakter]"
+            preview = r["out"][:1500]
+            if len(r["out"]) > 1500:
+                preview += f"  ...[+{len(r['out'])-1500} karakter]"
             lines.append(preview)
     return "\n".join(lines)

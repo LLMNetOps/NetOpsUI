@@ -6,7 +6,7 @@ description: >
   dari agent lain menjadi laporan operasional yang tersimpan.
 model: qwen3.5:9b
 num_ctx: 32768
-num_predict: 8192
+num_predict: 16384
 context_window: 30
 timeout: 900
 tools:

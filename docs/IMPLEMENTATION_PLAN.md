@@ -237,6 +237,43 @@
 
 ---
 
+## Phase 8: TUI Replacement (Textual)
+
+**Goal:** Ganti ncurses-based `tui.py` dengan Textual framework. Simple, maintainable, Google-inspired design.
+
+### Tasks
+
+| ID | Task | File Target | DoD |
+|---|---|---|---|
+| P8-01 | Setup Textual + struktur app | `tui_textual.py` | `textual` installed, `python tui_textual.py` runs |
+| P8-02 | Header + Footer layout | `tui_textual.py` | Header: nama agent aktif + status; Footer: ctx%, pred%, tools, elapsed |
+| P8-03 | ChatPanel — area pesan | `tui_textual.py` | Pesan user + agent tampil; tool calls inline (✓/✗/⟳ + durasi) |
+| P8-04 | InputBar — area input | `tui_textual.py` | Enter to send; disabled otomatis saat RUNNING |
+| P8-05 | Connect ke `stream_agent_response()` | `tui_textual.py` | Async Worker; event routing/tool/ai dirender ke ChatPanel |
+| P8-06 | Approval modal (ModalScreen) | `tui_textual.py` | Muncul saat `approval_required`; tampilkan router + perintah; tombol Setujui/Tolak |
+| P8-07 | Connect approval ke `resume_after_approval()` | `tui_textual.py` | Keputusan operator dikirim via streaming; interrupt chain berikutnya ditangani |
+| P8-08 | Token metrics di Footer | `tui_textual.py` | ctx% dan pred% dari `AIMessage.usage_metadata`; progress bar ASCII |
+| P8-09 | Tambah `--ui` flag ke launcher | `tui_textual.py` | `python tui_textual.py` atau flag `--ui textual` di entry point |
+| P8-10 | Test end-to-end | — | Query → tool calls → approval → resume semua berfungsi |
+
+### Design Decisions
+
+- **Layout:** Satu panel utama, chat mendominasi layar penuh, tool calls inline di dalam chat
+- **Header:** Satu baris tipis — nama agen aktif + bullet status (idle/running/approval)
+- **Footer:** Satu baris — `ctx ████░░ 19%  ·  pred ████░░ 26%  ·  8 tools  ·  00:02:14`
+- **Approval:** Textual `ModalScreen`, centered, tanpa box drawing berat
+- **Style:** Google-inspired — hanya `─` sebagai separator, whitespace konsisten, tidak ada `╔╗╚╝`
+- **Migrasi:** `tui_textual.py` berjalan paralel dengan `tui.py` sampai verified stabil
+
+### Definition of Done Phase 8
+
+- `python tui_textual.py` runs tanpa error ✅
+- Query, approval, multi-interrupt chain semua berfungsi ✅
+- Token metrics tampil real-time di footer ✅
+- Code lebih pendek dan maintainable dari `tui.py` ✅
+
+---
+
 ## Tracking Status
 
 ### Progress Overview
@@ -249,18 +286,19 @@ Phase 4: Multi-Agent Graph   [██████████] 100% ✅
 Phase 5: New Tools           [██████████] 100% ✅
 Phase 6: TUI Refactor        [██████████] 100% ✅
 Phase 7: Human-in-the-Loop   [██████████] 100% ✅
+Phase 8: TUI Replacement     [░░░░░░░░░░]   0% ⬜
 ```
 
 ### Hasil Akhir
 
 | Metrik | Target | Aktual |
 |---|---|---|
-| Tool atomic | ≥ 20 | 28 |
-| Skill contoh | ≥ 8 | 9 |
+| Tool atomic | ≥ 20 | 31 |
+| Skill | ≥ 8 | 21 |
 | Lines agent.py | < 300 | 178 |
 | LLM logic di tui.py | 0 | 0 |
-| Specialist agents | 4 | 4 |
-| Total commit di netops | — | 8 |
+| Specialist agents | 4 | 5 |
+| Total commit di branch | — | 10+ |
 
 ---
 
@@ -274,6 +312,7 @@ P1 (Foundation)
               ├── P5 (New Tools)
               ├── P6 (TUI Refactor)
               └── P7 (Human-in-the-Loop)
+                    └── P8 (TUI Replacement)
 ```
 
-P5, P6, P7 dikerjakan paralel setelah P4 selesai.
+P5, P6, P7 dikerjakan paralel setelah P4 selesai. P8 dikerjakan setelah P7 verified.

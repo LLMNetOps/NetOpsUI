@@ -73,13 +73,13 @@ def get_dhcp_leases(router_name: str, dhcp_server: str) -> str:
         f"utbk-os: {result['utbk']}",
         "",
     ]
-    for l in leases[:30]:
+    for l in leases[:200]:
         status = "bound" if l.is_active else ("waiting" if l.is_inactive else "disabled")
         lines.append(
             f"  {l.ip_address:<16} {l.mac_address}  {l.hostname or '-':<20} {status}"
         )
-    if len(leases) > 30:
-        lines.append(f"  ... ({len(leases) - 30} lease lagi tidak ditampilkan)")
+    if len(leases) > 200:
+        lines.append(f"  ... ({len(leases) - 200} lease lagi tidak ditampilkan)")
     return "\n".join(lines)
 
 

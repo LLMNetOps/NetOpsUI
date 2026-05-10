@@ -51,10 +51,11 @@ def _make_llm(
     num_predict: int = 2048,
     timeout: int = 300,
     agent_name: str | None = None,
+    base_url: str | None = None,
 ) -> ChatOllama:
     from agents.metrics import TokenMetricsCallback  # noqa: PLC0415
     kwargs: dict[str, Any] = dict(
-        base_url=OLLAMA_BASE_URL,
+        base_url=base_url or OLLAMA_BASE_URL,
         model=model or OLLAMA_MODEL,
         temperature=temperature,
         num_predict=num_predict,
@@ -287,6 +288,7 @@ def supervisor_node(state: "NetworkOpsState") -> dict:
         num_predict=_supervisor_defn.num_predict if _supervisor_defn else 256,
         timeout=_supervisor_defn.timeout if _supervisor_defn else 60,
         agent_name="supervisor",
+        base_url=(_supervisor_defn.ollama_host if _supervisor_defn else "") or None,
     )
     try:
         resp = llm.invoke([sys_msg] + recent)
@@ -329,6 +331,12 @@ def supervisor_node(state: "NetworkOpsState") -> dict:
         next_agent = "END"
         data["reasoning"] = "document_agent selesai, routing ke END"
 
+    # Loop guard: jangan route ke specialist yang sama yang baru saja selesai.
+    # Cegah skenario: specialist → supervisor (empty JSON) → keyword-fallback → specialist sama → loop
+    if next_agent == _prev_agent and _prev_agent in valid_agent_names:
+        next_agent = "END"
+        data["reasoning"] = f"loop guard: {_prev_agent} baru selesai, cegah re-route ke agent sama"
+
     skills = data.get("relevant_skills", [])
     log_msg = f"→ {next_agent}  skills: {skills}  | {data.get('reasoning','')}"
     base_result = {
@@ -365,6 +373,7 @@ def supervisor_node(state: "NetworkOpsState") -> dict:
                 num_predict=_supervisor_defn.num_predict if _supervisor_defn else 2048,
                 timeout=_supervisor_defn.timeout if _supervisor_defn else 60,
                 agent_name="supervisor",
+                base_url=(_supervisor_defn.ollama_host if _supervisor_defn else "") or None,
             )
             chat_sys = SystemMessage(content=_chat_prompt)
             try:
@@ -394,6 +403,8 @@ ATURAN WAJIB — TOOL CALLING:
 3. DILARANG mensimulasikan atau mengarang data — gunakan tool untuk mendapatkan data nyata.
 4. Teks respons hanya boleh ditulis SETELAH semua tool selesai dipanggil.
 5. Jika butuh data dari beberapa router, panggil tool satu per satu secara langsung.
+6. Setelah menerima hasil tool, jika masih ada tugas berikutnya, LANGSUNG panggil tool
+   berikutnya tanpa menulis teks konfirmasi, ringkasan, atau "Lanjut ke langkah X".
 
 {skill_context}
 """
@@ -410,6 +421,7 @@ def _make_specialist_node(agent_name: str):
     _num_ctx = defn.num_ctx if defn else 8192
     _num_predict = defn.num_predict if defn else 2048
     _timeout = defn.timeout if defn else 300
+    _ollama_host = defn.ollama_host if defn else ""
     llm_with_tools = _make_llm(
         temperature=0.3,
         model=_model,
@@ -417,6 +429,7 @@ def _make_specialist_node(agent_name: str):
         num_predict=_num_predict,
         timeout=_timeout,
         agent_name=agent_name,
+        base_url=_ollama_host or None,
     ).bind_tools(tools)
 
     def _node(state: "NetworkOpsState") -> dict:
@@ -456,6 +469,7 @@ def _make_specialist_node(agent_name: str):
                     temperature=0.3, model=_model,
                     num_ctx=_num_ctx, num_predict=_num_predict, timeout=_timeout,
                     agent_name=agent_name,
+                    base_url=_ollama_host or None,
                 )
                 summary = llm_plain.invoke(all_msgs)
                 summary_content = _clean(summary.content or "")
@@ -464,6 +478,19 @@ def _make_specialist_node(agent_name: str):
                     logs.append(_log(agent_name, "tool_result", "(forced summary generated)"))
             except Exception as exc:
                 logger.warning("Forced summary failed for %s: %s", agent_name, exc)
+
+        # Safety net: final_msg HARUS selalu AIMessage dengan content.
+        # Jika masih ToolMessage atau AIMessage kosong, ekstrak hasil tool terpanjang
+        # (biasanya paling informatif, hindari ambil tool terakhir yang arbitrary).
+        if not (isinstance(final_msg, AIMessage) and _clean(getattr(final_msg, "content", "") or "")):
+            tool_msgs = [m for m in all_msgs if isinstance(m, ToolMessage)]
+            if tool_msgs:
+                best = max(tool_msgs, key=lambda m: len(m.content or ""))
+                raw = best.content
+            else:
+                raw = "(tidak ada data)"
+            final_msg = AIMessage(content=f"Hasil:\n{raw}")
+            logs.append(_log(agent_name, "tool_result", "(safety net: paksa AIMessage dari tool result)"))
 
         logs.append(_log(agent_name, "routing", "← kembali ke supervisor"))
 
@@ -490,6 +517,7 @@ _CONFIG_LLM = _make_llm(
     num_predict=_config_defn.num_predict if _config_defn else 2048,
     timeout=_config_defn.timeout if _config_defn else 180,
     agent_name="config_agent",
+    base_url=(_config_defn.ollama_host if _config_defn else "") or None,
 ).bind_tools(_CONFIG_TOOLS)
 _APPROVAL_REQUIRED_TOOLS = set(
     _config_defn.approval_required_tools if _config_defn else ["backup_router_config"]

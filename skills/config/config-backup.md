@@ -55,6 +55,8 @@ Setelah disetujui, jalankan `backup_router_config` untuk:
 ### Langkah 5: Verifikasi Backup
 Gunakan `list_backups` untuk konfirmasi file backup baru tersimpan.
 Jika ada backup sebelumnya, gunakan `diff_config` untuk melihat perubahan sejak backup terakhir.
+Setelah backup selesai, LANGSUNG lanjutkan ke tugas berikutnya tanpa menunggu konfirmasi —
+sistem approval sudah menangani persetujuan operator per operasi.
 
 ## Prosedur Perubahan Konfigurasi yang Aman
 
@@ -69,8 +71,9 @@ Jalankan `backup_router_config` sebelum membuat perubahan apapun.
 Catat nama file backup yang dihasilkan — dibutuhkan jika rollback diperlukan.
 
 ### Langkah 2: Eksekusi Perubahan
-Buat perubahan di router menggunakan `run_command`. Ubah satu hal sekaligus,
-tidak menggabungkan banyak perubahan dalam satu sesi.
+Buat perubahan di router menggunakan `run_command_write`. Setiap perintah write
+akan meminta approval operator secara otomatis via sistem — tidak perlu menunggu
+konfirmasi manual. Setelah approval dan eksekusi, langsung lanjut ke perubahan berikutnya.
 
 ### Langkah 3: Verifikasi Hasil
 Segera setelah perubahan:

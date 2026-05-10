@@ -66,8 +66,8 @@ def run_command(router_name: str, command: str) -> str:
 
     output = out.strip()
     header = f"Output dari {router_name} ({entry['host']}) — `{command}`\n{'─'*60}\n"
-    if len(output) > 4000:
-        output = output[:4000] + f"\n...[terpotong, total {len(out)} karakter]..."
+    if len(output) > 8000:
+        output = output[:8000] + f"\n...[terpotong, total {len(out)} karakter]..."
     return header + output
 
 
@@ -146,8 +146,8 @@ def run_command_all(command: str) -> str:
         elif not r["out"]:
             lines.append("  (tidak ada output / tidak ditemukan)")
         else:
-            preview = r["out"][:300]
-            if len(r["out"]) > 300:
-                preview += f"  ...[+{len(r['out'])-300} karakter]"
+            preview = r["out"][:2000]
+            if len(r["out"]) > 2000:
+                preview += f"  ...[+{len(r['out'])-2000} karakter]"
             lines.append(preview)
     return "\n".join(lines)

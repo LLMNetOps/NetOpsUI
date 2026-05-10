@@ -33,6 +33,8 @@ class AgentDefinition:
     timeout: int = 300
     # Optional chat fallback prompt (supervisor only)
     chat_prompt: str = ""
+    # Optional per-agent Ollama host (overrides OLLAMA_BASE_URL env var)
+    ollama_host: str = ""
 
 
 def _parse_definition_file(path: Path) -> Optional[AgentDefinition]:
@@ -81,6 +83,7 @@ def _parse_definition_file(path: Path) -> Optional[AgentDefinition]:
         context_window=int(fm.get("context_window", 10)),
         timeout=int(fm.get("timeout", 300)),
         chat_prompt=str(fm.get("chat_prompt", "")),
+        ollama_host=str(fm.get("ollama_host", "")),
     )
 
 

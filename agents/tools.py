@@ -6,7 +6,7 @@ from tools.reachability import check_reachability, check_ssh_access
 from tools.system import get_system_info
 from tools.routing import get_routing_full, get_router_config, get_bgp_sessions, get_ospf_neighbors
 from tools.interface import get_interface_stats
-from tools.traffic import get_interface_traffic, get_traffic_summary, get_top_talkers, get_queue_stats, get_traffic_all
+from tools.traffic import get_interface_traffic, get_traffic_summary, get_top_talkers, get_queue_stats, get_traffic_all, get_top_interfaces_all
 from tools.dhcp import get_dhcp_leases, get_router_leases, search_device, audit_dhcp
 from tools.log import get_router_log
 from tools.config_read import run_command, run_command_all
@@ -25,7 +25,7 @@ _ALL_TOOLS = [
     get_system_info,
     get_routing_full, get_router_config, get_bgp_sessions, get_ospf_neighbors,
     get_interface_stats,
-    get_interface_traffic, get_traffic_summary, get_top_talkers, get_queue_stats, get_traffic_all,
+    get_interface_traffic, get_traffic_summary, get_top_talkers, get_queue_stats, get_traffic_all, get_top_interfaces_all,
     get_dhcp_leases, get_router_leases, search_device, audit_dhcp,
     get_router_log,
     run_command, run_command_all, run_command_write,

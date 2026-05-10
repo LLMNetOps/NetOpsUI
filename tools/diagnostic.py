@@ -83,6 +83,6 @@ def run_diagnostic(
         f"Perintah: {cmd}\n{'─' * 60}\n"
     )
     output = out.strip()
-    if len(output) > 3000:
-        output = output[:3000] + f"\n...[terpotong, total {len(out)} karakter]..."
+    if len(output) > 8000:
+        output = output[:8000] + f"\n...[terpotong, total {len(out)} karakter]..."
     return header + output

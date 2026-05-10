@@ -1,0 +1,1231 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NetOps AI — Campus Network Operations</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700&family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:    #040B14;
+  --bg2:   #070E1A;
+  --bg3:   #0B1525;
+  --bg4:   #0F1C30;
+  --cyan:  #00D4FF;
+  --cyan-d: rgba(0,212,255,.16);
+  --cyan-m: rgba(0,212,255,.40);
+  --green: #00FF9D;
+  --green-d: rgba(0,255,157,.13);
+  --amber: #FFB200;
+  --amber-d: rgba(255,178,0,.13);
+  --red:   #FF2D55;
+  --red-d: rgba(255,45,85,.13);
+  --white: #D8EEF8;
+  --dim:   rgba(216,238,248,.38);
+  --dimmer:rgba(216,238,248,.16);
+  --border: rgba(0,212,255,.10);
+  --border-b: rgba(0,212,255,.32);
+  --fl: 'Barlow Condensed', sans-serif;
+  --fm: 'IBM Plex Mono', monospace;
+}
+
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:var(--bg);color:var(--white);font-family:var(--fm);font-size:12px;overflow:hidden}
+
+body::before{
+  content:'';position:fixed;inset:0;
+  background-image:radial-gradient(circle,rgba(0,212,255,.055) 1px,transparent 1px);
+  background-size:24px 24px;pointer-events:none;z-index:0
+}
+
+.app{position:relative;display:flex;flex-direction:column;height:100vh;z-index:1}
+
+/* ─ Header ─────────────────────────────────── */
+.hdr{
+  display:flex;align-items:center;height:30px;min-height:30px;
+  padding:0 14px;background:var(--bg2);
+  border-bottom:1px solid var(--border-b);gap:10px;flex-shrink:0
+}
+.hdr-logo{
+  font-family:var(--fl);font-size:14px;font-weight:700;
+  letter-spacing:.14em;color:var(--cyan);text-transform:uppercase;
+  display:flex;align-items:center;gap:6px
+}
+.hdr-logo::before{content:'◆';font-size:9px;opacity:.7}
+.v-sep{width:1px;height:14px;background:var(--border-b)}
+.hdr-sub{
+  font-family:var(--fl);font-size:10px;font-weight:500;
+  letter-spacing:.18em;color:var(--dimmer);text-transform:uppercase
+}
+.spacer{flex:1}
+.hdr-right{display:flex;align-items:center;gap:10px}
+.state-pill{
+  display:flex;align-items:center;gap:5px;
+  font-family:var(--fl);font-size:10px;font-weight:600;
+  letter-spacing:.12em;text-transform:uppercase
+}
+.dot{width:6px;height:6px;border-radius:50%}
+.dot.idle{background:var(--dimmer)}
+.dot.running{background:var(--green);box-shadow:0 0 6px var(--green);animation:pg .8s ease infinite}
+.dot.approval{background:var(--amber);box-shadow:0 0 6px var(--amber);animation:pa .5s ease infinite}
+.clock{font-size:11px;color:var(--dim);font-variant-numeric:tabular-nums;letter-spacing:.04em}
+
+/* ─ Body layout ────────────────────────────── */
+.body{display:grid;grid-template-columns:156px 1fr 198px;flex:1;overflow:hidden}
+
+/* ─ Sidebar ─────────────────────────────────── */
+.sidebar{
+  background:var(--bg2);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;overflow:hidden
+}
+.nav{padding:10px 0;flex:1}
+.nav-lbl{
+  font-family:var(--fl);font-size:9px;font-weight:700;
+  letter-spacing:.22em;color:var(--dimmer);text-transform:uppercase;
+  padding:0 12px 5px
+}
+.ni{
+  display:flex;align-items:center;gap:8px;padding:5px 12px;
+  cursor:pointer;border-left:2px solid transparent;transition:all .1s
+}
+.ni:hover{background:var(--cyan-d);border-left-color:var(--cyan-m)}
+.ni.active{background:var(--cyan-d);border-left-color:var(--cyan)}
+.ni.active .nk{color:var(--cyan)}
+.ni.active .nn{color:var(--white)}
+.nk{
+  font-family:var(--fl);font-size:10px;font-weight:600;
+  color:var(--dimmer);width:12px;text-align:center
+}
+.nn{font-family:var(--fl);font-size:12px;font-weight:500;color:var(--dim);letter-spacing:.04em}
+.ni.active .na{opacity:1}
+.na{position:absolute;right:10px;font-size:7px;color:var(--cyan);opacity:0}
+.sdiv{height:1px;background:var(--border);margin:6px 0}
+.sysinfo{padding:8px 12px;border-top:1px solid var(--border)}
+.sir{display:flex;justify-content:space-between;align-items:center;margin-bottom:3px}
+.sik{
+  font-family:var(--fl);font-size:9px;font-weight:600;
+  color:var(--dimmer);letter-spacing:.12em;text-transform:uppercase
+}
+.siv{font-size:10px;color:var(--dim)}
+.siv.ok{color:var(--green)}
+
+/* ─ Content ─────────────────────────────────── */
+.content{display:flex;flex-direction:column;overflow:hidden;background:var(--bg);position:relative}
+.screen{display:none;flex-direction:column;flex:1;overflow:hidden}
+.screen.active{display:flex}
+
+/* ─ Chat ──────────────────────────────────── */
+.chat-msgs{
+  flex:1;overflow-y:auto;padding:14px 20px;
+  display:flex;flex-direction:column;gap:0;
+  scrollbar-width:thin;scrollbar-color:var(--border) transparent
+}
+.chat-msgs::-webkit-scrollbar{width:3px}
+.chat-msgs::-webkit-scrollbar-thumb{background:var(--border-b);border-radius:2px}
+
+.msg{padding:10px 0;border-bottom:1px solid var(--border);animation:fi .18s ease}
+.msg:last-child{border-bottom:none}
+.msg-hdr{display:flex;align-items:center;gap:8px;margin-bottom:5px}
+.role{
+  font-family:var(--fl);font-size:10px;font-weight:700;
+  letter-spacing:.15em;text-transform:uppercase
+}
+.role.user{color:var(--cyan)}
+.role.ai{color:var(--green)}
+.mts{font-size:10px;color:var(--dimmer);font-variant-numeric:tabular-nums}
+.msg-body{line-height:1.6}
+.msg-text{font-size:13px;color:var(--white);white-space:pre-wrap;word-break:break-word;line-height:1.7}
+
+.erow{display:flex;align-items:flex-start;gap:8px;padding:2px 0}
+.eicon{width:14px;text-align:center;flex-shrink:0;margin-top:1px;font-size:11px}
+.eicon.routing{color:var(--amber)}
+.eicon.tool_call{color:var(--cyan)}
+.eicon.tool_result{color:var(--green)}
+.eicon.error{color:var(--red)}
+.eicon.approval_required{color:var(--amber)}
+.etext{color:var(--dim);font-size:11px;font-style:italic;flex:1;line-height:1.5}
+.etext.routing{color:var(--amber);font-style:normal}
+.etext.tool_call{color:var(--cyan);font-style:normal}
+.etext.tool_result{color:var(--dim)}
+.ets{font-size:10px;color:var(--dimmer);flex-shrink:0}
+
+.typing{display:flex;align-items:center;gap:4px;padding:4px 0}
+.td{
+  width:4px;height:4px;border-radius:50%;background:var(--cyan);
+  animation:tb 1s ease infinite
+}
+.td:nth-child(2){animation-delay:.15s}
+.td:nth-child(3){animation-delay:.3s}
+
+.empty{
+  flex:1;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:10px;color:var(--dimmer)
+}
+.empty-glyph{font-size:28px;color:var(--cyan-m);margin-bottom:2px}
+.empty-title{
+  font-family:var(--fl);font-size:15px;font-weight:600;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--dim)
+}
+.empty-hint{font-size:11px;color:var(--dimmer);text-align:center;max-width:240px;line-height:1.6}
+
+/* ─ Chat input ───────────────────────────────── */
+.chat-in{
+  border-top:1px solid var(--border);padding:9px 20px 11px;
+  background:var(--bg2);flex-shrink:0
+}
+.in-row{
+  display:flex;align-items:center;gap:8px;
+  background:var(--bg3);border:1px solid var(--border);
+  padding:7px 10px;transition:border-color .14s
+}
+.in-row:focus-within{border-color:var(--cyan-m);box-shadow:0 0 0 2px rgba(0,212,255,.07)}
+.in-prompt{color:var(--cyan);font-size:13px;font-weight:500;flex-shrink:0}
+.in-field{
+  flex:1;background:transparent;border:none;outline:none;
+  color:var(--white);font-family:var(--fm);font-size:13px;caret-color:var(--cyan)
+}
+.in-field::placeholder{color:var(--dimmer)}
+.in-field:disabled{opacity:.35;cursor:not-allowed}
+.send-btn{
+  background:var(--cyan);color:var(--bg);border:none;
+  padding:3px 10px;font-family:var(--fl);font-size:10px;font-weight:700;
+  letter-spacing:.1em;text-transform:uppercase;cursor:pointer;transition:background .1s
+}
+.send-btn:hover{background:#33DDFF}
+.send-btn:disabled{opacity:.3;cursor:not-allowed}
+.in-hint{font-size:10px;color:var(--dimmer);margin-top:5px;padding-left:1px}
+
+/* ─ Agent panel ──────────────────────────────── */
+.agent-panel{
+  background:var(--bg2);border-left:1px solid var(--border);
+  display:flex;flex-direction:column;overflow:hidden
+}
+.ph{padding:9px 12px 7px;border-bottom:1px solid var(--border);flex-shrink:0}
+.pt{
+  font-family:var(--fl);font-size:9px;font-weight:700;
+  letter-spacing:.22em;color:var(--dim);text-transform:uppercase
+}
+.agent-cards{flex:1;overflow-y:auto;padding:6px;display:flex;flex-direction:column;gap:3px;scrollbar-width:none}
+
+.acard{
+  padding:7px 10px;border:1px solid var(--border);
+  border-left:3px solid var(--border);background:var(--bg3);transition:all .2s;position:relative;overflow:hidden
+}
+.acard::before{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(90deg,var(--cg,transparent) 0%,transparent 60%);
+  pointer-events:none
+}
+.acard.standby{}
+.acard.running{border-left-color:var(--green);--cg:rgba(0,255,157,.07)}
+.acard.waiting{border-left-color:var(--amber);--cg:rgba(255,178,0,.07)}
+.acard.queued{border-left-color:var(--cyan);--cg:rgba(0,212,255,.07)}
+.acard.done{border-left-color:rgba(216,238,248,.2);opacity:.6}
+.acard.failed{border-left-color:var(--red);--cg:rgba(255,45,85,.07)}
+.ach{display:flex;justify-content:space-between;align-items:center;margin-bottom:2px}
+.aname{
+  font-family:var(--fl);font-size:11px;font-weight:700;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--white)
+}
+.arole{font-size:9px;color:var(--dimmer);font-family:var(--fl);letter-spacing:.08em}
+.ast{display:flex;align-items:center;gap:4px}
+.adot{width:5px;height:5px;border-radius:50%}
+.standby .adot{background:var(--dimmer)}
+.running .adot{background:var(--green);box-shadow:0 0 4px var(--green);animation:pg .8s ease infinite}
+.waiting .adot{background:var(--amber);animation:pa .5s ease infinite}
+.queued .adot{background:var(--cyan)}
+.done .adot{background:rgba(216,238,248,.25)}
+.failed .adot{background:var(--red)}
+.aslbl{font-family:var(--fl);font-size:9px;font-weight:600;letter-spacing:.12em;text-transform:uppercase}
+.standby .aslbl{color:var(--dimmer)}
+.running .aslbl{color:var(--green)}
+.waiting .aslbl{color:var(--amber)}
+.queued .aslbl{color:var(--cyan)}
+.done .aslbl{color:var(--dimmer)}
+.failed .aslbl{color:var(--red)}
+.adetail{font-size:10px;color:var(--dimmer);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+.qdisp{padding:8px 10px;border-top:1px solid var(--border);flex-shrink:0}
+.qlbl{font-family:var(--fl);font-size:9px;letter-spacing:.15em;color:var(--dimmer);text-transform:uppercase;margin-bottom:2px}
+.qtext{font-size:10px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.qelapsed{font-size:10px;color:var(--cyan);margin-top:2px;font-variant-numeric:tabular-nums}
+
+/* ─ Footer ────────────────────────────────────── */
+.footer{
+  height:22px;min-height:22px;display:flex;align-items:center;
+  padding:0 12px;background:var(--bg2);border-top:1px solid var(--border-b);
+  gap:14px;flex-shrink:0;font-size:10px
+}
+.met{display:flex;align-items:center;gap:5px}
+.mlbl{
+  font-family:var(--fl);font-size:9px;font-weight:600;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--dimmer)
+}
+.mbar{width:38px;height:3px;background:var(--bg4);border-radius:1px;overflow:hidden}
+.mfill{height:100%;background:var(--cyan);border-radius:1px;transition:width .5s ease}
+.mfill.warn{background:var(--amber)}
+.mfill.danger{background:var(--red)}
+.mpct{font-size:10px;color:var(--dim);min-width:26px;font-variant-numeric:tabular-nums}
+.fsep{width:1px;height:9px;background:var(--border)}
+.fstate{
+  font-family:var(--fl);font-size:10px;font-weight:600;
+  letter-spacing:.1em;text-transform:uppercase;
+  display:flex;align-items:center;gap:4px
+}
+.fstate.idle{color:var(--dimmer)}
+.fstate.running{color:var(--green)}
+.fstate.approval{color:var(--amber)}
+.fkeys{font-family:var(--fl);font-size:9px;letter-spacing:.07em;color:var(--dimmer)}
+.fkeys b{color:var(--dim);font-weight:600;margin-right:2px}
+
+/* ─ Other screens ────────────────────────────── */
+.sc-body{padding:16px 20px;flex:1;overflow-y:auto}
+.sc-title{
+  font-family:var(--fl);font-size:14px;font-weight:700;
+  letter-spacing:.12em;text-transform:uppercase;color:var(--white);margin-bottom:5px
+}
+.sc-rule{height:1px;background:var(--border-b);margin-bottom:16px}
+
+/* Skills */
+.skill-grid{display:flex;flex-direction:column;gap:3px}
+.scard{
+  padding:8px 12px;border:1px solid var(--border);background:var(--bg3);
+  display:flex;justify-content:space-between;align-items:flex-start
+}
+.sname{
+  font-family:var(--fl);font-size:12px;font-weight:600;
+  letter-spacing:.05em;color:var(--white);margin-bottom:1px
+}
+.sdomain{font-size:10px;color:var(--cyan);font-family:var(--fl);letter-spacing:.08em;text-transform:uppercase}
+.strig{font-size:10px;color:var(--dimmer);margin-top:2px}
+.sbadge{
+  font-family:var(--fl);font-size:9px;font-weight:700;
+  letter-spacing:.1em;text-transform:uppercase;padding:2px 6px;
+  background:var(--green-d);color:var(--green);border:1px solid rgba(0,255,157,.28)
+}
+
+/* Routers */
+.rtbl{width:100%;border-collapse:collapse;font-size:11px}
+.rtbl th{
+  font-family:var(--fl);font-size:9px;font-weight:700;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--dimmer);text-align:left;
+  padding:5px 8px;border-bottom:1px solid var(--border)
+}
+.rtbl td{
+  padding:6px 8px;border-bottom:1px solid rgba(0,212,255,.04);
+  color:var(--dim);vertical-align:middle
+}
+.rtbl td.up{color:var(--green)}
+.rtbl td.down{color:var(--red)}
+.rtbl td.checking{color:var(--amber)}
+.rtbl td.name{color:var(--white)}
+.pbtn{
+  font-family:var(--fl);font-size:9px;font-weight:700;letter-spacing:.1em;
+  padding:4px 12px;background:transparent;border:1px solid var(--cyan-m);
+  color:var(--cyan);cursor:pointer;margin-top:12px;text-transform:uppercase;transition:all .12s
+}
+.pbtn:hover{background:var(--cyan-d)}
+
+/* Laporan */
+.lap-list{display:flex;flex-direction:column;gap:3px}
+.lap-item{
+  display:grid;grid-template-columns:1fr auto auto;gap:12px;
+  align-items:center;padding:7px 10px;border:1px solid var(--border);background:var(--bg3)
+}
+.lap-name{font-size:11px;color:var(--white)}
+.lap-date{font-size:10px;color:var(--dimmer);font-variant-numeric:tabular-nums}
+.lap-size{font-size:10px;color:var(--dimmer);text-align:right}
+
+/* Log */
+.log-wrap{display:flex;flex-direction:column;gap:1px}
+.log-line{padding:2px 0;border-bottom:1px solid rgba(0,212,255,.03);font-size:11px;line-height:1.5}
+.lts{color:var(--dimmer);margin-right:8px}
+
+/* Dashboard */
+.dash-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.dash-card{padding:12px 14px;border:1px solid var(--border);background:var(--bg3)}
+.dash-card-title{
+  font-family:var(--fl);font-size:10px;font-weight:700;letter-spacing:.18em;
+  text-transform:uppercase;color:var(--dim);margin-bottom:10px
+}
+.dash-stat{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
+.dash-key{font-size:10px;color:var(--dimmer)}
+.dash-val{font-size:11px;color:var(--white)}
+.dash-val.ok{color:var(--green)}
+.dash-val.warn{color:var(--amber)}
+
+/* Token metrics */
+.mtbl{width:100%;border-collapse:collapse;font-size:11px}
+.mtbl th{
+  font-family:var(--fl);font-size:9px;font-weight:700;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--dimmer);
+  text-align:right;padding:5px 8px;border-bottom:1px solid var(--border)
+}
+.mtbl th:first-child{text-align:left}
+.mtbl td{padding:5px 8px;border-bottom:1px solid rgba(0,212,255,.04);color:var(--dim);text-align:right;font-variant-numeric:tabular-nums}
+.mtbl td:first-child{
+  text-align:left;color:var(--white);
+  font-family:var(--fl);font-size:12px;font-weight:600;letter-spacing:.05em
+}
+.mtbl tr.warn td{color:var(--amber)}
+
+/* ─ Approval modal ───────────────────────────── */
+.overlay{
+  display:none;position:fixed;inset:0;
+  background:rgba(4,11,20,.88);backdrop-filter:blur(3px);
+  z-index:200;align-items:center;justify-content:center
+}
+.overlay.show{display:flex}
+.mbox{
+  background:var(--bg3);border:1px solid var(--amber);
+  width:460px;max-width:90vw;padding:20px 24px;position:relative;
+  box-shadow:0 0 50px rgba(255,178,0,.10),0 0 0 1px rgba(255,178,0,.08)
+}
+.mbox::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:2px;
+  background:linear-gradient(90deg,transparent,var(--amber),transparent)
+}
+.mtitle{
+  font-family:var(--fl);font-size:13px;font-weight:700;letter-spacing:.15em;
+  text-transform:uppercase;color:var(--amber);margin-bottom:16px;
+  display:flex;align-items:center;gap:8px
+}
+.mfield{display:grid;grid-template-columns:58px 1fr;gap:4px 12px;margin-bottom:5px;align-items:start}
+.mkey{font-family:var(--fl);font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--dimmer);padding-top:1px}
+.mval{font-size:12px;color:var(--white);word-break:break-all}
+.mval.risk-medium{color:var(--amber)}
+.mval.risk-high{color:var(--red)}
+.mbtns{display:flex;gap:10px;margin-top:18px;justify-content:flex-end}
+.btn{
+  font-family:var(--fl);font-size:11px;font-weight:700;letter-spacing:.12em;
+  text-transform:uppercase;padding:7px 16px;border:1px solid;cursor:pointer;transition:all .1s
+}
+.btn-ok{background:var(--green);border-color:var(--green);color:var(--bg)}
+.btn-ok:hover{background:#33FFB4;border-color:#33FFB4}
+.btn-no{background:transparent;border-color:var(--red);color:var(--red)}
+.btn-no:hover{background:var(--red-d)}
+
+/* ─ Animations ───────────────────────────────── */
+@keyframes pg{0%,100%{opacity:1}50%{opacity:.35}}
+@keyframes pa{0%,100%{opacity:1}50%{opacity:.25}}
+@keyframes tb{0%,60%,100%{transform:translateY(0);opacity:.4}30%{transform:translateY(-4px);opacity:1}}
+@keyframes fi{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:translateY(0)}}
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- Header -->
+<header class="hdr">
+  <div class="hdr-logo">NetOps AI</div>
+  <div class="v-sep"></div>
+  <div class="hdr-sub">Campus Network Operations</div>
+  <div class="spacer"></div>
+  <div class="hdr-right">
+    <div class="state-pill">
+      <div class="dot idle" id="hdr-dot"></div>
+      <span id="hdr-state" style="color:var(--dimmer);font-family:var(--fl);font-size:10px;letter-spacing:.12em;">IDLE</span>
+    </div>
+    <div class="v-sep"></div>
+    <div class="clock" id="clock">--:--:--</div>
+  </div>
+</header>
+
+<!-- Body -->
+<div class="body">
+
+  <!-- Sidebar -->
+  <nav class="sidebar">
+    <div class="nav">
+      <div class="nav-lbl">Menu</div>
+      <!-- nav items injected -->
+    </div>
+    <div class="sdiv"></div>
+    <div class="sysinfo">
+      <div class="nav-lbl" style="margin-bottom:7px">System</div>
+      <div class="sir"><span class="sik">Model</span><span class="siv" id="si-model">—</span></div>
+      <div class="sir"><span class="sik">Skills</span><span class="siv ok" id="si-skills">—</span></div>
+      <div class="sir"><span class="sik">Ollama</span><span class="siv ok" id="si-ollama">—</span></div>
+      <div style="margin-top:10px">
+        <span class="sik" style="color:var(--dimmer)">[Q] Keluar  [Ctrl+L] Clear</span>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Content -->
+  <main class="content">
+
+    <!-- Dashboard -->
+    <div class="screen" id="screen-dash">
+      <div class="sc-body">
+        <div class="sc-title">Dashboard</div>
+        <div class="sc-rule"></div>
+        <div class="dash-grid">
+          <div class="dash-card">
+            <div class="dash-card-title">Agent</div>
+            <div class="dash-stat"><span class="dash-key">Model</span><span class="dash-val" id="d-model">—</span></div>
+            <div class="dash-stat"><span class="dash-key">Skills</span><span class="dash-val ok" id="d-skills">—</span></div>
+            <div class="dash-stat"><span class="dash-key">Ollama</span><span class="dash-val ok" id="d-ollama">—</span></div>
+          </div>
+          <div class="dash-card">
+            <div class="dash-card-title">Infrastruktur</div>
+            <div class="dash-stat"><span class="dash-key">config.yaml</span><span class="dash-val ok">✓ ada</span></div>
+            <div class="dash-stat"><span class="dash-key">Routers</span><span class="dash-val" id="d-routers">—</span></div>
+            <div class="dash-stat"><span class="dash-key">Backups</span><span class="dash-val" id="d-backups">—</span></div>
+          </div>
+          <div class="dash-card" style="grid-column:1/-1">
+            <div class="dash-card-title">Laporan Terbaru</div>
+            <div id="d-laporan" style="font-size:11px;color:var(--dim)">—</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Skills -->
+    <div class="screen" id="screen-skills">
+      <div class="sc-body">
+        <div class="sc-title">Skills <span id="skills-count" style="font-size:11px;color:var(--dim);font-family:var(--fl)"></span></div>
+        <div class="sc-rule"></div>
+        <div class="skill-grid" id="skill-grid"></div>
+      </div>
+    </div>
+
+    <!-- Reachability -->
+    <div class="screen" id="screen-reach">
+      <div class="sc-body">
+        <div class="sc-title">Reachability</div>
+        <div class="sc-rule"></div>
+        <table class="rtbl">
+          <thead><tr><th>Router</th><th>Host</th><th>Status</th><th>RTT</th></tr></thead>
+          <tbody id="router-tbody"></tbody>
+        </table>
+        <button class="pbtn" id="ping-btn">⟳ Ping Semua Router</button>
+      </div>
+    </div>
+
+    <!-- Laporan -->
+    <div class="screen" id="screen-laporan">
+      <div class="sc-body">
+        <div class="sc-title">Laporan</div>
+        <div class="sc-rule"></div>
+        <div class="lap-list" id="laporan-list"></div>
+      </div>
+    </div>
+
+    <!-- Log -->
+    <div class="screen" id="screen-log">
+      <div class="sc-body">
+        <div class="sc-title">Log</div>
+        <div class="sc-rule"></div>
+        <div class="log-wrap" id="log-lines"></div>
+      </div>
+    </div>
+
+    <!-- AI Chat -->
+    <div class="screen active" id="screen-chat">
+      <div class="chat-msgs" id="chat-msgs">
+        <div class="empty" id="empty-state">
+          <div class="empty-glyph">◈</div>
+          <div class="empty-title">NetOps AI</div>
+          <div class="empty-hint">Ketik perintah untuk memulai sesi operasional jaringan kampus.</div>
+        </div>
+      </div>
+      <div class="chat-in">
+        <div class="in-row">
+          <span class="in-prompt">›</span>
+          <input class="in-field" id="chat-input" type="text"
+            placeholder="Ketik perintah atau pertanyaan..." autocomplete="off" spellcheck="false">
+          <button class="send-btn" id="send-btn">SEND</button>
+        </div>
+        <div class="in-hint">[Enter] Kirim  ·  [Ctrl+L] Hapus chat  ·  [1-9] Pindah layar</div>
+      </div>
+    </div>
+
+    <!-- Activity -->
+    <div class="screen" id="screen-activity">
+      <div class="sc-body">
+        <div class="sc-title">Aktivitas Agent</div>
+        <div class="sc-rule"></div>
+        <div class="log-wrap" id="activity-log">
+          <div style="font-size:11px;color:var(--dimmer)">Belum ada aktivitas. Gunakan AI Chat untuk memulai.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Status -->
+    <div class="screen" id="screen-status">
+      <div class="sc-body">
+        <div class="sc-title">Status Agent</div>
+        <div class="sc-rule"></div>
+        <div style="font-size:11px;color:var(--dimmer)">Kanban board — aktif saat AI Chat berjalan. Lihat panel kanan untuk status real-time.</div>
+      </div>
+    </div>
+
+    <!-- Token metrics -->
+    <div class="screen" id="screen-tokens">
+      <div class="sc-body">
+        <div class="sc-title">Token Metrics</div>
+        <div class="sc-rule"></div>
+        <table class="mtbl">
+          <thead>
+            <tr><th>Agent</th><th>Calls</th><th>ctx%</th><th>pred%</th><th>tps</th><th>⚠</th></tr>
+          </thead>
+          <tbody id="metrics-tbody">
+            <tr><td colspan="6" style="text-align:left;color:var(--dimmer);padding:12px 8px">
+              Belum ada data — gunakan AI Chat untuk merekam metrics.
+            </td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Agent panel -->
+  <aside class="agent-panel">
+    <div class="ph"><div class="pt">Agent Status</div></div>
+    <div class="agent-cards" id="agent-cards"></div>
+    <div class="qdisp">
+      <div class="qlbl">Query Aktif</div>
+      <div class="qtext" id="active-query">—</div>
+      <div class="qelapsed" id="q-elapsed"></div>
+    </div>
+  </aside>
+
+</div><!-- /body -->
+
+<!-- Footer -->
+<footer class="footer">
+  <div class="met">
+    <span class="mlbl">CTX</span>
+    <div class="mbar"><div class="mfill" id="ctx-fill" style="width:0%"></div></div>
+    <span class="mpct" id="ctx-pct">0%</span>
+  </div>
+  <div class="fsep"></div>
+  <div class="met">
+    <span class="mlbl">PRED</span>
+    <div class="mbar"><div class="mfill" id="pred-fill" style="width:0%"></div></div>
+    <span class="mpct" id="pred-pct">0%</span>
+  </div>
+  <div class="fsep"></div>
+  <div class="met">
+    <span class="mlbl">TOOLS</span>
+    <span class="mpct" id="f-tools">0</span>
+  </div>
+  <div class="fsep"></div>
+  <div class="met">
+    <span class="mlbl">TIME</span>
+    <span class="mpct" id="f-elapsed">──:──</span>
+  </div>
+  <div class="fsep"></div>
+  <div class="fstate idle" id="f-state">
+    <div class="dot idle" id="f-dot"></div>
+    <span id="f-label">IDLE</span>
+  </div>
+  <div class="spacer"></div>
+  <div class="fkeys">
+    <b>[1-9]</b>Menu <b style="margin-left:8px">[Enter]</b>Kirim <b style="margin-left:8px">[Ctrl+L]</b>Clear
+  </div>
+</footer>
+
+</div><!-- /app -->
+
+<!-- Approval modal -->
+<div class="overlay" id="approval-overlay">
+  <div class="mbox">
+    <div class="mtitle">⚠ &nbsp;Konfirmasi Aksi Agent</div>
+    <div class="mfield"><span class="mkey">Agent</span><span class="mval" id="m-agent">—</span></div>
+    <div class="mfield"><span class="mkey">Aksi</span><span class="mval" id="m-action">—</span></div>
+    <div class="mfield"><span class="mkey">Risiko</span><span class="mval risk-medium" id="m-risk">MEDIUM</span></div>
+    <div class="mbtns">
+      <button class="btn btn-no" id="btn-reject">✗ &nbsp;Tolak &nbsp;[N]</button>
+      <button class="btn btn-ok" id="btn-approve">✓ &nbsp;Setujui &nbsp;[Y]</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Sample data (replace with real API calls in production) ──────────────────
+const SAMPLE = {
+  status: { model: 'qwen3.5:9b', skills: 21, ollama: 'localhost:11434' },
+  routers: [
+    { name: 'DTI',      host: '10.10.1.1' },
+    { name: 'FIKES',    host: '10.10.2.1' },
+    { name: 'LIBRARY',  host: '10.10.3.1' },
+    { name: 'REKTORAT', host: '10.10.4.1' },
+  ],
+  skills: [
+    { name: 'network-health-check', domain: 'monitoring',  triggers: ['cek status', 'health check', 'status jaringan'], tools: 5 },
+    { name: 'router-unreachable',   domain: 'monitoring',  triggers: ['router down', 'tidak bisa diakses', 'unreachable'], tools: 3 },
+    { name: 'utbk-client-monitor',  domain: 'dhcp',        triggers: ['utbk', 'client', 'peserta ujian'], tools: 4 },
+    { name: 'diagnose-dhcp-client', domain: 'dhcp',        triggers: ['dhcp', 'ip address', 'tidak dapat IP'], tools: 3 },
+    { name: 'dhcp-pool-audit',      domain: 'dhcp',        triggers: ['audit dhcp', 'pool habis', 'lease'], tools: 3 },
+    { name: 'bgp-diagnostics',      domain: 'routing',     triggers: ['bgp', 'routing', 'prefix'], tools: 4 },
+    { name: 'ospf-neighbor-down',   domain: 'routing',     triggers: ['ospf', 'neighbor', 'adjacency'], tools: 3 },
+    { name: 'security-audit',       domain: 'security',    triggers: ['audit', 'keamanan', 'firewall'], tools: 5 },
+    { name: 'config-backup',        domain: 'config',      triggers: ['backup', 'simpan konfigurasi'], tools: 2 },
+    { name: 'firewall-management',  domain: 'security',    triggers: ['firewall', 'filter rules', 'blokir'], tools: 3 },
+    { name: 'network-traffic',      domain: 'monitoring',  triggers: ['traffic', 'bandwidth', 'utilizasi'], tools: 4 },
+  ],
+  laporan: [
+    { name: 'rekap-jaringan_20260510.md',   date: '2026-05-10 09:23', size: '14.2K' },
+    { name: 'audit-security_20260509.md',   date: '2026-05-09 16:41', size: '8.7K'  },
+    { name: 'backup-report_20260508.md',    date: '2026-05-08 11:05', size: '3.1K'  },
+    { name: 'rekap-utbk_20260504.md',       date: '2026-05-04 18:30', size: '22.8K' },
+  ],
+  logs: [
+    '09:15:32  [bambang] supervisor started',
+    '09:15:33  [bambang] → eko/monitor_agent',
+    '09:15:34  [eko] get_interface_stats(DTI)',
+    '09:15:36  [eko] ✓ 12 interfaces retrieved',
+    '09:15:37  [bambang] END',
+    '09:23:11  [bambang] supervisor started',
+    '09:23:12  [bambang] → agus/diagnose_agent',
+    '09:23:14  [agus] run_diagnostic(router=FIKES)',
+    '09:23:18  [agus] ✓ diagnostic complete',
+    '09:23:19  [bambang] END',
+    '10:01:44  [bambang] supervisor started',
+    '10:01:45  [bambang] → joko/config_agent',
+    '10:01:46  [joko] backup_router_config(DTI) — approval required',
+    '10:01:52  [joko] ✓ approved by operator',
+    '10:01:58  [joko] backup saved: backups/DTI/DTI_20260510_100158.rsc',
+    '10:02:00  [bambang] END',
+  ],
+};
+
+const AGENTS = [
+  { alias: 'bambang', role: 'supervisor' },
+  { alias: 'eko',     role: 'monitor'   },
+  { alias: 'agus',    role: 'diagnosa'  },
+  { alias: 'joko',    role: 'config'    },
+  { alias: 'satria',  role: 'security'  },
+  { alias: 'budi',    role: 'dokumen'   },
+];
+
+const MENU = [
+  { key:'1', label:'Dashboard',  id:'dash'     },
+  { key:'2', label:'Skills',     id:'skills'   },
+  { key:'3', label:'Reachability',id:'reach'   },
+  { key:'4', label:'Laporan',    id:'laporan'  },
+  { key:'5', label:'Log',        id:'log'      },
+  { key:'6', label:'AI Chat',    id:'chat'     },
+  { key:'7', label:'Aktivitas',  id:'activity' },
+  { key:'8', label:'Status',     id:'status'   },
+  { key:'9', label:'Metrics',    id:'tokens'   },
+];
+
+// ── App state ─────────────────────────────────────────────────────────────────
+let appState = 'idle';
+let currentScreen = 'chat';
+let toolCount = 0;
+let elapsedTimer = null;
+let elapsedStart = null;
+let approvalResolve = null;
+let agentStates = {};
+AGENTS.forEach(a => { agentStates[a.alias] = { state: 'standby', detail: '' }; });
+
+// ── Bootstrap ─────────────────────────────────────────────────────────────────
+function init() {
+  buildNav();
+  populateSysInfo();
+  buildAgentCards();
+  buildSkills();
+  buildRouters();
+  buildLaporan();
+  buildLog();
+  buildDashboard();
+  startClock();
+  setupInput();
+  setupKeyboard();
+  document.getElementById('btn-approve').onclick = () => resolveApproval('approved');
+  document.getElementById('btn-reject').onclick  = () => resolveApproval('rejected');
+  document.getElementById('ping-btn').onclick    = simulatePing;
+  document.getElementById('chat-input').focus();
+}
+
+// ── Clock ──────────────────────────────────────────────────────────────────────
+function startClock() {
+  function tick() {
+    const n = new Date();
+    const pad = v => String(v).padStart(2,'0');
+    document.getElementById('clock').textContent = `${pad(n.getHours())}:${pad(n.getMinutes())}:${pad(n.getSeconds())}`;
+  }
+  tick(); setInterval(tick, 1000);
+}
+
+// ── Nav ────────────────────────────────────────────────────────────────────────
+function buildNav() {
+  const nav = document.querySelector('.nav');
+  MENU.forEach((item, i) => {
+    const d = document.createElement('div');
+    d.className = 'ni' + (item.id === 'chat' ? ' active' : '');
+    d.dataset.screen = item.id;
+    d.innerHTML = `<span class="nk">${item.key}</span><span class="nn">${item.label}</span>`;
+    d.addEventListener('click', () => switchScreen(item.id, d));
+    nav.appendChild(d);
+  });
+}
+
+function switchScreen(id, el) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.ni').forEach(n => n.classList.remove('active'));
+  const screen = document.getElementById('screen-' + id);
+  if (screen) screen.classList.add('active');
+  if (el) el.classList.add('active');
+  currentScreen = id;
+  if (id === 'chat') setTimeout(() => document.getElementById('chat-input').focus(), 40);
+}
+
+function navByKey(key) {
+  const item = MENU.find(m => m.key === key);
+  if (!item) return;
+  const navItems = document.querySelectorAll('.ni');
+  const idx = MENU.indexOf(item);
+  switchScreen(item.id, navItems[idx]);
+}
+
+// ── Sysinfo ───────────────────────────────────────────────────────────────────
+function populateSysInfo() {
+  const s = SAMPLE.status;
+  document.getElementById('si-model').textContent = s.model;
+  document.getElementById('si-skills').textContent = s.skills + ' loaded';
+  document.getElementById('si-ollama').textContent = s.ollama;
+}
+
+// ── Dashboard ──────────────────────────────────────────────────────────────────
+function buildDashboard() {
+  const s = SAMPLE.status;
+  document.getElementById('d-model').textContent  = s.model;
+  document.getElementById('d-skills').textContent = s.skills + ' loaded';
+  document.getElementById('d-ollama').textContent = s.ollama;
+  document.getElementById('d-routers').textContent = SAMPLE.routers.map(r => r.name).join(', ');
+  document.getElementById('d-backups').textContent = '3 file .rsc';
+  document.getElementById('d-laporan').innerHTML = SAMPLE.laporan.slice(0,3)
+    .map(f => `<div style="margin-bottom:3px;color:var(--dim)">${f.name} <span style="color:var(--dimmer)">${f.date}</span></div>`)
+    .join('');
+}
+
+// ── Agent cards ────────────────────────────────────────────────────────────────
+function buildAgentCards() {
+  const c = document.getElementById('agent-cards');
+  c.innerHTML = '';
+  AGENTS.forEach(a => {
+    const st = agentStates[a.alias];
+    const d = document.createElement('div');
+    d.className = 'acard ' + st.state;
+    d.id = 'ac-' + a.alias;
+    d.innerHTML = `
+      <div class="ach">
+        <div><div class="aname">${a.alias}</div><div class="arole">${a.role}</div></div>
+        <div class="ast"><div class="adot"></div><div class="aslbl">STANDBY</div></div>
+      </div>
+      <div class="adetail" id="ad-${a.alias}">—</div>`;
+    c.appendChild(d);
+  });
+}
+
+function setAgentState(alias, state, detail) {
+  if (!agentStates[alias]) return;
+  agentStates[alias] = { state, detail: detail || '' };
+  const card = document.getElementById('ac-' + alias);
+  if (!card) return;
+  card.className = 'acard ' + state;
+  card.querySelector('.aslbl').textContent = state.toUpperCase();
+  const det = document.getElementById('ad-' + alias);
+  if (det) det.textContent = detail || '—';
+}
+
+function resetAgents() {
+  AGENTS.forEach(a => setAgentState(a.alias, 'standby', ''));
+  setAgentState('bambang', 'running', 'routing...');
+}
+
+// ── Skills ────────────────────────────────────────────────────────────────────
+function buildSkills() {
+  const g = document.getElementById('skill-grid');
+  document.getElementById('skills-count').textContent = `(${SAMPLE.skills.length} aktif)`;
+  SAMPLE.skills.forEach(s => {
+    const d = document.createElement('div');
+    d.className = 'scard';
+    d.innerHTML = `
+      <div>
+        <div class="sname">${s.name}</div>
+        <div class="sdomain">${s.domain}</div>
+        <div class="strig">${s.triggers.slice(0,3).join(' · ')}</div>
+      </div>
+      <div style="text-align:right">
+        <div class="sbadge">AKTIF</div>
+        <div style="font-size:10px;color:var(--dimmer);margin-top:4px">${s.tools} tools</div>
+      </div>`;
+    g.appendChild(d);
+  });
+}
+
+// ── Routers ───────────────────────────────────────────────────────────────────
+function buildRouters() {
+  const tb = document.getElementById('router-tbody');
+  SAMPLE.routers.forEach(r => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="name">${r.name}</td>
+      <td>${r.host}</td>
+      <td id="rs-${r.name}" style="color:var(--dimmer)">— belum dicek</td>
+      <td id="rr-${r.name}" style="color:var(--dimmer)">—</td>`;
+    tb.appendChild(tr);
+  });
+}
+
+function simulatePing() {
+  SAMPLE.routers.forEach((r, i) => {
+    const s = document.getElementById('rs-' + r.name);
+    const rt = document.getElementById('rr-' + r.name);
+    s.className = 'checking'; s.style.color = ''; s.textContent = '⟳ pinging...'; rt.textContent = '—';
+    setTimeout(() => {
+      const ok = r.name !== 'FIKES';
+      s.className = ok ? 'up' : 'down'; s.style.color = '';
+      s.textContent = ok ? '✓ UP' : '✗ DOWN';
+      rt.textContent = ok ? `${(Math.random()*3+0.8).toFixed(1)}ms` : '—';
+    }, 600 + i * 350);
+  });
+}
+
+// ── Laporan ───────────────────────────────────────────────────────────────────
+function buildLaporan() {
+  const el = document.getElementById('laporan-list');
+  if (!SAMPLE.laporan.length) {
+    el.innerHTML = '<div style="font-size:11px;color:var(--dimmer)">Belum ada laporan.</div>';
+    return;
+  }
+  SAMPLE.laporan.forEach(f => {
+    const d = document.createElement('div');
+    d.className = 'lap-item';
+    d.innerHTML = `<div class="lap-name">${f.name}</div><div class="lap-date">${f.date}</div><div class="lap-size">${f.size}</div>`;
+    el.appendChild(d);
+  });
+}
+
+// ── Log ───────────────────────────────────────────────────────────────────────
+function buildLog() {
+  const el = document.getElementById('log-lines');
+  SAMPLE.logs.forEach(line => {
+    const d = document.createElement('div');
+    d.className = 'log-line';
+    const ts = line.substring(0, 8);
+    d.innerHTML = `<span class="lts">${ts}</span>${esc(line.substring(9))}`;
+    el.appendChild(d);
+  });
+}
+
+// ── App state ──────────────────────────────────────────────────────────────────
+function setState(state) {
+  appState = state;
+  const labels = { idle: 'IDLE', running: 'RUNNING', approval: 'APPROVAL REQUIRED' };
+  const lbl = labels[state] || state.toUpperCase();
+
+  ['hdr-dot','f-dot'].forEach(id => {
+    const el = document.getElementById(id);
+    el.className = 'dot ' + state;
+  });
+  document.getElementById('hdr-state').textContent = lbl;
+  document.getElementById('hdr-state').style.color =
+    state === 'running' ? 'var(--green)' : state === 'approval' ? 'var(--amber)' : 'var(--dimmer)';
+
+  const fs = document.getElementById('f-state');
+  fs.className = 'fstate ' + state;
+  fs.innerHTML = `<div class="dot ${state}"></div> <span>${labels[state] || lbl}</span>`;
+
+  if (state === 'running') {
+    toolCount = 0;
+    document.getElementById('f-tools').textContent = '0';
+    elapsedStart = Date.now();
+    if (elapsedTimer) clearInterval(elapsedTimer);
+    elapsedTimer = setInterval(tickElapsed, 1000);
+  } else if (state === 'idle') {
+    if (elapsedTimer) { clearInterval(elapsedTimer); elapsedTimer = null; }
+    document.getElementById('f-elapsed').textContent = '──:──';
+    document.getElementById('q-elapsed').textContent = '';
+  }
+}
+
+function tickElapsed() {
+  if (!elapsedStart) return;
+  const s = Math.floor((Date.now() - elapsedStart) / 1000);
+  const t = `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
+  document.getElementById('f-elapsed').textContent = t;
+  document.getElementById('q-elapsed').textContent = '⏱ ' + t;
+}
+
+// ── Chat ───────────────────────────────────────────────────────────────────────
+const chatMsgs = document.getElementById('chat-msgs');
+
+function now12() {
+  const n = new Date(), p = v => String(v).padStart(2,'0');
+  return `${p(n.getHours())}:${p(n.getMinutes())}:${p(n.getSeconds())}`;
+}
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function addUserMsg(text) {
+  document.getElementById('empty-state')?.remove();
+  const d = document.createElement('div');
+  d.className = 'msg';
+  d.innerHTML = `
+    <div class="msg-hdr"><span class="role user">ANDA</span><span class="mts">${now12()}</span></div>
+    <div class="msg-body"><div class="msg-text">${esc(text)}</div></div>`;
+  chatMsgs.appendChild(d);
+  scrollChat();
+}
+
+function addAiGroup() {
+  const d = document.createElement('div');
+  d.className = 'msg';
+  d.id = 'ai-group';
+  d.innerHTML = `
+    <div class="msg-hdr"><span class="role ai">AGENT</span><span class="mts">${now12()}</span></div>
+    <div class="msg-body" id="ai-body">
+      <div class="typing" id="typing"><div class="td"></div><div class="td"></div><div class="td"></div></div>
+    </div>`;
+  chatMsgs.appendChild(d);
+  scrollChat();
+  return d;
+}
+
+function addEventRow(type, text) {
+  const icons = { routing:'→', tool_call:'⚙', tool_result:'✓', error:'✗', approval_required:'⚠' };
+  const d = document.createElement('div');
+  d.className = 'erow';
+  d.innerHTML = `
+    <span class="eicon ${type}">${icons[type]||'·'}</span>
+    <span class="etext ${type}">${esc(text)}</span>
+    <span class="ets">${now12()}</span>`;
+  return d;
+}
+
+function appendEvent(aiBody, type, content) {
+  document.getElementById('typing')?.remove();
+  aiBody.appendChild(addEventRow(type, content));
+  scrollChat();
+}
+
+function setAiText(aiBody, text) {
+  document.getElementById('typing')?.remove();
+  aiBody.querySelectorAll('.msg-text').forEach(e => e.remove());
+  const p = document.createElement('div');
+  p.className = 'msg-text';
+  p.style.marginTop = '6px';
+  p.textContent = text;
+  aiBody.appendChild(p);
+  scrollChat();
+}
+
+function scrollChat() { chatMsgs.scrollTop = chatMsgs.scrollHeight; }
+
+function addActivityEntry(type, content) {
+  const al = document.getElementById('activity-log');
+  if (al.querySelector('div[style]')) al.innerHTML = '';
+  const icons = { routing:'→', tool_call:'⚙', tool_result:'✓', error:'✗', approval_required:'⚠' };
+  const d = document.createElement('div');
+  d.className = 'log-line';
+  d.innerHTML = `<span class="lts">${now12()}</span>[${icons[type]||'·'}] ${esc(String(content).substring(0,90))}`;
+  al.appendChild(d);
+}
+
+// ── Simulated scenarios ────────────────────────────────────────────────────────
+const SCENARIOS = {
+  default: {
+    events: [
+      { t:'routing',    c:'[bambang] → eko/monitor_agent',                ms:400,  ag:['bambang','done'],    agt:['eko','running','get_interface_stats...'] },
+      { t:'tool_call',  c:'[eko] get_interface_stats(router="DTI")',       ms:500  },
+      { t:'tool_result',c:'[eko] ether1 UP 1Gbps ↑234Mbps ↓89Mbps, ether2 UP 100Mbps, ether3 DOWN', ms:1100 },
+      { t:'tool_call',  c:'[eko] check_reachability(router="DTI")',        ms:350  },
+      { t:'tool_result',c:'[eko] DTI reachable — latency 1.2ms avg',      ms:800  },
+      { t:'routing',    c:'[bambang] ← eko selesai → END',                ms:300, ag:['eko','done'] },
+    ],
+    ai:'Status jaringan kampus:\n\n• DTI Router: 11/12 interface UP ✓\n• Interface ether3: DOWN — perlu investigasi\n• Latency normal (1.2ms avg)\n\nApakah ingin saya diagnosa interface ether3 yang DOWN?',
+    aiMs: 400,
+    ctx:19, pred:22,
+  },
+  backup: {
+    events: [
+      { t:'routing',   c:'[bambang] → joko/config_agent',                 ms:350, ag:['bambang','done'],   agt:['joko','running','backup_router_config...'] },
+      { t:'tool_call', c:'[joko] backup_router_config(router="DTI")',      ms:500 },
+      { t:'approval_required', c:JSON.stringify({agent:'joko/config_agent',action:'backup_router_config("DTI")',risk_level:'medium'}), ms:100 },
+    ],
+    postApprove: [
+      { t:'tool_result',c:'[joko] Backup disimpan: backups/DTI/DTI_20260510_103045.rsc (128 KB)', ms:1400, ag:['joko','done','backup selesai'] },
+      { t:'routing',   c:'[bambang] END',                                  ms:300 },
+    ],
+    ai:'Backup konfigurasi router DTI berhasil:\n\nFile: backups/DTI/DTI_20260510_103045.rsc\nUkuran: 128 KB\nWaktu: 2026-05-10 10:30:45',
+    postReject:'Backup dibatalkan oleh operator.',
+    aiMs:300, ctx:11, pred:14,
+  },
+  security: {
+    events: [
+      { t:'routing',    c:'[bambang] → satria/security_agent',             ms:380, ag:['bambang','done'],  agt:['satria','running','audit_security...'] },
+      { t:'tool_call',  c:'[satria] audit_security(router="DTI")',         ms:600 },
+      { t:'tool_result',c:'[satria] 3 open ports non-standard, 1 firewall rule disabled, SSH exposed WAN', ms:1600 },
+      { t:'tool_call',  c:'[satria] audit_security(router="FIKES")',       ms:400 },
+      { t:'tool_result',c:'[satria] FIKES: 2 isu minor — non-critical',    ms:1200 },
+      { t:'routing',    c:'[bambang] ← satria selesai → END',              ms:300, ag:['satria','done'] },
+    ],
+    ai:'Hasil audit keamanan:\n\n◆ DTI (3 isu kritis):\n  • SSH terekspos ke WAN — segera tutup\n  • 3 port non-standard terbuka\n  • Firewall rule #7 dinonaktifkan\n\n◆ FIKES (2 isu minor):\n  • Password policy lemah\n  • Log rotation tidak dikonfigurasi\n\nRekomendasikan menutup akses SSH WAN DTI sekarang?',
+    aiMs:500, ctx:28, pred:41,
+  },
+};
+
+function pickScenario(q) {
+  const l = q.toLowerCase();
+  if (l.includes('backup') || l.includes('simpan konfigurasi')) return SCENARIOS.backup;
+  if (l.includes('security') || l.includes('audit') || l.includes('keamanan')) return SCENARIOS.security;
+  return SCENARIOS.default;
+}
+
+async function runScenario(query, aiBody) {
+  document.getElementById('active-query').textContent = query.substring(0, 38);
+  resetAgents();
+  const sc = pickScenario(query);
+
+  for (const ev of sc.events) {
+    await sleep(ev.ms);
+    appendEvent(aiBody, ev.t, ev.c);
+    if (ev.ag) setAgentState(ev.ag[0], ev.ag[1], ev.ag[2]||'');
+    if (ev.agt) setAgentState(ev.agt[0], ev.agt[1], ev.agt[2]||'');
+    if (ev.t === 'tool_call') {
+      toolCount++;
+      document.getElementById('f-tools').textContent = toolCount;
+    }
+    addActivityEntry(ev.t, ev.c);
+
+    if (ev.t === 'approval_required') {
+      setState('approval');
+      const decision = await showApproval(ev.c);
+      appendEvent(aiBody, 'routing', `Operator: ${decision === 'approved' ? '✓ DISETUJUI' : '✗ DITOLAK'}`);
+      addActivityEntry('routing', `Operator: ${decision}`);
+      setState('running');
+      setAgentState('joko', 'running', 'melanjutkan...');
+
+      if (decision === 'approved' && sc.postApprove) {
+        for (const pev of sc.postApprove) {
+          await sleep(pev.ms);
+          appendEvent(aiBody, pev.t, pev.c);
+          if (pev.ag) setAgentState(pev.ag[0], pev.ag[1], pev.ag[2]||'');
+          addActivityEntry(pev.t, pev.c);
+        }
+        await sleep(sc.aiMs);
+        setAiText(aiBody, sc.ai);
+      } else {
+        await sleep(300);
+        setAiText(aiBody, sc.postReject || 'Aksi dibatalkan oleh operator.');
+      }
+      return;
+    }
+  }
+
+  await sleep(sc.aiMs);
+  setAiText(aiBody, sc.ai);
+  updateMetrics(sc.ctx, sc.pred);
+}
+
+// ── Approval ───────────────────────────────────────────────────────────────────
+function showApproval(payload) {
+  return new Promise(resolve => {
+    approvalResolve = resolve;
+    try {
+      const d = JSON.parse(payload);
+      document.getElementById('m-agent').textContent  = d.agent || 'config_agent';
+      document.getElementById('m-action').textContent = d.action || payload;
+      const r = document.getElementById('m-risk');
+      r.textContent = (d.risk_level || 'medium').toUpperCase();
+      r.className = 'mval risk-' + (d.risk_level || 'medium');
+    } catch { document.getElementById('m-action').textContent = String(payload).substring(0,100); }
+    document.getElementById('approval-overlay').classList.add('show');
+  });
+}
+
+function resolveApproval(decision) {
+  document.getElementById('approval-overlay').classList.remove('show');
+  if (approvalResolve) { approvalResolve(decision); approvalResolve = null; }
+}
+
+// ── Metrics ───────────────────────────────────────────────────────────────────
+function updateMetrics(ctx, pred) {
+  const set = (id, fill, pct) => {
+    document.getElementById(id).textContent = pct + '%';
+    const f = document.getElementById(fill);
+    f.style.width = pct + '%';
+    f.className = 'mfill' + (pct > 80 ? ' danger' : pct > 60 ? ' warn' : '');
+  };
+  set('ctx-pct','ctx-fill', ctx);
+  set('pred-pct','pred-fill', pred);
+}
+
+// ── Input ──────────────────────────────────────────────────────────────────────
+function setupInput() {
+  const inp = document.getElementById('chat-input');
+  const btn = document.getElementById('send-btn');
+
+  async function send() {
+    if (appState === 'running') return;
+    const text = inp.value.trim();
+    if (!text) return;
+    inp.value = '';
+    addUserMsg(text);
+    inp.disabled = true; btn.disabled = true;
+    setState('running');
+    const grp = addAiGroup();
+    const body = grp.querySelector('#ai-body');
+    await runScenario(text, body);
+    setState('idle');
+    AGENTS.forEach(a => { if (agentStates[a.alias].state !== 'failed') setAgentState(a.alias,'done',''); });
+    document.getElementById('active-query').textContent = '—';
+    inp.disabled = false; btn.disabled = false; inp.focus();
+  }
+
+  btn.onclick = send;
+  inp.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } });
+}
+
+// ── Keyboard ───────────────────────────────────────────────────────────────────
+function setupKeyboard() {
+  document.addEventListener('keydown', e => {
+    if (document.getElementById('approval-overlay').classList.contains('show')) {
+      if (e.key === 'y' || e.key === 'Y') { e.preventDefault(); resolveApproval('approved'); return; }
+      if (e.key === 'n' || e.key === 'N' || e.key === 'Escape') { e.preventDefault(); resolveApproval('rejected'); return; }
+      return;
+    }
+    if (document.activeElement === document.getElementById('chat-input')) {
+      if (e.key === 'Escape') document.getElementById('chat-input').blur();
+      return;
+    }
+    if (e.ctrlKey && e.key === 'l') { e.preventDefault(); clearChat(); return; }
+    if (e.key >= '1' && e.key <= '9') { navByKey(e.key); return; }
+    if ((e.key === 'i' || e.key === 'Enter') && currentScreen === 'chat') {
+      document.getElementById('chat-input').focus();
+    }
+  });
+}
+
+function clearChat() {
+  if (appState === 'running') return;
+  chatMsgs.innerHTML = `
+    <div class="empty" id="empty-state">
+      <div class="empty-glyph">◈</div>
+      <div class="empty-title">NetOps AI</div>
+      <div class="empty-hint">Ketik perintah untuk memulai sesi operasional jaringan kampus.</div>
+    </div>`;
+  AGENTS.forEach(a => setAgentState(a.alias,'standby',''));
+  document.getElementById('active-query').textContent = '—';
+  updateMetrics(0, 0);
+  document.getElementById('f-tools').textContent = '0';
+  document.getElementById('chat-input').focus();
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+init();
+</script>
+</body>
+</html>

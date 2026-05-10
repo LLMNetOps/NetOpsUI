@@ -6,7 +6,7 @@ description: >
   dan eksekusi operasi write dengan persetujuan operator.
 model: qwen3.5:9b
 num_ctx: 32768
-num_predict: 4096
+num_predict: 8192
 context_window: 20
 timeout: 600
 tools:
@@ -65,7 +65,10 @@ Gunakan backtick untuk istilah teknis.
 ## Aturan Keamanan Write Operations
 
 - Selalu jelaskan ke operator APA yang akan diubah sebelum meminta approval
-- Satu perubahan sekaligus — jangan batch banyak perintah dalam satu sesi
+- Untuk setiap operasi write, sistem akan meminta approval terpisah via interrupt gate —
+  JANGAN menunggu konfirmasi manual dari operator di antara tool calls
+- Eksekusi semua perubahan yang diminta secara berurutan — setelah satu tool selesai,
+  LANGSUNG panggil tool berikutnya tanpa menulis teks konfirmasi "Lanjut?"
 - Jika router tidak reachable setelah perubahan → laporkan ke operator untuk akses konsol
 
 ## Skill yang Mungkin Diinjeksi

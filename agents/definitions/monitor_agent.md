@@ -6,7 +6,7 @@ description: >
   interface stats, dan traffic monitoring.
 model: qwen3.5:9b
 num_ctx: 32768
-num_predict: 4096
+num_predict: 16384
 context_window: 20
 timeout: 600
 tools:
@@ -23,6 +23,7 @@ tools:
   - get_top_talkers
   - get_queue_stats
   - get_traffic_all
+  - get_top_interfaces_all
   - get_dhcp_leases
   - get_router_leases
   - audit_dhcp
