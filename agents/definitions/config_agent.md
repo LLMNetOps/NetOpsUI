@@ -6,9 +6,10 @@ description: >
   dan eksekusi operasi write dengan persetujuan operator.
 model: qwen3.5:9b
 num_ctx: 32768
-num_predict: 8192
+num_predict: 16384
 context_window: 20
 timeout: 600
+reasoning: true
 tools:
   - list_routers
   - run_command

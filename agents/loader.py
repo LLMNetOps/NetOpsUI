@@ -35,6 +35,8 @@ class AgentDefinition:
     chat_prompt: str = ""
     # Optional per-agent Ollama host (overrides OLLAMA_BASE_URL env var)
     ollama_host: str = ""
+    # Enable think/reasoning mode (qwen3.5 and compatible models only)
+    reasoning: bool = False
 
 
 def _parse_definition_file(path: Path) -> Optional[AgentDefinition]:
@@ -84,6 +86,7 @@ def _parse_definition_file(path: Path) -> Optional[AgentDefinition]:
         timeout=int(fm.get("timeout", 300)),
         chat_prompt=str(fm.get("chat_prompt", "")),
         ollama_host=str(fm.get("ollama_host", "")),
+        reasoning=bool(fm.get("reasoning", False)),
     )
 
 

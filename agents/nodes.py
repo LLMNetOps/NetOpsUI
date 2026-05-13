@@ -52,6 +52,7 @@ def _make_llm(
     timeout: int = 300,
     agent_name: str | None = None,
     base_url: str | None = None,
+    reasoning: bool = False,
 ) -> ChatOllama:
     from agents.metrics import TokenMetricsCallback  # noqa: PLC0415
     kwargs: dict[str, Any] = dict(
@@ -61,6 +62,7 @@ def _make_llm(
         num_predict=num_predict,
         num_ctx=num_ctx,
         timeout=timeout,
+        reasoning=reasoning,
         callbacks=[TokenMetricsCallback(agent_name or "unknown", num_ctx, num_predict)],
     )
     if json_mode:
@@ -289,6 +291,7 @@ def supervisor_node(state: "NetworkOpsState") -> dict:
         timeout=_supervisor_defn.timeout if _supervisor_defn else 60,
         agent_name="supervisor",
         base_url=(_supervisor_defn.ollama_host if _supervisor_defn else "") or None,
+        reasoning=False,
     )
     try:
         resp = llm.invoke([sys_msg] + recent)
@@ -374,6 +377,7 @@ def supervisor_node(state: "NetworkOpsState") -> dict:
                 timeout=_supervisor_defn.timeout if _supervisor_defn else 60,
                 agent_name="supervisor",
                 base_url=(_supervisor_defn.ollama_host if _supervisor_defn else "") or None,
+                reasoning=False,
             )
             chat_sys = SystemMessage(content=_chat_prompt)
             try:
@@ -422,6 +426,7 @@ def _make_specialist_node(agent_name: str):
     _num_predict = defn.num_predict if defn else 2048
     _timeout = defn.timeout if defn else 300
     _ollama_host = defn.ollama_host if defn else ""
+    _reasoning = defn.reasoning if defn else False
     llm_with_tools = _make_llm(
         temperature=0.3,
         model=_model,
@@ -430,6 +435,7 @@ def _make_specialist_node(agent_name: str):
         timeout=_timeout,
         agent_name=agent_name,
         base_url=_ollama_host or None,
+        reasoning=_reasoning,
     ).bind_tools(tools)
 
     def _node(state: "NetworkOpsState") -> dict:
@@ -470,6 +476,7 @@ def _make_specialist_node(agent_name: str):
                     num_ctx=_num_ctx, num_predict=_num_predict, timeout=_timeout,
                     agent_name=agent_name,
                     base_url=_ollama_host or None,
+                    reasoning=False,
                 )
                 summary = llm_plain.invoke(all_msgs)
                 summary_content = _clean(summary.content or "")
@@ -518,6 +525,7 @@ _CONFIG_LLM = _make_llm(
     timeout=_config_defn.timeout if _config_defn else 180,
     agent_name="config_agent",
     base_url=(_config_defn.ollama_host if _config_defn else "") or None,
+    reasoning=_config_defn.reasoning if _config_defn else False,
 ).bind_tools(_CONFIG_TOOLS)
 _APPROVAL_REQUIRED_TOOLS = set(
     _config_defn.approval_required_tools if _config_defn else ["backup_router_config"]
