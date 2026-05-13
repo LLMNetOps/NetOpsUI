@@ -1,1231 +1,666 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="id">
 <head>
-<meta charset="UTF-8">
+<meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>NetOps AI — Campus Network Operations</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700&family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<title>NetOps AI · Web Dashboard</title>
 <style>
+/* ============================================================
+   NetOps AI — Color & Type Tokens
+   Dark theme only. NOC console / precision instrument aesthetic.
+   ============================================================ */
+
+@font-face { font-family: 'IBM Plex Mono'; font-style: normal; font-weight: 400; font-display: swap; src: url('fonts/IBMPlexMono-Regular.woff2') format('woff2'); }
+@font-face { font-family: 'IBM Plex Mono'; font-style: normal; font-weight: 500; font-display: swap; src: url('fonts/IBMPlexMono-Medium.woff2') format('woff2'); }
+@font-face { font-family: 'IBM Plex Mono'; font-style: normal; font-weight: 600; font-display: swap; src: url('fonts/IBMPlexMono-SemiBold.woff2') format('woff2'); }
+@font-face { font-family: 'IBM Plex Sans'; font-style: normal; font-weight: 400; font-display: swap; src: url('fonts/IBMPlexSans-Regular.woff2') format('woff2'); }
+@font-face { font-family: 'IBM Plex Sans'; font-style: normal; font-weight: 500; font-display: swap; src: url('fonts/IBMPlexSans-Medium.woff2') format('woff2'); }
+@font-face { font-family: 'IBM Plex Sans Condensed'; font-style: normal; font-weight: 500; font-display: swap; src: url('fonts/IBMPlexSansCondensed-Medium.woff2') format('woff2'); }
+@font-face { font-family: 'IBM Plex Sans Condensed'; font-style: normal; font-weight: 600; font-display: swap; src: url('fonts/IBMPlexSansCondensed-SemiBold.woff2') format('woff2'); }
+
 :root {
-  --bg:    #040B14;
-  --bg2:   #070E1A;
-  --bg3:   #0B1525;
-  --bg4:   #0F1C30;
-  --cyan:  #00D4FF;
-  --cyan-d: rgba(0,212,255,.16);
-  --cyan-m: rgba(0,212,255,.40);
-  --green: #00FF9D;
-  --green-d: rgba(0,255,157,.13);
-  --amber: #FFB200;
-  --amber-d: rgba(255,178,0,.13);
-  --red:   #FF2D55;
-  --red-d: rgba(255,45,85,.13);
-  --white: #D8EEF8;
-  --dim:   rgba(216,238,248,.38);
-  --dimmer:rgba(216,238,248,.16);
-  --border: rgba(0,212,255,.10);
-  --border-b: rgba(0,212,255,.32);
-  --fl: 'Barlow Condensed', sans-serif;
-  --fm: 'IBM Plex Mono', monospace;
+  --bg-0: #08090b;
+  --bg-1: #0e1014;
+  --bg-2: #15181e;
+  --bg-3: #1c2028;
+  --border-1: #252932;
+  --border-2: #363b46;
+  --fg-0: #e8eaee;
+  --fg-1: #a8aeba;
+  --fg-2: #6c7280;
+  --fg-3: #454a55;
+  --ok: #7ee787;
+  --ok-dim: #2d4a32;
+  --warn: #f0b85c;
+  --warn-dim: #4a3a1c;
+  --err: #ff7b72;
+  --err-dim: #4a1f1f;
+  --info: #79c0ff;
+  --info-dim: #1c3147;
+  --agent-bambang: #d2a8ff;
+  --agent-eko: #7ee787;
+  --agent-agus: #79c0ff;
+  --agent-joko: #ffa657;
+  --agent-satria: #ff7b72;
+  --agent-budi: #a8c7fa;
+  --state-standby: var(--fg-2);
+  --state-antrean: var(--info);
+  --state-berjalan: var(--ok);
+  --state-menunggu: var(--warn);
+  --state-selesai: var(--fg-1);
+  --state-gagal: var(--err);
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'JetBrains Mono', Menlo, Consolas, monospace;
+  --font-sans: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-cond: 'IBM Plex Sans Condensed', 'IBM Plex Sans', system-ui, sans-serif;
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-6: 24px; --sp-8: 32px; --sp-12: 48px;
+  --r-0: 0; --r-1: 2px; --r-full: 9999px;
+  --shadow-elev: 0 8px 32px rgba(0,0,0,0.6), 0 0 0 1px var(--border-1);
+  --shadow-glow-ok: 0 0 6px rgba(126,231,135,0.6);
+  --shadow-glow-warn: 0 0 6px rgba(240,184,92,0.6);
+  --shadow-glow-err: 0 0 6px rgba(255,123,114,0.6);
+  --t-fast: 120ms cubic-bezier(0.2,0,0,1);
+  --t-base: 180ms cubic-bezier(0.2,0,0,1);
+  --t-modal: 320ms cubic-bezier(0.2,0,0,1);
 }
 
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-html,body{height:100%;background:var(--bg);color:var(--white);font-family:var(--fm);font-size:12px;overflow:hidden}
+html, body { background: var(--bg-0); color: var(--fg-0); font-family: var(--font-mono); font-size: 13px; line-height: 1.45; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
 
-body::before{
-  content:'';position:fixed;inset:0;
-  background-image:radial-gradient(circle,rgba(0,212,255,.055) 1px,transparent 1px);
-  background-size:24px 24px;pointer-events:none;z-index:0
-}
+.t-display { font-family: var(--font-cond); font-weight: 500; font-size: 32px; line-height: 1.1; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
+.t-h1 { font-family: var(--font-cond); font-weight: 500; font-size: 22px; line-height: 1.2; }
+.t-h2 { font-family: var(--font-cond); font-weight: 500; font-size: 16px; line-height: 1.3; text-transform: uppercase; letter-spacing: 0.06em; }
+.t-h3 { font-family: var(--font-cond); font-weight: 500; font-size: 13px; line-height: 1.4; text-transform: uppercase; letter-spacing: 0.08em; }
+.t-body { font-family: var(--font-sans); font-weight: 400; font-size: 14px; line-height: 1.5; }
+.t-data { font-family: var(--font-mono); font-weight: 400; font-size: 13px; line-height: 1.45; }
+.t-data-sm { font-family: var(--font-mono); font-weight: 400; font-size: 12px; line-height: 1.4; }
+.t-num { font-family: var(--font-mono); font-weight: 500; font-variant-numeric: tabular-nums; font-size: 13px; }
+.t-label { font-family: var(--font-cond); font-weight: 500; font-size: 11px; line-height: 1.3; text-transform: uppercase; letter-spacing: 0.1em; color: var(--fg-2); }
+.t-tag { font-family: var(--font-mono); font-weight: 500; font-size: 10px; line-height: 1.2; text-transform: uppercase; letter-spacing: 0.05em; }
+.t-dim { color: var(--fg-2); } .t-fg1 { color: var(--fg-1); } .t-ok { color: var(--ok); } .t-warn { color: var(--warn); } .t-err { color: var(--err); } .t-info { color: var(--info); }
 
-.app{position:relative;display:flex;flex-direction:column;height:100vh;z-index:1}
+/* ============================================================
+   Web Dashboard styles
+   ============================================================ */
 
-/* ─ Header ─────────────────────────────────── */
-.hdr{
-  display:flex;align-items:center;height:30px;min-height:30px;
-  padding:0 14px;background:var(--bg2);
-  border-bottom:1px solid var(--border-b);gap:10px;flex-shrink:0
-}
-.hdr-logo{
-  font-family:var(--fl);font-size:14px;font-weight:700;
-  letter-spacing:.14em;color:var(--cyan);text-transform:uppercase;
-  display:flex;align-items:center;gap:6px
-}
-.hdr-logo::before{content:'◆';font-size:9px;opacity:.7}
-.v-sep{width:1px;height:14px;background:var(--border-b)}
-.hdr-sub{
-  font-family:var(--fl);font-size:10px;font-weight:500;
-  letter-spacing:.18em;color:var(--dimmer);text-transform:uppercase
-}
-.spacer{flex:1}
-.hdr-right{display:flex;align-items:center;gap:10px}
-.state-pill{
-  display:flex;align-items:center;gap:5px;
-  font-family:var(--fl);font-size:10px;font-weight:600;
-  letter-spacing:.12em;text-transform:uppercase
-}
-.dot{width:6px;height:6px;border-radius:50%}
-.dot.idle{background:var(--dimmer)}
-.dot.running{background:var(--green);box-shadow:0 0 6px var(--green);animation:pg .8s ease infinite}
-.dot.approval{background:var(--amber);box-shadow:0 0 6px var(--amber);animation:pa .5s ease infinite}
-.clock{font-size:11px;color:var(--dim);font-variant-numeric:tabular-nums;letter-spacing:.04em}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; height: 100vh; overflow: hidden; }
 
-/* ─ Body layout ────────────────────────────── */
-.body{display:grid;grid-template-columns:156px 1fr 198px;flex:1;overflow:hidden}
-
-/* ─ Sidebar ─────────────────────────────────── */
-.sidebar{
-  background:var(--bg2);border-right:1px solid var(--border);
-  display:flex;flex-direction:column;overflow:hidden
-}
-.nav{padding:10px 0;flex:1}
-.nav-lbl{
-  font-family:var(--fl);font-size:9px;font-weight:700;
-  letter-spacing:.22em;color:var(--dimmer);text-transform:uppercase;
-  padding:0 12px 5px
-}
-.ni{
-  display:flex;align-items:center;gap:8px;padding:5px 12px;
-  cursor:pointer;border-left:2px solid transparent;transition:all .1s
-}
-.ni:hover{background:var(--cyan-d);border-left-color:var(--cyan-m)}
-.ni.active{background:var(--cyan-d);border-left-color:var(--cyan)}
-.ni.active .nk{color:var(--cyan)}
-.ni.active .nn{color:var(--white)}
-.nk{
-  font-family:var(--fl);font-size:10px;font-weight:600;
-  color:var(--dimmer);width:12px;text-align:center
-}
-.nn{font-family:var(--fl);font-size:12px;font-weight:500;color:var(--dim);letter-spacing:.04em}
-.ni.active .na{opacity:1}
-.na{position:absolute;right:10px;font-size:7px;color:var(--cyan);opacity:0}
-.sdiv{height:1px;background:var(--border);margin:6px 0}
-.sysinfo{padding:8px 12px;border-top:1px solid var(--border)}
-.sir{display:flex;justify-content:space-between;align-items:center;margin-bottom:3px}
-.sik{
-  font-family:var(--fl);font-size:9px;font-weight:600;
-  color:var(--dimmer);letter-spacing:.12em;text-transform:uppercase
-}
-.siv{font-size:10px;color:var(--dim)}
-.siv.ok{color:var(--green)}
-
-/* ─ Content ─────────────────────────────────── */
-.content{display:flex;flex-direction:column;overflow:hidden;background:var(--bg);position:relative}
-.screen{display:none;flex-direction:column;flex:1;overflow:hidden}
-.screen.active{display:flex}
-
-/* ─ Chat ──────────────────────────────────── */
-.chat-msgs{
-  flex:1;overflow-y:auto;padding:14px 20px;
-  display:flex;flex-direction:column;gap:0;
-  scrollbar-width:thin;scrollbar-color:var(--border) transparent
-}
-.chat-msgs::-webkit-scrollbar{width:3px}
-.chat-msgs::-webkit-scrollbar-thumb{background:var(--border-b);border-radius:2px}
-
-.msg{padding:10px 0;border-bottom:1px solid var(--border);animation:fi .18s ease}
-.msg:last-child{border-bottom:none}
-.msg-hdr{display:flex;align-items:center;gap:8px;margin-bottom:5px}
-.role{
-  font-family:var(--fl);font-size:10px;font-weight:700;
-  letter-spacing:.15em;text-transform:uppercase
-}
-.role.user{color:var(--cyan)}
-.role.ai{color:var(--green)}
-.mts{font-size:10px;color:var(--dimmer);font-variant-numeric:tabular-nums}
-.msg-body{line-height:1.6}
-.msg-text{font-size:13px;color:var(--white);white-space:pre-wrap;word-break:break-word;line-height:1.7}
-
-.erow{display:flex;align-items:flex-start;gap:8px;padding:2px 0}
-.eicon{width:14px;text-align:center;flex-shrink:0;margin-top:1px;font-size:11px}
-.eicon.routing{color:var(--amber)}
-.eicon.tool_call{color:var(--cyan)}
-.eicon.tool_result{color:var(--green)}
-.eicon.error{color:var(--red)}
-.eicon.approval_required{color:var(--amber)}
-.etext{color:var(--dim);font-size:11px;font-style:italic;flex:1;line-height:1.5}
-.etext.routing{color:var(--amber);font-style:normal}
-.etext.tool_call{color:var(--cyan);font-style:normal}
-.etext.tool_result{color:var(--dim)}
-.ets{font-size:10px;color:var(--dimmer);flex-shrink:0}
-
-.typing{display:flex;align-items:center;gap:4px;padding:4px 0}
-.td{
-  width:4px;height:4px;border-radius:50%;background:var(--cyan);
-  animation:tb 1s ease infinite
-}
-.td:nth-child(2){animation-delay:.15s}
-.td:nth-child(3){animation-delay:.3s}
-
-.empty{
-  flex:1;display:flex;flex-direction:column;
-  align-items:center;justify-content:center;gap:10px;color:var(--dimmer)
-}
-.empty-glyph{font-size:28px;color:var(--cyan-m);margin-bottom:2px}
-.empty-title{
-  font-family:var(--fl);font-size:15px;font-weight:600;
-  letter-spacing:.16em;text-transform:uppercase;color:var(--dim)
-}
-.empty-hint{font-size:11px;color:var(--dimmer);text-align:center;max-width:240px;line-height:1.6}
-
-/* ─ Chat input ───────────────────────────────── */
-.chat-in{
-  border-top:1px solid var(--border);padding:9px 20px 11px;
-  background:var(--bg2);flex-shrink:0
-}
-.in-row{
-  display:flex;align-items:center;gap:8px;
-  background:var(--bg3);border:1px solid var(--border);
-  padding:7px 10px;transition:border-color .14s
-}
-.in-row:focus-within{border-color:var(--cyan-m);box-shadow:0 0 0 2px rgba(0,212,255,.07)}
-.in-prompt{color:var(--cyan);font-size:13px;font-weight:500;flex-shrink:0}
-.in-field{
-  flex:1;background:transparent;border:none;outline:none;
-  color:var(--white);font-family:var(--fm);font-size:13px;caret-color:var(--cyan)
-}
-.in-field::placeholder{color:var(--dimmer)}
-.in-field:disabled{opacity:.35;cursor:not-allowed}
-.send-btn{
-  background:var(--cyan);color:var(--bg);border:none;
-  padding:3px 10px;font-family:var(--fl);font-size:10px;font-weight:700;
-  letter-spacing:.1em;text-transform:uppercase;cursor:pointer;transition:background .1s
-}
-.send-btn:hover{background:#33DDFF}
-.send-btn:disabled{opacity:.3;cursor:not-allowed}
-.in-hint{font-size:10px;color:var(--dimmer);margin-top:5px;padding-left:1px}
-
-/* ─ Agent panel ──────────────────────────────── */
-.agent-panel{
-  background:var(--bg2);border-left:1px solid var(--border);
-  display:flex;flex-direction:column;overflow:hidden
-}
-.ph{padding:9px 12px 7px;border-bottom:1px solid var(--border);flex-shrink:0}
-.pt{
-  font-family:var(--fl);font-size:9px;font-weight:700;
-  letter-spacing:.22em;color:var(--dim);text-transform:uppercase
-}
-.agent-cards{flex:1;overflow-y:auto;padding:6px;display:flex;flex-direction:column;gap:3px;scrollbar-width:none}
-
-.acard{
-  padding:7px 10px;border:1px solid var(--border);
-  border-left:3px solid var(--border);background:var(--bg3);transition:all .2s;position:relative;overflow:hidden
-}
-.acard::before{
-  content:'';position:absolute;inset:0;
-  background:linear-gradient(90deg,var(--cg,transparent) 0%,transparent 60%);
-  pointer-events:none
-}
-.acard.standby{}
-.acard.running{border-left-color:var(--green);--cg:rgba(0,255,157,.07)}
-.acard.waiting{border-left-color:var(--amber);--cg:rgba(255,178,0,.07)}
-.acard.queued{border-left-color:var(--cyan);--cg:rgba(0,212,255,.07)}
-.acard.done{border-left-color:rgba(216,238,248,.2);opacity:.6}
-.acard.failed{border-left-color:var(--red);--cg:rgba(255,45,85,.07)}
-.ach{display:flex;justify-content:space-between;align-items:center;margin-bottom:2px}
-.aname{
-  font-family:var(--fl);font-size:11px;font-weight:700;
-  letter-spacing:.1em;text-transform:uppercase;color:var(--white)
-}
-.arole{font-size:9px;color:var(--dimmer);font-family:var(--fl);letter-spacing:.08em}
-.ast{display:flex;align-items:center;gap:4px}
-.adot{width:5px;height:5px;border-radius:50%}
-.standby .adot{background:var(--dimmer)}
-.running .adot{background:var(--green);box-shadow:0 0 4px var(--green);animation:pg .8s ease infinite}
-.waiting .adot{background:var(--amber);animation:pa .5s ease infinite}
-.queued .adot{background:var(--cyan)}
-.done .adot{background:rgba(216,238,248,.25)}
-.failed .adot{background:var(--red)}
-.aslbl{font-family:var(--fl);font-size:9px;font-weight:600;letter-spacing:.12em;text-transform:uppercase}
-.standby .aslbl{color:var(--dimmer)}
-.running .aslbl{color:var(--green)}
-.waiting .aslbl{color:var(--amber)}
-.queued .aslbl{color:var(--cyan)}
-.done .aslbl{color:var(--dimmer)}
-.failed .aslbl{color:var(--red)}
-.adetail{font-size:10px;color:var(--dimmer);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-
-.qdisp{padding:8px 10px;border-top:1px solid var(--border);flex-shrink:0}
-.qlbl{font-family:var(--fl);font-size:9px;letter-spacing:.15em;color:var(--dimmer);text-transform:uppercase;margin-bottom:2px}
-.qtext{font-size:10px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.qelapsed{font-size:10px;color:var(--cyan);margin-top:2px;font-variant-numeric:tabular-nums}
-
-/* ─ Footer ────────────────────────────────────── */
-.footer{
-  height:22px;min-height:22px;display:flex;align-items:center;
-  padding:0 12px;background:var(--bg2);border-top:1px solid var(--border-b);
-  gap:14px;flex-shrink:0;font-size:10px
-}
-.met{display:flex;align-items:center;gap:5px}
-.mlbl{
-  font-family:var(--fl);font-size:9px;font-weight:600;
-  letter-spacing:.14em;text-transform:uppercase;color:var(--dimmer)
-}
-.mbar{width:38px;height:3px;background:var(--bg4);border-radius:1px;overflow:hidden}
-.mfill{height:100%;background:var(--cyan);border-radius:1px;transition:width .5s ease}
-.mfill.warn{background:var(--amber)}
-.mfill.danger{background:var(--red)}
-.mpct{font-size:10px;color:var(--dim);min-width:26px;font-variant-numeric:tabular-nums}
-.fsep{width:1px;height:9px;background:var(--border)}
-.fstate{
-  font-family:var(--fl);font-size:10px;font-weight:600;
-  letter-spacing:.1em;text-transform:uppercase;
-  display:flex;align-items:center;gap:4px
-}
-.fstate.idle{color:var(--dimmer)}
-.fstate.running{color:var(--green)}
-.fstate.approval{color:var(--amber)}
-.fkeys{font-family:var(--fl);font-size:9px;letter-spacing:.07em;color:var(--dimmer)}
-.fkeys b{color:var(--dim);font-weight:600;margin-right:2px}
-
-/* ─ Other screens ────────────────────────────── */
-.sc-body{padding:16px 20px;flex:1;overflow-y:auto}
-.sc-title{
-  font-family:var(--fl);font-size:14px;font-weight:700;
-  letter-spacing:.12em;text-transform:uppercase;color:var(--white);margin-bottom:5px
-}
-.sc-rule{height:1px;background:var(--border-b);margin-bottom:16px}
-
-/* Skills */
-.skill-grid{display:flex;flex-direction:column;gap:3px}
-.scard{
-  padding:8px 12px;border:1px solid var(--border);background:var(--bg3);
-  display:flex;justify-content:space-between;align-items:flex-start
-}
-.sname{
-  font-family:var(--fl);font-size:12px;font-weight:600;
-  letter-spacing:.05em;color:var(--white);margin-bottom:1px
-}
-.sdomain{font-size:10px;color:var(--cyan);font-family:var(--fl);letter-spacing:.08em;text-transform:uppercase}
-.strig{font-size:10px;color:var(--dimmer);margin-top:2px}
-.sbadge{
-  font-family:var(--fl);font-size:9px;font-weight:700;
-  letter-spacing:.1em;text-transform:uppercase;padding:2px 6px;
-  background:var(--green-d);color:var(--green);border:1px solid rgba(0,255,157,.28)
+body::before {
+  content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 9999;
+  background: repeating-linear-gradient(0deg, rgba(255,255,255,0.018) 0 1px, transparent 1px 3px);
 }
 
-/* Routers */
-.rtbl{width:100%;border-collapse:collapse;font-size:11px}
-.rtbl th{
-  font-family:var(--fl);font-size:9px;font-weight:700;letter-spacing:.16em;
-  text-transform:uppercase;color:var(--dimmer);text-align:left;
-  padding:5px 8px;border-bottom:1px solid var(--border)
-}
-.rtbl td{
-  padding:6px 8px;border-bottom:1px solid rgba(0,212,255,.04);
-  color:var(--dim);vertical-align:middle
-}
-.rtbl td.up{color:var(--green)}
-.rtbl td.down{color:var(--red)}
-.rtbl td.checking{color:var(--amber)}
-.rtbl td.name{color:var(--white)}
-.pbtn{
-  font-family:var(--fl);font-size:9px;font-weight:700;letter-spacing:.1em;
-  padding:4px 12px;background:transparent;border:1px solid var(--cyan-m);
-  color:var(--cyan);cursor:pointer;margin-top:12px;text-transform:uppercase;transition:all .12s
-}
-.pbtn:hover{background:var(--cyan-d)}
+.app { display: grid; grid-template-rows: 40px 1fr 24px; height: 100vh; }
 
-/* Laporan */
-.lap-list{display:flex;flex-direction:column;gap:3px}
-.lap-item{
-  display:grid;grid-template-columns:1fr auto auto;gap:12px;
-  align-items:center;padding:7px 10px;border:1px solid var(--border);background:var(--bg3)
-}
-.lap-name{font-size:11px;color:var(--white)}
-.lap-date{font-size:10px;color:var(--dimmer);font-variant-numeric:tabular-nums}
-.lap-size{font-size:10px;color:var(--dimmer);text-align:right}
+/* TOP BAR */
+.topbar { display: flex; align-items: center; padding: 0 16px; gap: 16px; background: var(--bg-1); border-bottom: 1px solid var(--border-1); font-size: 12px; }
+.topbar-left { display: flex; align-items: center; gap: 12px; }
+.topbar-right { margin-left: auto; display: flex; align-items: center; gap: 18px; }
+.logo { font-family: var(--font-mono); font-weight: 500; font-size: 14px; color: var(--fg-0); display: inline-flex; gap: 1px; align-items: center; }
+.logo span { color: var(--fg-0); }
+.logo i { color: var(--ok); font-style: normal; padding: 0 4px; }
+.dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.dot-ok { background: var(--ok); }
+.topbar-thread { color: var(--fg-1); font-size: 12px; }
+.tb-meta { display: inline-flex; gap: 6px; align-items: center; font-family: var(--font-mono); }
+.tb-meta .lbl { font-family: var(--font-cond); font-weight: 500; font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--fg-2); }
+.tb-meta .val { color: var(--fg-0); font-variant-numeric: tabular-nums; }
 
-/* Log */
-.log-wrap{display:flex;flex-direction:column;gap:1px}
-.log-line{padding:2px 0;border-bottom:1px solid rgba(0,212,255,.03);font-size:11px;line-height:1.5}
-.lts{color:var(--dimmer);margin-right:8px}
+/* MAIN */
+.main { display: grid; grid-template-columns: 64px 1fr 360px; height: 100%; min-height: 0; }
 
-/* Dashboard */
-.dash-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.dash-card{padding:12px 14px;border:1px solid var(--border);background:var(--bg3)}
-.dash-card-title{
-  font-family:var(--fl);font-size:10px;font-weight:700;letter-spacing:.18em;
-  text-transform:uppercase;color:var(--dim);margin-bottom:10px
-}
-.dash-stat{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
-.dash-key{font-size:10px;color:var(--dimmer)}
-.dash-val{font-size:11px;color:var(--white)}
-.dash-val.ok{color:var(--green)}
-.dash-val.warn{color:var(--amber)}
+/* LEFT RAIL */
+.leftrail { background: var(--bg-1); border-right: 1px solid var(--border-1); display: flex; flex-direction: column; padding: 8px 0; gap: 1px; }
+.rail-btn { background: transparent; border: none; color: var(--fg-2); padding: 12px 6px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 4px; transition: background 120ms, color 120ms; border-left: 2px solid transparent; width: 100%; }
+.rail-btn:hover { background: var(--bg-2); color: var(--fg-1); }
+.rail-active { background: var(--bg-2); color: var(--fg-0); border-left-color: var(--ok); }
+.rail-glyph { font-size: 18px; line-height: 1; }
+.rail-label { font-family: var(--font-cond); font-size: 9px; text-transform: uppercase; letter-spacing: 0.08em; }
 
-/* Token metrics */
-.mtbl{width:100%;border-collapse:collapse;font-size:11px}
-.mtbl th{
-  font-family:var(--fl);font-size:9px;font-weight:700;letter-spacing:.16em;
-  text-transform:uppercase;color:var(--dimmer);
-  text-align:right;padding:5px 8px;border-bottom:1px solid var(--border)
-}
-.mtbl th:first-child{text-align:left}
-.mtbl td{padding:5px 8px;border-bottom:1px solid rgba(0,212,255,.04);color:var(--dim);text-align:right;font-variant-numeric:tabular-nums}
-.mtbl td:first-child{
-  text-align:left;color:var(--white);
-  font-family:var(--fl);font-size:12px;font-weight:600;letter-spacing:.05em
-}
-.mtbl tr.warn td{color:var(--amber)}
+/* CHAT PANEL */
+.chat-panel { display: grid; grid-template-rows: 36px 1fr auto; min-height: 0; background: var(--bg-0); }
+.chat-head { display: flex; align-items: center; padding: 0 16px; gap: 14px; border-bottom: 1px solid var(--border-1); background: var(--bg-1); }
+.chat-head-title { font-family: var(--font-cond); font-weight: 500; font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--fg-1); }
+.chat-head-meta { color: var(--fg-2); font-size: 11px; font-family: var(--font-mono); }
+.chat-head-btns { margin-left: auto; display: flex; gap: 8px; }
 
-/* ─ Approval modal ───────────────────────────── */
-.overlay{
-  display:none;position:fixed;inset:0;
-  background:rgba(4,11,20,.88);backdrop-filter:blur(3px);
-  z-index:200;align-items:center;justify-content:center
-}
-.overlay.show{display:flex}
-.mbox{
-  background:var(--bg3);border:1px solid var(--amber);
-  width:460px;max-width:90vw;padding:20px 24px;position:relative;
-  box-shadow:0 0 50px rgba(255,178,0,.10),0 0 0 1px rgba(255,178,0,.08)
-}
-.mbox::before{
-  content:'';position:absolute;top:0;left:0;right:0;height:2px;
-  background:linear-gradient(90deg,transparent,var(--amber),transparent)
-}
-.mtitle{
-  font-family:var(--fl);font-size:13px;font-weight:700;letter-spacing:.15em;
-  text-transform:uppercase;color:var(--amber);margin-bottom:16px;
-  display:flex;align-items:center;gap:8px
-}
-.mfield{display:grid;grid-template-columns:58px 1fr;gap:4px 12px;margin-bottom:5px;align-items:start}
-.mkey{font-family:var(--fl);font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--dimmer);padding-top:1px}
-.mval{font-size:12px;color:var(--white);word-break:break-all}
-.mval.risk-medium{color:var(--amber)}
-.mval.risk-high{color:var(--red)}
-.mbtns{display:flex;gap:10px;margin-top:18px;justify-content:flex-end}
-.btn{
-  font-family:var(--fl);font-size:11px;font-weight:700;letter-spacing:.12em;
-  text-transform:uppercase;padding:7px 16px;border:1px solid;cursor:pointer;transition:all .1s
-}
-.btn-ok{background:var(--green);border-color:var(--green);color:var(--bg)}
-.btn-ok:hover{background:#33FFB4;border-color:#33FFB4}
-.btn-no{background:transparent;border-color:var(--red);color:var(--red)}
-.btn-no:hover{background:var(--red-d)}
+.chat-stream { padding: 16px 20px 24px; overflow-y: auto; font-family: var(--font-mono); font-size: 13px; line-height: 1.6; min-height: 0; }
+.chat-stream::-webkit-scrollbar { width: 8px; }
+.chat-stream::-webkit-scrollbar-track { background: var(--bg-0); }
+.chat-stream::-webkit-scrollbar-thumb { background: var(--border-1); }
 
-/* ─ Animations ───────────────────────────────── */
-@keyframes pg{0%,100%{opacity:1}50%{opacity:.35}}
-@keyframes pa{0%,100%{opacity:1}50%{opacity:.25}}
-@keyframes tb{0%,60%,100%{transform:translateY(0);opacity:.4}30%{transform:translateY(-4px);opacity:1}}
-@keyframes fi{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:translateY(0)}}
+.ch-line { white-space: pre-wrap; }
+.ch-block { margin: 8px 0; padding: 10px 12px; background: var(--bg-1); border-left: 1px solid var(--border-2); }
+.ch-you { color: var(--ok); font-weight: 500; }
+.ch-user-text { color: var(--fg-0); }
+.ch-ev { color: var(--fg-2); }
+.ch-ok { color: var(--ok); }
+.ch-err { color: var(--err); }
+.ch-warn { color: var(--warn); }
+.ch-ai { color: var(--warn); font-weight: 500; }
+.ch-ai-body { color: var(--fg-0); }
+.ch-ai-cont { color: var(--fg-0); padding-left: 6ch; }
+.ch-dim { color: var(--fg-3); }
+.ch-caret { display: inline-block; width: 7px; height: 13px; background: var(--fg-0); vertical-align: -2px; margin-left: 1px; animation: blink 1s step-start infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+.ch-approval { padding: 8px 10px; background: rgba(74,58,28,0.3); border: 1px solid var(--warn); margin: 6px 0; }
+
+.ch-meter { display: flex; gap: 14px; padding: 6px 0 0; margin-top: 6px; border-top: 1px dashed var(--border-1); font-size: 10px; color: var(--fg-2); font-family: var(--font-mono); }
+.ch-meter span { display: inline-flex; gap: 4px; align-items: center; }
+.ch-meter i { font-style: normal; font-family: var(--font-cond); text-transform: uppercase; letter-spacing: 0.08em; color: var(--fg-3); font-size: 9px; }
+.ch-meter b { font-weight: 500; color: var(--fg-1); font-variant-numeric: tabular-nums; }
+
+/* COMPOSER */
+.composer { display: grid; grid-template-columns: 30px 1fr auto; gap: 0; align-items: stretch; background: var(--bg-1); border-top: 1px solid var(--border-1); padding: 12px 16px; }
+.comp-prompt { font-family: var(--font-mono); font-size: 14px; color: var(--ok); padding-top: 6px; font-weight: 600; }
+.comp-input { background: var(--bg-2); border: 1px solid var(--border-1); color: var(--fg-0); padding: 8px 10px; font-family: var(--font-mono); font-size: 13px; resize: none; outline: none; line-height: 1.5; }
+.comp-input:focus { border-color: var(--border-2); }
+.comp-input::placeholder { color: var(--fg-3); }
+.comp-side { display: flex; flex-direction: column; gap: 6px; align-items: flex-end; padding-left: 14px; justify-content: space-between; }
+.comp-hint { font-family: var(--font-mono); font-size: 10px; color: var(--fg-2); display: inline-flex; gap: 4px; align-items: center; }
+.comp-hint kbd { background: var(--bg-2); border: 1px solid var(--border-1); padding: 1px 5px; font-family: var(--font-mono); font-size: 10px; color: var(--fg-0); }
+
+/* BUTTONS */
+.btn-pri { font-family: var(--font-mono); font-weight: 500; font-size: 12px; padding: 6px 14px; background: var(--bg-3); color: var(--fg-0); border: 1px solid var(--border-2); cursor: pointer; border-radius: 2px; transition: background 120ms; }
+.btn-pri:hover { background: var(--border-1); }
+.btn-pri:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn-ghost { font-family: var(--font-mono); font-weight: 500; font-size: 12px; padding: 6px 14px; background: transparent; color: var(--fg-1); border: 1px solid var(--border-1); cursor: pointer; border-radius: 2px; }
+.btn-ghost:hover { background: var(--bg-2); border-color: var(--border-2); }
+.btn-warn-fill { font-family: var(--font-mono); font-weight: 600; font-size: 12px; padding: 6px 16px; background: var(--warn); color: var(--bg-0); border: 1px solid var(--warn); cursor: pointer; border-radius: 2px; }
+.btn-warn-fill:hover { filter: brightness(1.1); }
+
+/* AGENT RAIL (right) */
+.agent-rail { background: var(--bg-0); border-left: 1px solid var(--border-1); display: flex; flex-direction: column; min-height: 0; overflow-y: auto; }
+.agent-rail-head { padding: 10px 14px; border-bottom: 1px solid var(--border-1); display: flex; justify-content: space-between; align-items: center; background: var(--bg-1); }
+.agent-rail-title { font-family: var(--font-cond); font-weight: 500; font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--fg-1); }
+.agent-rail-count { font-family: var(--font-mono); font-size: 11px; color: var(--fg-2); }
+.agent-rail-list { display: flex; flex-direction: column; gap: 1px; padding: 1px 0; }
+
+.agent-card { background: var(--bg-1); border: 1px solid var(--border-1); border-left: none; border-right: none; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; position: relative; transition: background 120ms; }
+.agent-card:hover { background: var(--bg-2); }
+.agent-active { background: var(--bg-2); }
+
+.cb { position: absolute; width: 8px; height: 8px; pointer-events: none; }
+.cb1 { left: 0; top: 0; border-left: 1px solid var(--ok); border-top: 1px solid var(--ok); }
+.cb2 { right: 0; top: 0; border-right: 1px solid var(--ok); border-top: 1px solid var(--ok); }
+.cb3 { left: 0; bottom: 0; border-left: 1px solid var(--ok); border-bottom: 1px solid var(--ok); }
+.cb4 { right: 0; bottom: 0; border-right: 1px solid var(--ok); border-bottom: 1px solid var(--ok); }
+
+.agent-head { display: flex; align-items: center; gap: 10px; }
+.agent-av { width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; font-family: var(--font-mono); font-weight: 600; font-size: 11px; color: var(--bg-0); border-radius: 2px; }
+.agent-name { font-family: var(--font-mono); font-weight: 500; font-size: 13px; color: var(--fg-0); }
+.agent-role { font-family: var(--font-cond); font-weight: 500; font-size: 9px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--fg-2); margin-left: auto; }
+
+.agent-state-row { display: flex; align-items: center; gap: 10px; }
+.agent-elapsed { font-family: var(--font-mono); font-size: 10px; color: var(--fg-2); margin-left: auto; font-variant-numeric: tabular-nums; }
+
+.chip { font-family: var(--font-mono); font-weight: 500; font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; padding: 2px 7px; border: 1px solid; display: inline-flex; gap: 6px; align-items: center; line-height: 1.2; }
+.chip-dot { width: 6px; height: 6px; border-radius: 50%; }
+
+.agent-task { font-family: var(--font-mono); font-size: 11px; color: var(--fg-1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.agent-metrics { display: flex; gap: 12px; font-family: var(--font-mono); font-size: 10px; }
+.agent-metrics span { display: inline-flex; gap: 4px; align-items: center; }
+.agent-metrics i { font-style: normal; font-family: var(--font-cond); text-transform: uppercase; letter-spacing: 0.08em; color: var(--fg-3); font-size: 9px; }
+.agent-metrics b { font-weight: 500; color: var(--fg-0); font-variant-numeric: tabular-nums; }
+
+/* STATUS BAR */
+.statusbar { display: flex; align-items: center; padding: 0 16px; background: var(--bg-1); border-top: 1px solid var(--border-1); font-family: var(--font-mono); font-size: 11px; color: var(--fg-2); gap: 14px; }
+.sb-state { color: var(--fg-1); }
+.sb-spacer { flex: 1; }
+.sb-hint { color: var(--fg-2); }
+.sb-hint kbd { background: var(--bg-2); border: 1px solid var(--border-1); padding: 0 4px; font-family: var(--font-mono); font-size: 10px; color: var(--ok); margin: 0 4px 0 8px; }
+
+/* MODAL */
+.modal-backdrop { position: fixed; inset: 0; background: rgba(8,9,11,0.72); -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px); display: flex; align-items: center; justify-content: center; z-index: 100; animation: fadein 180ms cubic-bezier(0.2,0,0,1); }
+@keyframes fadein { from { opacity: 0; } }
+.modal { width: 580px; background: var(--bg-1); border: 1px solid var(--warn); box-shadow: 0 8px 32px rgba(0,0,0,0.6); position: relative; animation: modalin 220ms cubic-bezier(0.2,0,0,1); }
+@keyframes modalin { from { opacity: 0; transform: translateY(8px); } }
+.modal .cb1 { border-color: var(--warn); }
+.modal .cb2 { border-color: var(--warn); }
+.modal .cb3 { border-color: var(--warn); }
+.modal .cb4 { border-color: var(--warn); }
+.modal-head { background: rgba(74,58,28,0.4); border-bottom: 1px solid var(--warn); padding: 10px 16px; font-family: var(--font-cond); font-weight: 500; font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--warn); }
+.modal-body { padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+.modal-title { font-family: var(--font-mono); font-size: 14px; color: var(--fg-0); }
+.modal-title b { color: var(--agent-joko); font-weight: 500; }
+.modal-kv { display: grid; grid-template-columns: 100px 1fr; gap: 6px 14px; font-family: var(--font-mono); font-size: 12px; align-items: start; }
+.modal-kv .k { font-family: var(--font-cond); text-transform: uppercase; letter-spacing: 0.08em; font-size: 10px; color: var(--fg-2); padding-top: 2px; }
+.modal-kv .v { color: var(--fg-0); }
+.modal-actions { display: flex; gap: 8px; justify-content: flex-end; padding: 12px 16px; border-top: 1px solid var(--border-1); background: var(--bg-0); }
+.diff { font-family: var(--font-mono); font-size: 11px; background: var(--bg-0); border: 1px solid var(--border-1); padding: 8px; margin: 0; white-space: pre-wrap; color: var(--fg-1); line-height: 1.5; }
+.diff::first-line { color: var(--ok); }
+
+/* TOKEN METER */
+.tmeter { display: flex; flex-direction: column; gap: 6px; padding: 8px 0 0; font-family: var(--font-mono); font-size: 11px; }
+.tmeter-row { display: flex; align-items: center; gap: 8px; }
+.tmeter-l { font-family: var(--font-cond); font-size: 9px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--fg-3); width: 32px; }
+.tmeter-track { flex: 1; height: 3px; background: var(--bg-3); border-radius: 2px; overflow: hidden; }
+.tmeter-fill { height: 100%; border-radius: 2px; transition: width 400ms ease; }
+.tmeter-v { font-variant-numeric: tabular-nums; color: var(--fg-1); width: 36px; text-align: right; }
+.tmeter-kpis { display: flex; gap: 12px; padding-top: 4px; }
+.tmeter-kpis span { display: inline-flex; gap: 4px; align-items: center; }
+.tmeter-kpis i { font-style: normal; font-family: var(--font-cond); text-transform: uppercase; letter-spacing: 0.08em; color: var(--fg-3); font-size: 9px; }
+.tmeter-kpis b { font-weight: 500; color: var(--fg-0); font-variant-numeric: tabular-nums; }
 </style>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
 </head>
 <body>
-<div class="app">
+<div id="root"></div>
+<script type="text/babel">
+// ============================================================
+// NetOps AI Web Dashboard — Components + App
+// ============================================================
+const { useState, useEffect, useRef } = React;
 
-<!-- Header -->
-<header class="hdr">
-  <div class="hdr-logo">NetOps AI</div>
-  <div class="v-sep"></div>
-  <div class="hdr-sub">Campus Network Operations</div>
-  <div class="spacer"></div>
-  <div class="hdr-right">
-    <div class="state-pill">
-      <div class="dot idle" id="hdr-dot"></div>
-      <span id="hdr-state" style="color:var(--dimmer);font-family:var(--fl);font-size:10px;letter-spacing:.12em;">IDLE</span>
-    </div>
-    <div class="v-sep"></div>
-    <div class="clock" id="clock">--:--:--</div>
-  </div>
-</header>
-
-<!-- Body -->
-<div class="body">
-
-  <!-- Sidebar -->
-  <nav class="sidebar">
-    <div class="nav">
-      <div class="nav-lbl">Menu</div>
-      <!-- nav items injected -->
-    </div>
-    <div class="sdiv"></div>
-    <div class="sysinfo">
-      <div class="nav-lbl" style="margin-bottom:7px">System</div>
-      <div class="sir"><span class="sik">Model</span><span class="siv" id="si-model">—</span></div>
-      <div class="sir"><span class="sik">Skills</span><span class="siv ok" id="si-skills">—</span></div>
-      <div class="sir"><span class="sik">Ollama</span><span class="siv ok" id="si-ollama">—</span></div>
-      <div style="margin-top:10px">
-        <span class="sik" style="color:var(--dimmer)">[Q] Keluar  [Ctrl+L] Clear</span>
+// ============ TOP BAR ============
+function TopBar({ thread, ctx, tokens, time }) {
+  return (
+    <div className="topbar">
+      <div className="topbar-left">
+        <div className="logo">[<span>NetOps</span><i>·</i><span>AI</span>]</div>
+        <span className="dot dot-ok" style={{boxShadow:'0 0 6px var(--ok)'}}></span>
+        <span className="topbar-thread">{thread}</span>
+      </div>
+      <div className="topbar-right">
+        <span className="tb-meta"><span className="lbl">CTX</span><span className="val">{ctx}%</span></span>
+        <span className="tb-meta"><span className="lbl">TOK</span><span className="val">{tokens}</span></span>
+        <span className="tb-meta"><span className="lbl">MODEL</span><span className="val">qwen3.6:35b</span></span>
+        <span className="tb-meta"><span className="lbl">WIB</span><span className="val">{time}</span></span>
       </div>
     </div>
-  </nav>
+  );
+}
 
-  <!-- Content -->
-  <main class="content">
-
-    <!-- Dashboard -->
-    <div class="screen" id="screen-dash">
-      <div class="sc-body">
-        <div class="sc-title">Dashboard</div>
-        <div class="sc-rule"></div>
-        <div class="dash-grid">
-          <div class="dash-card">
-            <div class="dash-card-title">Agent</div>
-            <div class="dash-stat"><span class="dash-key">Model</span><span class="dash-val" id="d-model">—</span></div>
-            <div class="dash-stat"><span class="dash-key">Skills</span><span class="dash-val ok" id="d-skills">—</span></div>
-            <div class="dash-stat"><span class="dash-key">Ollama</span><span class="dash-val ok" id="d-ollama">—</span></div>
-          </div>
-          <div class="dash-card">
-            <div class="dash-card-title">Infrastruktur</div>
-            <div class="dash-stat"><span class="dash-key">config.yaml</span><span class="dash-val ok">✓ ada</span></div>
-            <div class="dash-stat"><span class="dash-key">Routers</span><span class="dash-val" id="d-routers">—</span></div>
-            <div class="dash-stat"><span class="dash-key">Backups</span><span class="dash-val" id="d-backups">—</span></div>
-          </div>
-          <div class="dash-card" style="grid-column:1/-1">
-            <div class="dash-card-title">Laporan Terbaru</div>
-            <div id="d-laporan" style="font-size:11px;color:var(--dim)">—</div>
-          </div>
-        </div>
-      </div>
+// ============ LEFT RAIL ============
+function LeftRail({ active, onNav }) {
+  const items = [
+    { id: 'chat', label: 'AI Chat', glyph: '◆' },
+    { id: 'agents', label: 'Agents', glyph: '⊙' },
+    { id: 'routers', label: 'Routers', glyph: '◇' },
+    { id: 'reports', label: 'Reports', glyph: '▤' },
+    { id: 'schedule', label: 'Schedule', glyph: '◷' },
+    { id: 'logs', label: 'Logs', glyph: '≡' },
+  ];
+  return (
+    <div className="leftrail">
+      {items.map(it => (
+        <button key={it.id} className={'rail-btn ' + (active === it.id ? 'rail-active' : '')}
+          onClick={() => onNav(it.id)} title={it.label}>
+          <span className="rail-glyph">{it.glyph}</span>
+          <span className="rail-label">{it.label}</span>
+        </button>
+      ))}
     </div>
+  );
+}
 
-    <!-- Skills -->
-    <div class="screen" id="screen-skills">
-      <div class="sc-body">
-        <div class="sc-title">Skills <span id="skills-count" style="font-size:11px;color:var(--dim);font-family:var(--fl)"></span></div>
-        <div class="sc-rule"></div>
-        <div class="skill-grid" id="skill-grid"></div>
-      </div>
+// ============ STATUS BAR ============
+function StatusBar({ status, hint }) {
+  return (
+    <div className="statusbar">
+      <span className="sb-state">{status}</span>
+      <span className="sb-spacer"></span>
+      <span className="sb-hint">{hint}</span>
     </div>
-
-    <!-- Reachability -->
-    <div class="screen" id="screen-reach">
-      <div class="sc-body">
-        <div class="sc-title">Reachability</div>
-        <div class="sc-rule"></div>
-        <table class="rtbl">
-          <thead><tr><th>Router</th><th>Host</th><th>Status</th><th>RTT</th></tr></thead>
-          <tbody id="router-tbody"></tbody>
-        </table>
-        <button class="pbtn" id="ping-btn">⟳ Ping Semua Router</button>
-      </div>
-    </div>
-
-    <!-- Laporan -->
-    <div class="screen" id="screen-laporan">
-      <div class="sc-body">
-        <div class="sc-title">Laporan</div>
-        <div class="sc-rule"></div>
-        <div class="lap-list" id="laporan-list"></div>
-      </div>
-    </div>
-
-    <!-- Log -->
-    <div class="screen" id="screen-log">
-      <div class="sc-body">
-        <div class="sc-title">Log</div>
-        <div class="sc-rule"></div>
-        <div class="log-wrap" id="log-lines"></div>
-      </div>
-    </div>
-
-    <!-- AI Chat -->
-    <div class="screen active" id="screen-chat">
-      <div class="chat-msgs" id="chat-msgs">
-        <div class="empty" id="empty-state">
-          <div class="empty-glyph">◈</div>
-          <div class="empty-title">NetOps AI</div>
-          <div class="empty-hint">Ketik perintah untuk memulai sesi operasional jaringan kampus.</div>
-        </div>
-      </div>
-      <div class="chat-in">
-        <div class="in-row">
-          <span class="in-prompt">›</span>
-          <input class="in-field" id="chat-input" type="text"
-            placeholder="Ketik perintah atau pertanyaan..." autocomplete="off" spellcheck="false">
-          <button class="send-btn" id="send-btn">SEND</button>
-        </div>
-        <div class="in-hint">[Enter] Kirim  ·  [Ctrl+L] Hapus chat  ·  [1-9] Pindah layar</div>
-      </div>
-    </div>
-
-    <!-- Activity -->
-    <div class="screen" id="screen-activity">
-      <div class="sc-body">
-        <div class="sc-title">Aktivitas Agent</div>
-        <div class="sc-rule"></div>
-        <div class="log-wrap" id="activity-log">
-          <div style="font-size:11px;color:var(--dimmer)">Belum ada aktivitas. Gunakan AI Chat untuk memulai.</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Status -->
-    <div class="screen" id="screen-status">
-      <div class="sc-body">
-        <div class="sc-title">Status Agent</div>
-        <div class="sc-rule"></div>
-        <div style="font-size:11px;color:var(--dimmer)">Kanban board — aktif saat AI Chat berjalan. Lihat panel kanan untuk status real-time.</div>
-      </div>
-    </div>
-
-    <!-- Token metrics -->
-    <div class="screen" id="screen-tokens">
-      <div class="sc-body">
-        <div class="sc-title">Token Metrics</div>
-        <div class="sc-rule"></div>
-        <table class="mtbl">
-          <thead>
-            <tr><th>Agent</th><th>Calls</th><th>ctx%</th><th>pred%</th><th>tps</th><th>⚠</th></tr>
-          </thead>
-          <tbody id="metrics-tbody">
-            <tr><td colspan="6" style="text-align:left;color:var(--dimmer);padding:12px 8px">
-              Belum ada data — gunakan AI Chat untuk merekam metrics.
-            </td></tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-
-  </main>
-
-  <!-- Agent panel -->
-  <aside class="agent-panel">
-    <div class="ph"><div class="pt">Agent Status</div></div>
-    <div class="agent-cards" id="agent-cards"></div>
-    <div class="qdisp">
-      <div class="qlbl">Query Aktif</div>
-      <div class="qtext" id="active-query">—</div>
-      <div class="qelapsed" id="q-elapsed"></div>
-    </div>
-  </aside>
-
-</div><!-- /body -->
-
-<!-- Footer -->
-<footer class="footer">
-  <div class="met">
-    <span class="mlbl">CTX</span>
-    <div class="mbar"><div class="mfill" id="ctx-fill" style="width:0%"></div></div>
-    <span class="mpct" id="ctx-pct">0%</span>
-  </div>
-  <div class="fsep"></div>
-  <div class="met">
-    <span class="mlbl">PRED</span>
-    <div class="mbar"><div class="mfill" id="pred-fill" style="width:0%"></div></div>
-    <span class="mpct" id="pred-pct">0%</span>
-  </div>
-  <div class="fsep"></div>
-  <div class="met">
-    <span class="mlbl">TOOLS</span>
-    <span class="mpct" id="f-tools">0</span>
-  </div>
-  <div class="fsep"></div>
-  <div class="met">
-    <span class="mlbl">TIME</span>
-    <span class="mpct" id="f-elapsed">──:──</span>
-  </div>
-  <div class="fsep"></div>
-  <div class="fstate idle" id="f-state">
-    <div class="dot idle" id="f-dot"></div>
-    <span id="f-label">IDLE</span>
-  </div>
-  <div class="spacer"></div>
-  <div class="fkeys">
-    <b>[1-9]</b>Menu <b style="margin-left:8px">[Enter]</b>Kirim <b style="margin-left:8px">[Ctrl+L]</b>Clear
-  </div>
-</footer>
-
-</div><!-- /app -->
-
-<!-- Approval modal -->
-<div class="overlay" id="approval-overlay">
-  <div class="mbox">
-    <div class="mtitle">⚠ &nbsp;Konfirmasi Aksi Agent</div>
-    <div class="mfield"><span class="mkey">Agent</span><span class="mval" id="m-agent">—</span></div>
-    <div class="mfield"><span class="mkey">Aksi</span><span class="mval" id="m-action">—</span></div>
-    <div class="mfield"><span class="mkey">Risiko</span><span class="mval risk-medium" id="m-risk">MEDIUM</span></div>
-    <div class="mbtns">
-      <button class="btn btn-no" id="btn-reject">✗ &nbsp;Tolak &nbsp;[N]</button>
-      <button class="btn btn-ok" id="btn-approve">✓ &nbsp;Setujui &nbsp;[Y]</button>
-    </div>
-  </div>
-</div>
-
-<script>
-// ── Sample data (replace with real API calls in production) ──────────────────
-const SAMPLE = {
-  status: { model: 'qwen3.5:9b', skills: 21, ollama: 'localhost:11434' },
-  routers: [
-    { name: 'DTI',      host: '10.10.1.1' },
-    { name: 'FIKES',    host: '10.10.2.1' },
-    { name: 'LIBRARY',  host: '10.10.3.1' },
-    { name: 'REKTORAT', host: '10.10.4.1' },
-  ],
-  skills: [
-    { name: 'network-health-check', domain: 'monitoring',  triggers: ['cek status', 'health check', 'status jaringan'], tools: 5 },
-    { name: 'router-unreachable',   domain: 'monitoring',  triggers: ['router down', 'tidak bisa diakses', 'unreachable'], tools: 3 },
-    { name: 'utbk-client-monitor',  domain: 'dhcp',        triggers: ['utbk', 'client', 'peserta ujian'], tools: 4 },
-    { name: 'diagnose-dhcp-client', domain: 'dhcp',        triggers: ['dhcp', 'ip address', 'tidak dapat IP'], tools: 3 },
-    { name: 'dhcp-pool-audit',      domain: 'dhcp',        triggers: ['audit dhcp', 'pool habis', 'lease'], tools: 3 },
-    { name: 'bgp-diagnostics',      domain: 'routing',     triggers: ['bgp', 'routing', 'prefix'], tools: 4 },
-    { name: 'ospf-neighbor-down',   domain: 'routing',     triggers: ['ospf', 'neighbor', 'adjacency'], tools: 3 },
-    { name: 'security-audit',       domain: 'security',    triggers: ['audit', 'keamanan', 'firewall'], tools: 5 },
-    { name: 'config-backup',        domain: 'config',      triggers: ['backup', 'simpan konfigurasi'], tools: 2 },
-    { name: 'firewall-management',  domain: 'security',    triggers: ['firewall', 'filter rules', 'blokir'], tools: 3 },
-    { name: 'network-traffic',      domain: 'monitoring',  triggers: ['traffic', 'bandwidth', 'utilizasi'], tools: 4 },
-  ],
-  laporan: [
-    { name: 'rekap-jaringan_20260510.md',   date: '2026-05-10 09:23', size: '14.2K' },
-    { name: 'audit-security_20260509.md',   date: '2026-05-09 16:41', size: '8.7K'  },
-    { name: 'backup-report_20260508.md',    date: '2026-05-08 11:05', size: '3.1K'  },
-    { name: 'rekap-utbk_20260504.md',       date: '2026-05-04 18:30', size: '22.8K' },
-  ],
-  logs: [
-    '09:15:32  [bambang] supervisor started',
-    '09:15:33  [bambang] → eko/monitor_agent',
-    '09:15:34  [eko] get_interface_stats(DTI)',
-    '09:15:36  [eko] ✓ 12 interfaces retrieved',
-    '09:15:37  [bambang] END',
-    '09:23:11  [bambang] supervisor started',
-    '09:23:12  [bambang] → agus/diagnose_agent',
-    '09:23:14  [agus] run_diagnostic(router=FIKES)',
-    '09:23:18  [agus] ✓ diagnostic complete',
-    '09:23:19  [bambang] END',
-    '10:01:44  [bambang] supervisor started',
-    '10:01:45  [bambang] → joko/config_agent',
-    '10:01:46  [joko] backup_router_config(DTI) — approval required',
-    '10:01:52  [joko] ✓ approved by operator',
-    '10:01:58  [joko] backup saved: backups/DTI/DTI_20260510_100158.rsc',
-    '10:02:00  [bambang] END',
-  ],
-};
-
-const AGENTS = [
-  { alias: 'bambang', role: 'supervisor' },
-  { alias: 'eko',     role: 'monitor'   },
-  { alias: 'agus',    role: 'diagnosa'  },
-  { alias: 'joko',    role: 'config'    },
-  { alias: 'satria',  role: 'security'  },
-  { alias: 'budi',    role: 'dokumen'   },
-];
-
-const MENU = [
-  { key:'1', label:'Dashboard',  id:'dash'     },
-  { key:'2', label:'Skills',     id:'skills'   },
-  { key:'3', label:'Reachability',id:'reach'   },
-  { key:'4', label:'Laporan',    id:'laporan'  },
-  { key:'5', label:'Log',        id:'log'      },
-  { key:'6', label:'AI Chat',    id:'chat'     },
-  { key:'7', label:'Aktivitas',  id:'activity' },
-  { key:'8', label:'Status',     id:'status'   },
-  { key:'9', label:'Metrics',    id:'tokens'   },
-];
-
-// ── App state ─────────────────────────────────────────────────────────────────
-let appState = 'idle';
-let currentScreen = 'chat';
-let toolCount = 0;
-let elapsedTimer = null;
-let elapsedStart = null;
-let approvalResolve = null;
-let agentStates = {};
-AGENTS.forEach(a => { agentStates[a.alias] = { state: 'standby', detail: '' }; });
-
-// ── Bootstrap ─────────────────────────────────────────────────────────────────
-function init() {
-  buildNav();
-  populateSysInfo();
-  buildAgentCards();
-  buildSkills();
-  buildRouters();
-  buildLaporan();
-  buildLog();
-  buildDashboard();
-  startClock();
-  setupInput();
-  setupKeyboard();
-  document.getElementById('btn-approve').onclick = () => resolveApproval('approved');
-  document.getElementById('btn-reject').onclick  = () => resolveApproval('rejected');
-  document.getElementById('ping-btn').onclick    = simulatePing;
-  document.getElementById('chat-input').focus();
+  );
 }
 
-// ── Clock ──────────────────────────────────────────────────────────────────────
-function startClock() {
-  function tick() {
-    const n = new Date();
-    const pad = v => String(v).padStart(2,'0');
-    document.getElementById('clock').textContent = `${pad(n.getHours())}:${pad(n.getMinutes())}:${pad(n.getSeconds())}`;
-  }
-  tick(); setInterval(tick, 1000);
-}
-
-// ── Nav ────────────────────────────────────────────────────────────────────────
-function buildNav() {
-  const nav = document.querySelector('.nav');
-  MENU.forEach((item, i) => {
-    const d = document.createElement('div');
-    d.className = 'ni' + (item.id === 'chat' ? ' active' : '');
-    d.dataset.screen = item.id;
-    d.innerHTML = `<span class="nk">${item.key}</span><span class="nn">${item.label}</span>`;
-    d.addEventListener('click', () => switchScreen(item.id, d));
-    nav.appendChild(d);
-  });
-}
-
-function switchScreen(id, el) {
-  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-  document.querySelectorAll('.ni').forEach(n => n.classList.remove('active'));
-  const screen = document.getElementById('screen-' + id);
-  if (screen) screen.classList.add('active');
-  if (el) el.classList.add('active');
-  currentScreen = id;
-  if (id === 'chat') setTimeout(() => document.getElementById('chat-input').focus(), 40);
-}
-
-function navByKey(key) {
-  const item = MENU.find(m => m.key === key);
-  if (!item) return;
-  const navItems = document.querySelectorAll('.ni');
-  const idx = MENU.indexOf(item);
-  switchScreen(item.id, navItems[idx]);
-}
-
-// ── Sysinfo ───────────────────────────────────────────────────────────────────
-function populateSysInfo() {
-  const s = SAMPLE.status;
-  document.getElementById('si-model').textContent = s.model;
-  document.getElementById('si-skills').textContent = s.skills + ' loaded';
-  document.getElementById('si-ollama').textContent = s.ollama;
-}
-
-// ── Dashboard ──────────────────────────────────────────────────────────────────
-function buildDashboard() {
-  const s = SAMPLE.status;
-  document.getElementById('d-model').textContent  = s.model;
-  document.getElementById('d-skills').textContent = s.skills + ' loaded';
-  document.getElementById('d-ollama').textContent = s.ollama;
-  document.getElementById('d-routers').textContent = SAMPLE.routers.map(r => r.name).join(', ');
-  document.getElementById('d-backups').textContent = '3 file .rsc';
-  document.getElementById('d-laporan').innerHTML = SAMPLE.laporan.slice(0,3)
-    .map(f => `<div style="margin-bottom:3px;color:var(--dim)">${f.name} <span style="color:var(--dimmer)">${f.date}</span></div>`)
-    .join('');
-}
-
-// ── Agent cards ────────────────────────────────────────────────────────────────
-function buildAgentCards() {
-  const c = document.getElementById('agent-cards');
-  c.innerHTML = '';
-  AGENTS.forEach(a => {
-    const st = agentStates[a.alias];
-    const d = document.createElement('div');
-    d.className = 'acard ' + st.state;
-    d.id = 'ac-' + a.alias;
-    d.innerHTML = `
-      <div class="ach">
-        <div><div class="aname">${a.alias}</div><div class="arole">${a.role}</div></div>
-        <div class="ast"><div class="adot"></div><div class="aslbl">STANDBY</div></div>
-      </div>
-      <div class="adetail" id="ad-${a.alias}">—</div>`;
-    c.appendChild(d);
-  });
-}
-
-function setAgentState(alias, state, detail) {
-  if (!agentStates[alias]) return;
-  agentStates[alias] = { state, detail: detail || '' };
-  const card = document.getElementById('ac-' + alias);
-  if (!card) return;
-  card.className = 'acard ' + state;
-  card.querySelector('.aslbl').textContent = state.toUpperCase();
-  const det = document.getElementById('ad-' + alias);
-  if (det) det.textContent = detail || '—';
-}
-
-function resetAgents() {
-  AGENTS.forEach(a => setAgentState(a.alias, 'standby', ''));
-  setAgentState('bambang', 'running', 'routing...');
-}
-
-// ── Skills ────────────────────────────────────────────────────────────────────
-function buildSkills() {
-  const g = document.getElementById('skill-grid');
-  document.getElementById('skills-count').textContent = `(${SAMPLE.skills.length} aktif)`;
-  SAMPLE.skills.forEach(s => {
-    const d = document.createElement('div');
-    d.className = 'scard';
-    d.innerHTML = `
-      <div>
-        <div class="sname">${s.name}</div>
-        <div class="sdomain">${s.domain}</div>
-        <div class="strig">${s.triggers.slice(0,3).join(' · ')}</div>
-      </div>
-      <div style="text-align:right">
-        <div class="sbadge">AKTIF</div>
-        <div style="font-size:10px;color:var(--dimmer);margin-top:4px">${s.tools} tools</div>
-      </div>`;
-    g.appendChild(d);
-  });
-}
-
-// ── Routers ───────────────────────────────────────────────────────────────────
-function buildRouters() {
-  const tb = document.getElementById('router-tbody');
-  SAMPLE.routers.forEach(r => {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td class="name">${r.name}</td>
-      <td>${r.host}</td>
-      <td id="rs-${r.name}" style="color:var(--dimmer)">— belum dicek</td>
-      <td id="rr-${r.name}" style="color:var(--dimmer)">—</td>`;
-    tb.appendChild(tr);
-  });
-}
-
-function simulatePing() {
-  SAMPLE.routers.forEach((r, i) => {
-    const s = document.getElementById('rs-' + r.name);
-    const rt = document.getElementById('rr-' + r.name);
-    s.className = 'checking'; s.style.color = ''; s.textContent = '⟳ pinging...'; rt.textContent = '—';
-    setTimeout(() => {
-      const ok = r.name !== 'FIKES';
-      s.className = ok ? 'up' : 'down'; s.style.color = '';
-      s.textContent = ok ? '✓ UP' : '✗ DOWN';
-      rt.textContent = ok ? `${(Math.random()*3+0.8).toFixed(1)}ms` : '—';
-    }, 600 + i * 350);
-  });
-}
-
-// ── Laporan ───────────────────────────────────────────────────────────────────
-function buildLaporan() {
-  const el = document.getElementById('laporan-list');
-  if (!SAMPLE.laporan.length) {
-    el.innerHTML = '<div style="font-size:11px;color:var(--dimmer)">Belum ada laporan.</div>';
-    return;
-  }
-  SAMPLE.laporan.forEach(f => {
-    const d = document.createElement('div');
-    d.className = 'lap-item';
-    d.innerHTML = `<div class="lap-name">${f.name}</div><div class="lap-date">${f.date}</div><div class="lap-size">${f.size}</div>`;
-    el.appendChild(d);
-  });
-}
-
-// ── Log ───────────────────────────────────────────────────────────────────────
-function buildLog() {
-  const el = document.getElementById('log-lines');
-  SAMPLE.logs.forEach(line => {
-    const d = document.createElement('div');
-    d.className = 'log-line';
-    const ts = line.substring(0, 8);
-    d.innerHTML = `<span class="lts">${ts}</span>${esc(line.substring(9))}`;
-    el.appendChild(d);
-  });
-}
-
-// ── App state ──────────────────────────────────────────────────────────────────
-function setState(state) {
-  appState = state;
-  const labels = { idle: 'IDLE', running: 'RUNNING', approval: 'APPROVAL REQUIRED' };
-  const lbl = labels[state] || state.toUpperCase();
-
-  ['hdr-dot','f-dot'].forEach(id => {
-    const el = document.getElementById(id);
-    el.className = 'dot ' + state;
-  });
-  document.getElementById('hdr-state').textContent = lbl;
-  document.getElementById('hdr-state').style.color =
-    state === 'running' ? 'var(--green)' : state === 'approval' ? 'var(--amber)' : 'var(--dimmer)';
-
-  const fs = document.getElementById('f-state');
-  fs.className = 'fstate ' + state;
-  fs.innerHTML = `<div class="dot ${state}"></div> <span>${labels[state] || lbl}</span>`;
-
-  if (state === 'running') {
-    toolCount = 0;
-    document.getElementById('f-tools').textContent = '0';
-    elapsedStart = Date.now();
-    if (elapsedTimer) clearInterval(elapsedTimer);
-    elapsedTimer = setInterval(tickElapsed, 1000);
-  } else if (state === 'idle') {
-    if (elapsedTimer) { clearInterval(elapsedTimer); elapsedTimer = null; }
-    document.getElementById('f-elapsed').textContent = '──:──';
-    document.getElementById('q-elapsed').textContent = '';
-  }
-}
-
-function tickElapsed() {
-  if (!elapsedStart) return;
-  const s = Math.floor((Date.now() - elapsedStart) / 1000);
-  const t = `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
-  document.getElementById('f-elapsed').textContent = t;
-  document.getElementById('q-elapsed').textContent = '⏱ ' + t;
-}
-
-// ── Chat ───────────────────────────────────────────────────────────────────────
-const chatMsgs = document.getElementById('chat-msgs');
-
-function now12() {
-  const n = new Date(), p = v => String(v).padStart(2,'0');
-  return `${p(n.getHours())}:${p(n.getMinutes())}:${p(n.getSeconds())}`;
-}
-
-function esc(s) {
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-}
-
-function addUserMsg(text) {
-  document.getElementById('empty-state')?.remove();
-  const d = document.createElement('div');
-  d.className = 'msg';
-  d.innerHTML = `
-    <div class="msg-hdr"><span class="role user">ANDA</span><span class="mts">${now12()}</span></div>
-    <div class="msg-body"><div class="msg-text">${esc(text)}</div></div>`;
-  chatMsgs.appendChild(d);
-  scrollChat();
-}
-
-function addAiGroup() {
-  const d = document.createElement('div');
-  d.className = 'msg';
-  d.id = 'ai-group';
-  d.innerHTML = `
-    <div class="msg-hdr"><span class="role ai">AGENT</span><span class="mts">${now12()}</span></div>
-    <div class="msg-body" id="ai-body">
-      <div class="typing" id="typing"><div class="td"></div><div class="td"></div><div class="td"></div></div>
-    </div>`;
-  chatMsgs.appendChild(d);
-  scrollChat();
-  return d;
-}
-
-function addEventRow(type, text) {
-  const icons = { routing:'→', tool_call:'⚙', tool_result:'✓', error:'✗', approval_required:'⚠' };
-  const d = document.createElement('div');
-  d.className = 'erow';
-  d.innerHTML = `
-    <span class="eicon ${type}">${icons[type]||'·'}</span>
-    <span class="etext ${type}">${esc(text)}</span>
-    <span class="ets">${now12()}</span>`;
-  return d;
-}
-
-function appendEvent(aiBody, type, content) {
-  document.getElementById('typing')?.remove();
-  aiBody.appendChild(addEventRow(type, content));
-  scrollChat();
-}
-
-function setAiText(aiBody, text) {
-  document.getElementById('typing')?.remove();
-  aiBody.querySelectorAll('.msg-text').forEach(e => e.remove());
-  const p = document.createElement('div');
-  p.className = 'msg-text';
-  p.style.marginTop = '6px';
-  p.textContent = text;
-  aiBody.appendChild(p);
-  scrollChat();
-}
-
-function scrollChat() { chatMsgs.scrollTop = chatMsgs.scrollHeight; }
-
-function addActivityEntry(type, content) {
-  const al = document.getElementById('activity-log');
-  if (al.querySelector('div[style]')) al.innerHTML = '';
-  const icons = { routing:'→', tool_call:'⚙', tool_result:'✓', error:'✗', approval_required:'⚠' };
-  const d = document.createElement('div');
-  d.className = 'log-line';
-  d.innerHTML = `<span class="lts">${now12()}</span>[${icons[type]||'·'}] ${esc(String(content).substring(0,90))}`;
-  al.appendChild(d);
-}
-
-// ── Simulated scenarios ────────────────────────────────────────────────────────
-const SCENARIOS = {
-  default: {
-    events: [
-      { t:'routing',    c:'[bambang] → eko/monitor_agent',                ms:400,  ag:['bambang','done'],    agt:['eko','running','get_interface_stats...'] },
-      { t:'tool_call',  c:'[eko] get_interface_stats(router="DTI")',       ms:500  },
-      { t:'tool_result',c:'[eko] ether1 UP 1Gbps ↑234Mbps ↓89Mbps, ether2 UP 100Mbps, ether3 DOWN', ms:1100 },
-      { t:'tool_call',  c:'[eko] check_reachability(router="DTI")',        ms:350  },
-      { t:'tool_result',c:'[eko] DTI reachable — latency 1.2ms avg',      ms:800  },
-      { t:'routing',    c:'[bambang] ← eko selesai → END',                ms:300, ag:['eko','done'] },
-    ],
-    ai:'Status jaringan kampus:\n\n• DTI Router: 11/12 interface UP ✓\n• Interface ether3: DOWN — perlu investigasi\n• Latency normal (1.2ms avg)\n\nApakah ingin saya diagnosa interface ether3 yang DOWN?',
-    aiMs: 400,
-    ctx:19, pred:22,
-  },
-  backup: {
-    events: [
-      { t:'routing',   c:'[bambang] → joko/config_agent',                 ms:350, ag:['bambang','done'],   agt:['joko','running','backup_router_config...'] },
-      { t:'tool_call', c:'[joko] backup_router_config(router="DTI")',      ms:500 },
-      { t:'approval_required', c:JSON.stringify({agent:'joko/config_agent',action:'backup_router_config("DTI")',risk_level:'medium'}), ms:100 },
-    ],
-    postApprove: [
-      { t:'tool_result',c:'[joko] Backup disimpan: backups/DTI/DTI_20260510_103045.rsc (128 KB)', ms:1400, ag:['joko','done','backup selesai'] },
-      { t:'routing',   c:'[bambang] END',                                  ms:300 },
-    ],
-    ai:'Backup konfigurasi router DTI berhasil:\n\nFile: backups/DTI/DTI_20260510_103045.rsc\nUkuran: 128 KB\nWaktu: 2026-05-10 10:30:45',
-    postReject:'Backup dibatalkan oleh operator.',
-    aiMs:300, ctx:11, pred:14,
-  },
-  security: {
-    events: [
-      { t:'routing',    c:'[bambang] → satria/security_agent',             ms:380, ag:['bambang','done'],  agt:['satria','running','audit_security...'] },
-      { t:'tool_call',  c:'[satria] audit_security(router="DTI")',         ms:600 },
-      { t:'tool_result',c:'[satria] 3 open ports non-standard, 1 firewall rule disabled, SSH exposed WAN', ms:1600 },
-      { t:'tool_call',  c:'[satria] audit_security(router="FIKES")',       ms:400 },
-      { t:'tool_result',c:'[satria] FIKES: 2 isu minor — non-critical',    ms:1200 },
-      { t:'routing',    c:'[bambang] ← satria selesai → END',              ms:300, ag:['satria','done'] },
-    ],
-    ai:'Hasil audit keamanan:\n\n◆ DTI (3 isu kritis):\n  • SSH terekspos ke WAN — segera tutup\n  • 3 port non-standard terbuka\n  • Firewall rule #7 dinonaktifkan\n\n◆ FIKES (2 isu minor):\n  • Password policy lemah\n  • Log rotation tidak dikonfigurasi\n\nRekomendasikan menutup akses SSH WAN DTI sekarang?',
-    aiMs:500, ctx:28, pred:41,
-  },
-};
-
-function pickScenario(q) {
-  const l = q.toLowerCase();
-  if (l.includes('backup') || l.includes('simpan konfigurasi')) return SCENARIOS.backup;
-  if (l.includes('security') || l.includes('audit') || l.includes('keamanan')) return SCENARIOS.security;
-  return SCENARIOS.default;
-}
-
-async function runScenario(query, aiBody) {
-  document.getElementById('active-query').textContent = query.substring(0, 38);
-  resetAgents();
-  const sc = pickScenario(query);
-
-  for (const ev of sc.events) {
-    await sleep(ev.ms);
-    appendEvent(aiBody, ev.t, ev.c);
-    if (ev.ag) setAgentState(ev.ag[0], ev.ag[1], ev.ag[2]||'');
-    if (ev.agt) setAgentState(ev.agt[0], ev.agt[1], ev.agt[2]||'');
-    if (ev.t === 'tool_call') {
-      toolCount++;
-      document.getElementById('f-tools').textContent = toolCount;
-    }
-    addActivityEntry(ev.t, ev.c);
-
-    if (ev.t === 'approval_required') {
-      setState('approval');
-      const decision = await showApproval(ev.c);
-      appendEvent(aiBody, 'routing', `Operator: ${decision === 'approved' ? '✓ DISETUJUI' : '✗ DITOLAK'}`);
-      addActivityEntry('routing', `Operator: ${decision}`);
-      setState('running');
-      setAgentState('joko', 'running', 'melanjutkan...');
-
-      if (decision === 'approved' && sc.postApprove) {
-        for (const pev of sc.postApprove) {
-          await sleep(pev.ms);
-          appendEvent(aiBody, pev.t, pev.c);
-          if (pev.ag) setAgentState(pev.ag[0], pev.ag[1], pev.ag[2]||'');
-          addActivityEntry(pev.t, pev.c);
-        }
-        await sleep(sc.aiMs);
-        setAiText(aiBody, sc.ai);
-      } else {
-        await sleep(300);
-        setAiText(aiBody, sc.postReject || 'Aksi dibatalkan oleh operator.');
-      }
-      return;
-    }
-  }
-
-  await sleep(sc.aiMs);
-  setAiText(aiBody, sc.ai);
-  updateMetrics(sc.ctx, sc.pred);
-}
-
-// ── Approval ───────────────────────────────────────────────────────────────────
-function showApproval(payload) {
-  return new Promise(resolve => {
-    approvalResolve = resolve;
-    try {
-      const d = JSON.parse(payload);
-      document.getElementById('m-agent').textContent  = d.agent || 'config_agent';
-      document.getElementById('m-action').textContent = d.action || payload;
-      const r = document.getElementById('m-risk');
-      r.textContent = (d.risk_level || 'medium').toUpperCase();
-      r.className = 'mval risk-' + (d.risk_level || 'medium');
-    } catch { document.getElementById('m-action').textContent = String(payload).substring(0,100); }
-    document.getElementById('approval-overlay').classList.add('show');
-  });
-}
-
-function resolveApproval(decision) {
-  document.getElementById('approval-overlay').classList.remove('show');
-  if (approvalResolve) { approvalResolve(decision); approvalResolve = null; }
-}
-
-// ── Metrics ───────────────────────────────────────────────────────────────────
-function updateMetrics(ctx, pred) {
-  const set = (id, fill, pct) => {
-    document.getElementById(id).textContent = pct + '%';
-    const f = document.getElementById(fill);
-    f.style.width = pct + '%';
-    f.className = 'mfill' + (pct > 80 ? ' danger' : pct > 60 ? ' warn' : '');
+// ============ CHIPS ============
+function StateChip({ state }) {
+  const map = {
+    STANDBY:  { c: 'var(--fg-2)',  d: 'var(--fg-3)' },
+    ANTREAN:  { c: 'var(--info)',  d: 'var(--info)' },
+    BERJALAN: { c: 'var(--ok)',    d: 'var(--ok)', glow: true },
+    MENUNGGU: { c: 'var(--warn)',  d: 'var(--warn)', glow: true },
+    SELESAI:  { c: 'var(--fg-1)', d: 'var(--border-2)' },
+    GAGAL:    { c: 'var(--err)',   d: 'var(--err)' },
   };
-  set('ctx-pct','ctx-fill', ctx);
-  set('pred-pct','pred-fill', pred);
+  const m = map[state] || map.STANDBY;
+  return (
+    <span className="chip" style={{color: m.c, borderColor: m.d}}>
+      <span className="chip-dot" style={{background: m.c, boxShadow: m.glow ? `0 0 6px ${m.c}` : 'none'}}></span>
+      {state}
+    </span>
+  );
 }
 
-// ── Input ──────────────────────────────────────────────────────────────────────
-function setupInput() {
-  const inp = document.getElementById('chat-input');
-  const btn = document.getElementById('send-btn');
+// ============ AGENT CARD ============
+function AgentCard({ agent }) {
+  const initials = agent.name[0];
+  const isActive = agent.state === 'BERJALAN' || agent.state === 'MENUNGGU';
+  return (
+    <div className={'agent-card ' + (isActive ? 'agent-active' : '')}>
+      {isActive && <><span className="cb cb1"></span><span className="cb cb2"></span><span className="cb cb3"></span><span className="cb cb4"></span></>}
+      <div className="agent-head">
+        <div className="agent-av" style={{background: agent.color}}>{initials}</div>
+        <div className="agent-name">{agent.name}</div>
+        <div className="agent-role">{agent.role}</div>
+      </div>
+      <div className="agent-state-row">
+        <StateChip state={agent.state} />
+        {agent.elapsed && <span className="agent-elapsed">{agent.elapsed}</span>}
+      </div>
+      <div className="agent-task" style={agent.taskColor ? {color: agent.taskColor} : null}>
+        {agent.task}
+      </div>
+      {agent.metrics && (
+        <div className="agent-metrics">
+          {agent.metrics.map((m, i) => (
+            <span key={i}><i>{m.l}</i><b>{m.v}</b></span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
-  async function send() {
-    if (appState === 'running') return;
-    const text = inp.value.trim();
-    if (!text) return;
-    inp.value = '';
-    addUserMsg(text);
-    inp.disabled = true; btn.disabled = true;
-    setState('running');
-    const grp = addAiGroup();
-    const body = grp.querySelector('#ai-body');
-    await runScenario(text, body);
-    setState('idle');
-    AGENTS.forEach(a => { if (agentStates[a.alias].state !== 'failed') setAgentState(a.alias,'done',''); });
-    document.getElementById('active-query').textContent = '—';
-    inp.disabled = false; btn.disabled = false; inp.focus();
+// ============ CHAT EVENT ============
+function ChatEvent({ ev }) {
+  if (ev.type === 'user') {
+    return <div className="ch-line"><span className="ch-you">Anda:</span> <span className="ch-user-text">{ev.text}</span></div>;
+  }
+  if (ev.type === 'route') {
+    return <div className="ch-line ch-ev">  ↳ [<span style={{color:'var(--agent-bambang)'}}>bambang</span>] route → <span style={{color:'var(--fg-0)'}}>{ev.to}</span></div>;
+  }
+  if (ev.type === 'tool-call') {
+    return <div className="ch-line ch-ev">  ↳ <span className="ch-ok">[🔧 {ev.tool}{ev.args ? `(${ev.args})` : ''}]</span></div>;
+  }
+  if (ev.type === 'tool-result') {
+    return <div className="ch-line ch-ev">  ↳ <span className="ch-ok">[✓ {ev.tool}{ev.args ? `(${ev.args})` : ''}]</span> <span className="ch-dim">· {ev.tokens} tok · {ev.ms}ms</span></div>;
+  }
+  if (ev.type === 'tool-error') {
+    return <div className="ch-line ch-ev">  ↳ <span className="ch-err">[✗ {ev.tool}]</span> <span className="ch-dim">{ev.err}</span></div>;
+  }
+  if (ev.type === 'ai') {
+    return (
+      <div className="ch-block">
+        <div className="ch-line"><span className="ch-ai">AI  :</span> <span className="ch-ai-body">{ev.text}</span>{ev.streaming && <span className="ch-caret"></span>}</div>
+        {ev.lines && ev.lines.map((l, i) => (
+          <div key={i} className="ch-line ch-ai-cont">{l}</div>
+        ))}
+        {ev.meter && (
+          <div className="ch-meter">
+            <span><i>ctx</i><b>{ev.meter.ctx}%</b></span>
+            <span><i>pred</i><b>{ev.meter.pred}%</b></span>
+            <span><i>tps</i><b>{ev.meter.tps}</b></span>
+            <span><i>tok</i><b>{ev.meter.tokens}</b></span>
+            <span><i>done</i><b style={{color: 'var(--ok)'}}>{ev.meter.done}</b></span>
+          </div>
+        )}
+      </div>
+    );
+  }
+  if (ev.type === 'approval') {
+    return (
+      <div className="ch-line ch-approval">
+        <span className="ch-warn">⚠</span> <span style={{color: 'var(--warn)'}}>joko meminta approval untuk write op</span>
+        <span className="ch-dim"> · backup + apply firewall · target DTI</span>
+      </div>
+    );
+  }
+  return null;
+}
+
+// ============ COMPOSER ============
+function Composer({ onSend, disabled }) {
+  const [v, setV] = useState('');
+  const submit = () => {
+    if (!v.trim()) return;
+    onSend(v);
+    setV('');
+  };
+  return (
+    <div className="composer">
+      <div className="comp-prompt">{'>'}</div>
+      <textarea
+        className="comp-input"
+        placeholder="Tanya bambang… (contoh: cek lease di FILKOM, audit firewall DTI, apply rule blocklist)"
+        value={v}
+        onChange={e => setV(e.target.value)}
+        onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); } }}
+        rows={2}
+        disabled={disabled}
+      />
+      <div className="comp-side">
+        <span className="comp-hint"><kbd>↵</kbd>send</span>
+        <span className="comp-hint"><kbd>⇧↵</kbd>newline</span>
+        <button className="btn-pri" onClick={submit} disabled={disabled}>Send</button>
+      </div>
+    </div>
+  );
+}
+
+// ============ APPROVAL MODAL ============
+function ApprovalModal({ open, data, onApprove, onReject }) {
+  if (!open) return null;
+  const tool = data?.tool || '—';
+  const router = data?.args?.router_name || data?.args?.name || '—';
+  const agent = (data?.agent || 'config_agent').replace('_agent', '');
+  return (
+    <div className="modal-backdrop" onClick={onReject}>
+      <div className="modal" onClick={e => e.stopPropagation()}>
+        <span className="cb cb1"></span><span className="cb cb2"></span><span className="cb cb3"></span><span className="cb cb4"></span>
+        <div className="modal-head">⚠&nbsp;&nbsp;APPROVAL DIPERLUKAN — {agent} / config</div>
+        <div className="modal-body">
+          <div className="modal-title"><b>{agent}</b> meminta izin tulis ke router <span style={{color:'var(--info)'}}>{router}</span></div>
+          <div className="modal-kv">
+            <span className="k">TOOL</span><span className="v">{tool}</span>
+            <span className="k">TARGET</span><span className="v">{router}</span>
+            <span className="k">RISIKO</span><span className="v" style={{color:'var(--warn)'}}>SEDANG — backup otomatis dibuat sebelum eksekusi</span>
+            <span className="k">REVERSIBLE</span><span className="v" style={{color:'var(--ok)'}}>ya</span>
+          </div>
+        </div>
+        <div className="modal-actions">
+          <button className="btn-ghost" onClick={onReject}>Tolak</button>
+          <button className="btn-warn-fill" onClick={onApprove}>Setuju, jalankan</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============ APP ============
+const THREAD_ID = crypto.randomUUID();
+
+const AGENTS_DEF = [
+  { name: 'bambang', role: 'supervisor', color: '#d2a8ff' },
+  { name: 'eko',     role: 'monitor',    color: '#7ee787' },
+  { name: 'agus',    role: 'diagnosa',   color: '#79c0ff' },
+  { name: 'joko',    role: 'config',     color: '#ffa657' },
+  { name: 'satria',  role: 'security',   color: '#ff7b72' },
+  { name: 'budi',    role: 'dokumen',    color: '#a8c7fa' },
+];
+
+// Alias map: agent definition name → display name
+const ALIAS_MAP = { monitor_agent:'eko', diagnose_agent:'agus', config_agent:'joko', security_agent:'satria', document_agent:'budi', supervisor:'bambang' };
+
+function makeAgents() {
+  return AGENTS_DEF.map(a => ({ ...a, state: 'STANDBY', task: '— idle —', taskColor: 'var(--fg-3)', metrics: [] }));
+}
+
+function formatTime() {
+  return new Date().toLocaleTimeString('id-ID', { hour12: false });
+}
+
+async function* readSSE(response) {
+  const reader = response.body.getReader();
+  const dec = new TextDecoder();
+  let buf = '';
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, { stream: true });
+    const lines = buf.split('\n');
+    buf = lines.pop();
+    for (const line of lines) {
+      if (line.startsWith('data: ')) {
+        try { yield JSON.parse(line.slice(6)); } catch {}
+      }
+    }
+  }
+}
+
+function App() {
+  const [active, setActive] = useState('chat');
+  const [agents, setAgents] = useState(makeAgents());
+  const [events, setEvents] = useState([]);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [approvalData, setApprovalData] = useState(null);
+  const [streaming, setStreaming] = useState(false);
+  const [time, setTime] = useState(formatTime());
+  const streamRef = useRef(null);
+
+  useEffect(() => {
+    const t = setInterval(() => setTime(formatTime()), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  useEffect(() => {
+    if (streamRef.current) streamRef.current.scrollTop = streamRef.current.scrollHeight;
+  }, [events]);
+
+  function agentNameFromSource(source) {
+    // source like "[eko] tool_call" or "eko"
+    const m = source.match(/\[([^\]]+)\]/);
+    const raw = m ? m[1] : source;
+    return ALIAS_MAP[raw] || raw;
   }
 
-  btn.onclick = send;
-  inp.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } });
+  function setAgentState(name, patch) {
+    setAgents(prev => prev.map(a => a.name === name ? { ...a, ...patch } : a));
+  }
+
+  function resetAgents() {
+    setAgents(makeAgents());
+  }
+
+  async function consumeStream(endpoint, body) {
+    setStreaming(true);
+    try {
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        setEvents(e => [...e, { type: 'error', content: `HTTP ${res.status}` }]);
+        return;
+      }
+      for await (const ev of readSSE(res)) {
+        handleServerEvent(ev);
+        if (ev.type === 'approval_required') break;
+      }
+    } catch (err) {
+      setEvents(e => [...e, { type: 'error', content: String(err) }]);
+    } finally {
+      setStreaming(false);
+    }
+  }
+
+  function handleServerEvent(ev) {
+    const { type, content } = ev;
+
+    if (type === 'routing') {
+      // content: "[bambang] route → eko" or similar
+      const m = content.match(/route\s*[→>]\s*(\w+)/i);
+      const target = m ? (ALIAS_MAP[m[1]] || m[1]) : null;
+      if (target) setAgentState(target, { state: 'BERJALAN', task: '⠹ berjalan…', taskColor: null });
+      setEvents(e => [...e, { type: 'routing', content }]);
+
+    } else if (type === 'tool_call') {
+      const agentName = agentNameFromSource(content);
+      const tool = content.replace(/^\[[^\]]+\]\s*/, '');
+      setAgentState(agentName, { state: 'BERJALAN', task: `⠹ ${tool}`, taskColor: null });
+      setEvents(e => [...e, { type: 'tool_call', content: tool, agent: agentName }]);
+
+    } else if (type === 'tool_result') {
+      const agentName = agentNameFromSource(content);
+      const tool = content.replace(/^\[[^\]]+\]\s*/, '').split(/\s/)[0];
+      setAgentState(agentName, { task: `✓ ${tool}` });
+      setEvents(e => [...e, { type: 'tool_result', content, agent: agentName }]);
+
+    } else if (type === 'ai') {
+      agents.forEach(a => {
+        if (a.state === 'BERJALAN') setAgentState(a.name, { state: 'SELESAI', task: '✓ selesai', taskColor: null });
+      });
+      setEvents(e => [...e, { type: 'ai', content }]);
+
+    } else if (type === 'approval_required') {
+      let data = {};
+      try { data = JSON.parse(content); } catch {}
+      const agentName = agentNameFromSource(data.agent || 'config_agent');
+      setAgentState(agentName, { state: 'MENUNGGU', task: `⊙ approval: ${data.tool || '?'}`, taskColor: 'var(--warn)' });
+      setApprovalData(data);
+      setModalOpen(true);
+      setEvents(e => [...e, { type: 'approval_required', content: data }]);
+
+    } else if (type === 'error') {
+      setEvents(e => [...e, { type: 'error', content }]);
+    }
+  }
+
+  async function handleSend(text) {
+    resetAgents();
+    setEvents(e => [...e, { type: 'user', text }]);
+    await consumeStream('/chat', { thread_id: THREAD_ID, message: text });
+  }
+
+  async function approve() {
+    setModalOpen(false);
+    const agentName = agentNameFromSource(approvalData?.agent || 'config_agent');
+    setAgentState(agentName, { state: 'BERJALAN', task: '⠹ executing…', taskColor: null });
+    await consumeStream('/approve', { thread_id: THREAD_ID, decision: 'approved' });
+  }
+
+  async function reject() {
+    setModalOpen(false);
+    const agentName = agentNameFromSource(approvalData?.agent || 'config_agent');
+    setAgentState(agentName, { state: 'GAGAL', task: '✗ ditolak operator', taskColor: 'var(--err)' });
+    await consumeStream('/approve', { thread_id: THREAD_ID, decision: 'rejected' });
+  }
+
+  const activeCount = agents.filter(a => a.state === 'BERJALAN' || a.state === 'MENUNGGU').length;
+
+  return (
+    <div className="app">
+      <TopBar thread={`thread/${THREAD_ID.slice(0,8)}`} ctx={0} tokens="—" time={time} />
+      <div className="main">
+        <LeftRail active={active} onNav={setActive} />
+        <div className="chat-panel">
+          <div className="chat-head">
+            <span className="chat-head-title">AI Chat</span>
+            <span className="chat-head-meta">{streaming ? '⠹ streaming…' : '● siap'}</span>
+            <div className="chat-head-btns">
+              <button className="btn-ghost" onClick={() => { setEvents([]); resetAgents(); }}>Clear</button>
+            </div>
+          </div>
+          <div className="chat-stream" ref={streamRef}>
+            {events.map((ev, i) => <ChatEvent key={i} ev={ev} />)}
+            {streaming && events.length > 0 && <div className="ch-line ch-ev">  <span className="ch-caret"></span></div>}
+          </div>
+          <Composer onSend={handleSend} disabled={streaming} />
+        </div>
+        <div className="agent-rail">
+          <div className="agent-rail-head">
+            <span className="agent-rail-title">Agents</span>
+            <span className="agent-rail-count">{activeCount}/6 active</span>
+          </div>
+          <div className="agent-rail-list">
+            {agents.map(a => <AgentCard key={a.name} agent={a} />)}
+          </div>
+        </div>
+      </div>
+      <StatusBar
+        status={modalOpen ? '⊙ APPROVAL PENDING' : streaming ? '⠹ streaming' : '● ready'}
+        hint={<><kbd>↵</kbd>send <kbd>⇧↵</kbd>newline</>}
+      />
+      <ApprovalModal open={modalOpen} data={approvalData} onApprove={approve} onReject={reject} />
+    </div>
+  );
 }
 
-// ── Keyboard ───────────────────────────────────────────────────────────────────
-function setupKeyboard() {
-  document.addEventListener('keydown', e => {
-    if (document.getElementById('approval-overlay').classList.contains('show')) {
-      if (e.key === 'y' || e.key === 'Y') { e.preventDefault(); resolveApproval('approved'); return; }
-      if (e.key === 'n' || e.key === 'N' || e.key === 'Escape') { e.preventDefault(); resolveApproval('rejected'); return; }
-      return;
-    }
-    if (document.activeElement === document.getElementById('chat-input')) {
-      if (e.key === 'Escape') document.getElementById('chat-input').blur();
-      return;
-    }
-    if (e.ctrlKey && e.key === 'l') { e.preventDefault(); clearChat(); return; }
-    if (e.key >= '1' && e.key <= '9') { navByKey(e.key); return; }
-    if ((e.key === 'i' || e.key === 'Enter') && currentScreen === 'chat') {
-      document.getElementById('chat-input').focus();
-    }
-  });
-}
-
-function clearChat() {
-  if (appState === 'running') return;
-  chatMsgs.innerHTML = `
-    <div class="empty" id="empty-state">
-      <div class="empty-glyph">◈</div>
-      <div class="empty-title">NetOps AI</div>
-      <div class="empty-hint">Ketik perintah untuk memulai sesi operasional jaringan kampus.</div>
-    </div>`;
-  AGENTS.forEach(a => setAgentState(a.alias,'standby',''));
-  document.getElementById('active-query').textContent = '—';
-  updateMetrics(0, 0);
-  document.getElementById('f-tools').textContent = '0';
-  document.getElementById('chat-input').focus();
-}
-
-function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
-
-init();
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
 </script>
 </body>
 </html>

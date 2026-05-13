@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <rect width="64" height="64" fill="#08090b"></rect>
+  <rect x="2" y="2" width="60" height="60" fill="none" stroke="#252932" stroke-width="1"></rect>
+  <text x="8" y="24" fill="#7ee787" font-family="IBM Plex Mono, monospace" font-weight="600" font-size="14">[</text>
+  <text x="16" y="24" fill="#e8eaee" font-family="IBM Plex Mono, monospace" font-weight="600" font-size="14">N</text>
+  <text x="26" y="24" fill="#e8eaee" font-family="IBM Plex Mono, monospace" font-weight="600" font-size="14">A</text>
+  <text x="36" y="24" fill="#7ee787" font-family="IBM Plex Mono, monospace" font-weight="600" font-size="14">]</text>
+  <line x1="8" y1="32" x2="56" y2="32" stroke="#252932" stroke-width="1"></line>
+  <line x1="8" y1="38" x2="48" y2="38" stroke="#363b46" stroke-width="1"></line>
+  <line x1="8" y1="44" x2="40" y2="44" stroke="#363b46" stroke-width="1"></line>
+  <circle cx="52" cy="50" r="2" fill="#7ee787"></circle>
+</svg>

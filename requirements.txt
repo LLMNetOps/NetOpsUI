@@ -11,3 +11,7 @@ langgraph-checkpoint-sqlite>=2.0
 
 # Skill hot reload
 watchfiles>=0.21
+
+# Web server
+fastapi>=0.115
+uvicorn[standard]>=0.32
