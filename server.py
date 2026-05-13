@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any, AsyncGenerator, Iterator
 
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -29,6 +30,14 @@ FRONTEND_DIR = Path(__file__).parent / "frontend"
 import agent as _agent
 
 app = FastAPI(title="NetOps AI", docs_url=None, redoc_url=None)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # ── Session store ─────────────────────────────────────────────────────────────
 _sessions: dict[str, tuple[Any, Any]] = {}
@@ -45,11 +54,14 @@ def _get_or_create_session(thread_id: str) -> tuple[Any, Any]:
 # ── Async streaming helper ────────────────────────────────────────────────────
 
 async def _stream_events(gen: Iterator[tuple[str, str]]) -> AsyncGenerator[str, None]:
-    """Wrap sync generator → async SSE lines.
+    """Wrap sync generator → async SSE lines with heartbeat.
 
     Runs the blocking generator in a thread pool and forwards events via an
     asyncio.Queue using call_soon_threadsafe so the queue is only touched from
     the event-loop thread.
+
+    Sends a SSE comment (:ping) every 3 s while the generator is busy so the
+    browser connection stays alive and the user sees activity.
     """
     loop = asyncio.get_event_loop()
     queue: asyncio.Queue[tuple[str, str] | None] = asyncio.Queue()
@@ -63,7 +75,11 @@ async def _stream_events(gen: Iterator[tuple[str, str]]) -> AsyncGenerator[str, 
 
     future = loop.run_in_executor(None, _produce)
     while True:
-        item = await queue.get()
+        try:
+            item = await asyncio.wait_for(asyncio.shield(queue.get()), timeout=3.0)
+        except asyncio.TimeoutError:
+            yield ": ping\n\n"  # SSE comment — keeps connection alive, browser ignores
+            continue
         if item is None:
             break
         event_type, content = item
@@ -108,6 +124,15 @@ async def approve(req: ApproveRequest) -> StreamingResponse:
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+@app.get("/info")
+def info() -> dict:
+    import os
+    return {
+        "model": os.getenv("OLLAMA_MODEL", "unknown"),
+        "ollama_host": os.getenv("OLLAMA_BASE_URL", ""),
+    }
 
 
 @app.get("/metrics")

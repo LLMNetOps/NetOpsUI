@@ -148,6 +148,27 @@ def _react_loop(
 
 import re as _re
 
+_GREETING_PATTERNS: list[str] = [
+    "halo", "hallo", "hi", "hello", "hey", "hai",
+    "selamat pagi", "selamat siang", "selamat sore", "selamat malam",
+    "siapa kamu", "siapa anda", "kamu siapa", "anda siapa",
+    "kamu apa", "kamu bisa apa", "anda bisa apa",
+    "perkenalkan", "perkenalan",
+]
+
+
+def _is_greeting(messages: list) -> bool:
+    """Return True if the last human message is a simple greeting or identity question."""
+    last_human = next(
+        (m.content for m in reversed(messages) if isinstance(m, HumanMessage)), ""
+    )
+    text = last_human.strip().lower()
+    # Must be short (≤ 60 chars) to avoid false positives on "halo, cek router..."
+    if len(text) > 60:
+        return False
+    return any(pat in text for pat in _GREETING_PATTERNS)
+
+
 _KEYWORD_ROUTES: list[tuple[list[str], str]] = [
     (["status", "monitor", "ping", "reachability", "traffic", "bandwidth",
       "interface", "brief", "ringkasan", "uptime", "latency", "packet loss",
@@ -279,6 +300,41 @@ def supervisor_node(state: "NetworkOpsState") -> dict:
     )
     valid_agent_names = {d.name for d in specialist_defs}
     valid_agents_str = ", ".join(sorted(valid_agent_names))
+
+    # Fast-path: simple greetings / identity questions → answer directly, no LLM routing needed
+    if _is_greeting(messages):
+        _supervisor_defn_g = _agent_loader.get("supervisor")
+        _chat_prompt_g = (
+            _supervisor_defn_g.chat_prompt
+            if _supervisor_defn_g and _supervisor_defn_g.chat_prompt
+            else (
+                "Kamu adalah Bambang, supervisor operasional jaringan kampus universitas. "
+                "Balas sapaan atau pertanyaan umum dengan ramah dan singkat dalam Bahasa Indonesia. "
+                "Sebutkan bahwa kamu siap membantu kebutuhan operasional jaringan kampus."
+            )
+        )
+        _recent_g = [m for m in messages if isinstance(m, (HumanMessage, AIMessage))][-6:]
+        _llm_g = _make_llm(
+            temperature=0.5,
+            model=_supervisor_defn_g.model if _supervisor_defn_g else None,
+            num_ctx=_supervisor_defn_g.num_ctx if _supervisor_defn_g else 8192,
+            num_predict=512,
+            timeout=_supervisor_defn_g.timeout if _supervisor_defn_g else 60,
+            agent_name="supervisor",
+            base_url=(_supervisor_defn_g.ollama_host if _supervisor_defn_g else "") or None,
+            reasoning=False,
+        )
+        _greeting_result: dict = {
+            "next_agent": "END",
+            "active_agent": "supervisor",
+            "agent_log": [_log("supervisor", "routing", "→ END (sapaan/pertanyaan umum, jawab langsung)")],
+        }
+        try:
+            _reply_g = _llm_g.invoke([SystemMessage(content=_chat_prompt_g)] + _recent_g)
+            _greeting_result["messages"] = [_reply_g]
+        except Exception:
+            pass
+        return _greeting_result
 
     skill_list = "\n".join(
         f"  {s.name}: {', '.join(s.triggers[:3])}"

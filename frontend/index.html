@@ -164,6 +164,8 @@ body::before {
 .btn-pri:hover { background: var(--border-1); }
 .btn-pri:disabled { opacity: 0.4; cursor: not-allowed; }
 .btn-ghost { font-family: var(--font-mono); font-weight: 500; font-size: 12px; padding: 6px 14px; background: transparent; color: var(--fg-1); border: 1px solid var(--border-1); cursor: pointer; border-radius: 2px; }
+.btn-err { font-family: var(--font-mono); font-weight: 600; font-size: 12px; padding: 6px 14px; background: var(--err-dim); color: var(--err); border: 1px solid var(--err); cursor: pointer; border-radius: 2px; transition: background 120ms; }
+.btn-err:hover { background: rgba(255,123,114,0.25); }
 .btn-ghost:hover { background: var(--bg-2); border-color: var(--border-2); }
 .btn-warn-fill { font-family: var(--font-mono); font-weight: 600; font-size: 12px; padding: 6px 16px; background: var(--warn); color: var(--bg-0); border: 1px solid var(--warn); cursor: pointer; border-radius: 2px; }
 .btn-warn-fill:hover { filter: brightness(1.1); }
@@ -254,7 +256,7 @@ body::before {
 const { useState, useEffect, useRef } = React;
 
 // ============ TOP BAR ============
-function TopBar({ thread, ctx, tokens, time }) {
+function TopBar({ thread, ctx, tokens, time, model }) {
   return (
     <div className="topbar">
       <div className="topbar-left">
@@ -265,7 +267,7 @@ function TopBar({ thread, ctx, tokens, time }) {
       <div className="topbar-right">
         <span className="tb-meta"><span className="lbl">CTX</span><span className="val">{ctx}%</span></span>
         <span className="tb-meta"><span className="lbl">TOK</span><span className="val">{tokens}</span></span>
-        <span className="tb-meta"><span className="lbl">MODEL</span><span className="val">qwen3.6:35b</span></span>
+        <span className="tb-meta"><span className="lbl">MODEL</span><span className="val">{model}</span></span>
         <span className="tb-meta"><span className="lbl">WIB</span><span className="val">{time}</span></span>
       </div>
     </div>
@@ -360,44 +362,56 @@ function ChatEvent({ ev }) {
   if (ev.type === 'user') {
     return <div className="ch-line"><span className="ch-you">Anda:</span> <span className="ch-user-text">{ev.text}</span></div>;
   }
-  if (ev.type === 'route') {
-    return <div className="ch-line ch-ev">  ↳ [<span style={{color:'var(--agent-bambang)'}}>bambang</span>] route → <span style={{color:'var(--fg-0)'}}>{ev.to}</span></div>;
+  // FIX: was 'route', server sends 'routing'; parse content directly from ev.content
+  if (ev.type === 'routing') {
+    // content: "[supervisor] → monitor_agent  skills: [...]  | reasoning..."
+    const m = ev.content.match(/[→>]\s*(\w+)/);
+    const target = m ? (ALIAS_MAP[m[1]] || m[1]) : ev.content;
+    return <div className="ch-line ch-ev">  ↳ route → <span style={{color:'var(--fg-0)'}}>{target}</span></div>;
   }
-  if (ev.type === 'tool-call') {
-    return <div className="ch-line ch-ev">  ↳ <span className="ch-ok">[🔧 {ev.tool}{ev.args ? `(${ev.args})` : ''}]</span></div>;
+  // FIX: was 'tool-call' (kebab), server sends 'tool_call'; ev.content is tool string, not ev.tool
+  if (ev.type === 'tool_call') {
+    return <div className="ch-line ch-ev">  ↳ <span className="ch-ok">[{ev.agent}] {ev.content}</span></div>;
   }
-  if (ev.type === 'tool-result') {
-    return <div className="ch-line ch-ev">  ↳ <span className="ch-ok">[✓ {ev.tool}{ev.args ? `(${ev.args})` : ''}]</span> <span className="ch-dim">· {ev.tokens} tok · {ev.ms}ms</span></div>;
+  // FIX: was 'tool-result' (kebab), server sends 'tool_result'; ev.content is preview string
+  if (ev.type === 'tool_result') {
+    return <div className="ch-line ch-ev">  ↳ <span className="ch-ok">[{ev.agent}]</span> <span className="ch-dim">{ev.content}</span></div>;
   }
-  if (ev.type === 'tool-error') {
-    return <div className="ch-line ch-ev">  ↳ <span className="ch-err">[✗ {ev.tool}]</span> <span className="ch-dim">{ev.err}</span></div>;
+  // FIX: was 'tool-error' (kebab); agent.py never emits this but keep for future
+  if (ev.type === 'tool_error') {
+    return <div className="ch-line ch-ev">  ↳ <span className="ch-err">[✗ {ev.agent}]</span> <span className="ch-dim">{ev.content}</span></div>;
   }
+  // FIX: ai event stores text in ev.content, not ev.text
   if (ev.type === 'ai') {
+    const lines = ev.content ? ev.content.split('\n') : [];
+    const firstLine = lines[0] || '';
+    const rest = lines.slice(1).filter(l => l.trim());
     return (
       <div className="ch-block">
-        <div className="ch-line"><span className="ch-ai">AI  :</span> <span className="ch-ai-body">{ev.text}</span>{ev.streaming && <span className="ch-caret"></span>}</div>
-        {ev.lines && ev.lines.map((l, i) => (
+        <div className="ch-line"><span className="ch-ai">AI  :</span> <span className="ch-ai-body">{firstLine}</span></div>
+        {rest.map((l, i) => (
           <div key={i} className="ch-line ch-ai-cont">{l}</div>
         ))}
-        {ev.meter && (
-          <div className="ch-meter">
-            <span><i>ctx</i><b>{ev.meter.ctx}%</b></span>
-            <span><i>pred</i><b>{ev.meter.pred}%</b></span>
-            <span><i>tps</i><b>{ev.meter.tps}</b></span>
-            <span><i>tok</i><b>{ev.meter.tokens}</b></span>
-            <span><i>done</i><b style={{color: 'var(--ok)'}}>{ev.meter.done}</b></span>
-          </div>
-        )}
       </div>
     );
   }
-  if (ev.type === 'approval') {
+  // FIX: was 'approval' (missing _required suffix); use real data from ev.content
+  if (ev.type === 'approval_required') {
+    const d = ev.content || {};
+    const agent = (d.agent || 'config_agent').replace('_agent', '');
     return (
       <div className="ch-line ch-approval">
-        <span className="ch-warn">⚠</span> <span style={{color: 'var(--warn)'}}>joko meminta approval untuk write op</span>
-        <span className="ch-dim"> · backup + apply firewall · target DTI</span>
+        <span className="ch-warn">⚠</span> <span style={{color: 'var(--warn)'}}>{agent} meminta approval</span>
+        <span className="ch-dim"> · {d.action || '?'} · risiko: {d.risk_level || '?'}</span>
       </div>
     );
+  }
+  // FIX: add error event rendering (was missing, returned null silently)
+  if (ev.type === 'error') {
+    return <div className="ch-line ch-err">  ✗ error: {ev.content}</div>;
+  }
+  if (ev.type === 'elapsed') {
+    return <div className="ch-line ch-ev">  ↳ <span className="ch-dim">⏱ {ev.content}</span></div>;
   }
   return null;
 }
@@ -432,22 +446,28 @@ function Composer({ onSend, disabled }) {
 }
 
 // ============ APPROVAL MODAL ============
+// FIX: payload from agent.py is {agent, action, risk_level, details:{router_name,...}}
+// was reading data.tool (missing) and data.args.router_name (wrong key, should be data.details)
 function ApprovalModal({ open, data, onApprove, onReject }) {
   if (!open) return null;
-  const tool = data?.tool || '—';
-  const router = data?.args?.router_name || data?.args?.name || '—';
+  const details = data?.details || {};
+  const action = data?.action || '—';
+  const router = details.router_name || details.name || '—';
+  const riskLevel = data?.risk_level || 'medium';
   const agent = (data?.agent || 'config_agent').replace('_agent', '');
+  const riskColor = riskLevel === 'high' ? 'var(--err)' : 'var(--warn)';
+  const riskLabel = riskLevel === 'high' ? 'TINGGI' : 'SEDANG';
   return (
     <div className="modal-backdrop" onClick={onReject}>
       <div className="modal" onClick={e => e.stopPropagation()}>
         <span className="cb cb1"></span><span className="cb cb2"></span><span className="cb cb3"></span><span className="cb cb4"></span>
         <div className="modal-head">⚠&nbsp;&nbsp;APPROVAL DIPERLUKAN — {agent} / config</div>
         <div className="modal-body">
-          <div className="modal-title"><b>{agent}</b> meminta izin tulis ke router <span style={{color:'var(--info)'}}>{router}</span></div>
+          <div className="modal-title"><b>{agent}</b> meminta izin operasi tulis ke router <span style={{color:'var(--info)'}}>{router}</span></div>
           <div className="modal-kv">
-            <span className="k">TOOL</span><span className="v">{tool}</span>
+            <span className="k">AKSI</span><span className="v">{action}</span>
             <span className="k">TARGET</span><span className="v">{router}</span>
-            <span className="k">RISIKO</span><span className="v" style={{color:'var(--warn)'}}>SEDANG — backup otomatis dibuat sebelum eksekusi</span>
+            <span className="k">RISIKO</span><span className="v" style={{color: riskColor}}>{riskLabel} — backup otomatis dibuat sebelum eksekusi</span>
             <span className="k">REVERSIBLE</span><span className="v" style={{color:'var(--ok)'}}>ya</span>
           </div>
         </div>
@@ -508,21 +528,56 @@ function App() {
   const [modalOpen, setModalOpen] = useState(false);
   const [approvalData, setApprovalData] = useState(null);
   const [streaming, setStreaming] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
   const [time, setTime] = useState(formatTime());
+  const [model, setModel] = useState('…');
+  const [tokTotal, setTokTotal] = useState(0);
+  const [ctxPct, setCtxPct] = useState(0);
   const streamRef = useRef(null);
+  const abortRef = useRef(null);
+  const startRef = useRef(null);
 
+  // Clock tick
   useEffect(() => {
     const t = setInterval(() => setTime(formatTime()), 1000);
     return () => clearInterval(t);
   }, []);
 
+  // Elapsed timer while streaming (like TUI live_elapsed)
+  useEffect(() => {
+    if (!streaming) { setElapsed(0); return; }
+    startRef.current = Date.now();
+    const t = setInterval(() => setElapsed(Math.floor((Date.now() - startRef.current) / 1000)), 1000);
+    return () => clearInterval(t);
+  }, [streaming]);
+
+  // Fetch model info once
+  useEffect(() => {
+    fetch('/info').then(r => r.json()).then(d => setModel(d.model)).catch(() => {});
+  }, []);
+
+  // Poll /metrics every 5s for topbar CTX/TOK
+  useEffect(() => {
+    function poll() {
+      fetch('/metrics?n=5').then(r => r.json()).then(entries => {
+        if (!entries?.length) return;
+        const last = entries[entries.length - 1];
+        if (last.ctx_util != null) setCtxPct(Math.round(last.ctx_util));
+        if (last.prompt_tokens != null && last.gen_tokens != null)
+          setTokTotal(last.prompt_tokens + last.gen_tokens);
+      }).catch(() => {});
+    }
+    const t = setInterval(poll, 5000);
+    return () => clearInterval(t);
+  }, []);
+
+  // Auto-scroll chat on new events
   useEffect(() => {
     if (streamRef.current) streamRef.current.scrollTop = streamRef.current.scrollHeight;
   }, [events]);
 
   function agentNameFromSource(source) {
-    // source like "[eko] tool_call" or "eko"
-    const m = source.match(/\[([^\]]+)\]/);
+    const m = String(source).match(/\[([^\]]+)\]/);
     const raw = m ? m[1] : source;
     return ALIAS_MAP[raw] || raw;
   }
@@ -536,12 +591,16 @@ function App() {
   }
 
   async function consumeStream(endpoint, body) {
+    const controller = new AbortController();
+    abortRef.current = controller;
+    const t0 = Date.now();
     setStreaming(true);
     try {
       const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
+        signal: controller.signal,
       });
       if (!res.ok) {
         setEvents(e => [...e, { type: 'error', content: `HTTP ${res.status}` }]);
@@ -549,12 +608,30 @@ function App() {
       }
       for await (const ev of readSSE(res)) {
         handleServerEvent(ev);
-        if (ev.type === 'approval_required') break;
+        if (ev.type === 'approval_required') return; // keep streaming=true, wait for approve/reject
       }
+      // Stream done normally — add elapsed summary like TUI "[⏱ selesai dalam X.Xs]"
+      const secs = ((Date.now() - t0) / 1000).toFixed(1);
+      setEvents(e => [...e, { type: 'elapsed', content: `selesai dalam ${secs}s` }]);
     } catch (err) {
-      setEvents(e => [...e, { type: 'error', content: String(err) }]);
+      if (err.name !== 'AbortError') {
+        setEvents(e => [...e, { type: 'error', content: String(err) }]);
+      } else {
+        const secs = ((Date.now() - t0) / 1000).toFixed(1);
+        setEvents(e => [...e, { type: 'elapsed', content: `dibatalkan setelah ${secs}s` }]);
+      }
     } finally {
+      abortRef.current = null;
       setStreaming(false);
+    }
+  }
+
+  function cancelStream() {
+    if (abortRef.current) {
+      abortRef.current.abort();
+      setAgents(prev => prev.map(a =>
+        a.state === 'BERJALAN' ? { ...a, state: 'STANDBY', task: '— idle —', taskColor: 'var(--fg-3)' } : a
+      ));
     }
   }
 
@@ -562,10 +639,15 @@ function App() {
     const { type, content } = ev;
 
     if (type === 'routing') {
-      // content: "[bambang] route → eko" or similar
-      const m = content.match(/route\s*[→>]\s*(\w+)/i);
-      const target = m ? (ALIAS_MAP[m[1]] || m[1]) : null;
-      if (target) setAgentState(target, { state: 'BERJALAN', task: '⠹ berjalan…', taskColor: null });
+      // content: "[bambang] → monitor_agent  skills: [...]  | reasoning"
+      // bambang ALWAYS becomes SELESAI on routing (matches tui.py _kanban_update)
+      setAgentState('bambang', { state: 'SELESAI', task: '✓ routed', taskColor: null });
+      const m = content.match(/[→>]\s*(\w+)/);
+      const raw = m ? m[1] : null;
+      const target = raw ? (ALIAS_MAP[raw] || raw) : null;
+      if (target && target !== 'END') {
+        setAgentState(target, { state: 'BERJALAN', task: '⠹ berjalan…', taskColor: null });
+      }
       setEvents(e => [...e, { type: 'routing', content }]);
 
     } else if (type === 'tool_call') {
@@ -576,32 +658,38 @@ function App() {
 
     } else if (type === 'tool_result') {
       const agentName = agentNameFromSource(content);
-      const tool = content.replace(/^\[[^\]]+\]\s*/, '').split(/\s/)[0];
-      setAgentState(agentName, { task: `✓ ${tool}` });
-      setEvents(e => [...e, { type: 'tool_result', content, agent: agentName }]);
+      const preview = content.replace(/^\[[^\]]+\]\s*/, '').slice(0, 80);
+      setAgentState(agentName, { task: `✓ ${preview}` });
+      setEvents(e => [...e, { type: 'tool_result', content: preview, agent: agentName }]);
 
     } else if (type === 'ai') {
-      agents.forEach(a => {
-        if (a.state === 'BERJALAN') setAgentState(a.name, { state: 'SELESAI', task: '✓ selesai', taskColor: null });
-      });
+      // All BERJALAN agents → SELESAI (matches tui.py: no specific target tracking needed)
+      setAgents(prev => prev.map(a =>
+        a.state === 'BERJALAN' ? { ...a, state: 'SELESAI', task: '✓ selesai', taskColor: null } : a
+      ));
       setEvents(e => [...e, { type: 'ai', content }]);
 
     } else if (type === 'approval_required') {
       let data = {};
       try { data = JSON.parse(content); } catch {}
       const agentName = agentNameFromSource(data.agent || 'config_agent');
-      setAgentState(agentName, { state: 'MENUNGGU', task: `⊙ approval: ${data.tool || '?'}`, taskColor: 'var(--warn)' });
+      setAgentState(agentName, { state: 'MENUNGGU', task: `⊙ ${data.action || 'approval'}`, taskColor: 'var(--warn)' });
       setApprovalData(data);
       setModalOpen(true);
       setEvents(e => [...e, { type: 'approval_required', content: data }]);
 
     } else if (type === 'error') {
+      setAgents(prev => prev.map(a =>
+        a.state === 'BERJALAN' ? { ...a, state: 'GAGAL', task: '✗ error', taskColor: 'var(--err)' } : a
+      ));
       setEvents(e => [...e, { type: 'error', content }]);
     }
   }
 
   async function handleSend(text) {
     resetAgents();
+    // bambang starts BERJALAN like tui.py _kanban_reset
+    setAgentState('bambang', { state: 'BERJALAN', task: '⠹ routing…', taskColor: null });
     setEvents(e => [...e, { type: 'user', text }]);
     await consumeStream('/chat', { thread_id: THREAD_ID, message: text });
   }
@@ -621,25 +709,27 @@ function App() {
   }
 
   const activeCount = agents.filter(a => a.state === 'BERJALAN' || a.state === 'MENUNGGU').length;
+  const streamingLabel = streaming ? `⠹ agent bekerja… ${elapsed}s` : '● siap';
 
   return (
     <div className="app">
-      <TopBar thread={`thread/${THREAD_ID.slice(0,8)}`} ctx={0} tokens="—" time={time} />
+      <TopBar thread={`thread/${THREAD_ID.slice(0,8)}`} ctx={ctxPct} tokens={tokTotal > 0 ? tokTotal.toLocaleString() : '—'} time={time} model={model} />
       <div className="main">
         <LeftRail active={active} onNav={setActive} />
         <div className="chat-panel">
           <div className="chat-head">
             <span className="chat-head-title">AI Chat</span>
-            <span className="chat-head-meta">{streaming ? '⠹ streaming…' : '● siap'}</span>
+            <span className="chat-head-meta">{streamingLabel}</span>
             <div className="chat-head-btns">
+              {streaming && <button className="btn-err" onClick={cancelStream}>■ Stop</button>}
               <button className="btn-ghost" onClick={() => { setEvents([]); resetAgents(); }}>Clear</button>
             </div>
           </div>
           <div className="chat-stream" ref={streamRef}>
             {events.map((ev, i) => <ChatEvent key={i} ev={ev} />)}
-            {streaming && events.length > 0 && <div className="ch-line ch-ev">  <span className="ch-caret"></span></div>}
+            {streaming && <div className="ch-line ch-ev">  <span className="ch-caret"></span></div>}
           </div>
-          <Composer onSend={handleSend} disabled={streaming} />
+          <Composer onSend={handleSend} disabled={streaming || modalOpen} />
         </div>
         <div className="agent-rail">
           <div className="agent-rail-head">
@@ -652,7 +742,7 @@ function App() {
         </div>
       </div>
       <StatusBar
-        status={modalOpen ? '⊙ APPROVAL PENDING' : streaming ? '⠹ streaming' : '● ready'}
+        status={modalOpen ? '⊙ APPROVAL PENDING' : streaming ? `⠹ streaming ${elapsed}s` : '● ready'}
         hint={<><kbd>↵</kbd>send <kbd>⇧↵</kbd>newline</>}
       />
       <ApprovalModal open={modalOpen} data={approvalData} onApprove={approve} onReject={reject} />
