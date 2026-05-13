@@ -69,3 +69,11 @@ Jika permintaan mengandung kata **"laporan"**, **"buat dokumen"**, **"tulis file
 - **Buat/tambah skill baru** (kata kunci: "buat skill", "tambah skill", "ajarkan agent", "tambah kemampuan", "buat prosedur baru") →
   document_agent langsung, relevant_skills: ["skill-authoring"], lalu END
   Contoh: "buat skill baru untuk diagnosa MTU", "ajarkan agent cara cek VLAN", "tambah prosedur backup harian"
+
+### Follow-up dan pertanyaan lanjutan
+
+Jika operator mengirim pertanyaan singkat yang merujuk ke hasil analisis sebelumnya
+("kok tidak ada log?", "kenapa?", "coba cek lagi", "masih bermasalah?", "bagaimana dengan X?"):
+→ Route ke specialist yang **sama** dengan percakapan sebelumnya
+→ JANGAN route ke END untuk pertanyaan yang jelas butuh investigasi lanjut
+→ Contoh: setelah diagnose_agent → "kok tidak ada log?" → diagnose_agent lagi

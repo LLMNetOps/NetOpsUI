@@ -87,6 +87,20 @@ def _log(source: str, event_type: str, content: str) -> dict:
             "event_type": event_type, "content": content}
 
 
+def _last_specialist_from_log(state: dict, valid_agent_names: set[str]) -> str | None:
+    """Scan agent_log backwards to find the last specialist that ran."""
+    agent_log = state.get("agent_log", [])
+    if not agent_log:
+        return None
+    alias_to_agent = {alias: name for name, alias in AGENT_ALIAS.items()}
+    for entry in reversed(agent_log):
+        source = entry.get("source", "")
+        agent_name = alias_to_agent.get(source, source)
+        if agent_name in valid_agent_names:
+            return agent_name
+    return None
+
+
 def _react_loop(
     llm_with_tools: Any,
     messages: list,
@@ -304,9 +318,14 @@ def supervisor_node(state: "NetworkOpsState") -> dict:
     except Exception as exc:
         logger.warning("Supervisor routing parse error: %s", exc)
         keyword_agent = _keyword_route(messages, valid_agent_names)
-        fallback = keyword_agent or "END"
+        context_agent = (
+            _last_specialist_from_log(state, valid_agent_names)
+            if not keyword_agent else None
+        )
+        fallback = keyword_agent or context_agent or "END"
+        route_type = "context" if context_agent and not keyword_agent else "keyword"
         data = {"next_agent": fallback, "relevant_skills": [],
-                "reasoning": f"keyword-fallback({fallback}): {exc}"}
+                "reasoning": f"{route_type}-fallback({fallback}): {exc}"}
 
     next_agent = data.get("next_agent", "END")
     if next_agent not in valid_agent_names | {"END"}:
