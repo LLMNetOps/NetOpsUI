@@ -225,3 +225,19 @@ output/          # output lain
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Desain sistem lengkap |
 | [docs/SKILL_AUTHORING_GUIDE.md](docs/SKILL_AUTHORING_GUIDE.md) | Panduan menulis skill baru |
 | [laporan/rekap-pengembangan_20260509.md](laporan/rekap-pengembangan_20260509.md) | Rekap pekerjaan 9 Mei 2026 |
+
+---
+
+## Agent skills
+
+### Issue tracker
+
+Issues dikelola sebagai file Markdown di `.scratch/`. Lihat `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Label dalam Bahasa Indonesia: perlu-triage, perlu-info, siap-agent, siap-manusia, tidak-dikerjakan. Lihat `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context — satu `CONTEXT.md` di root + `docs/adr/`. Lihat `docs/agents/domain.md`.
