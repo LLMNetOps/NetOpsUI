@@ -3,7 +3,11 @@ pyyaml>=6.0
 tabulate>=0.9
 requests>=2.28
 
-# Optional: LangGraph agent for AI Chat with SSH router access
+# LangGraph multi-agent orchestration
 langchain-ollama>=0.3.0
 langchain-core>=0.3.0
 langgraph>=0.2.0
+langgraph-checkpoint-sqlite>=2.0
+
+# Skill hot reload
+watchfiles>=0.21

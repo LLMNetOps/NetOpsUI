@@ -36,7 +36,7 @@ _load_dotenv()
 OUTPUT_DIR = Path(__file__).parent / "output"
 LAPORAN_DIR = Path(__file__).parent / "laporan"
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen3.6:35b-a3b-q8_0")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "gemma4:e4b")
 OLLAMA_TIMEOUT = 300  # seconds per request
 
 

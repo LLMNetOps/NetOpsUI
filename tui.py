@@ -1,37 +1,48 @@
 #!/usr/bin/env python3
-"""Single-file curses TUI for DHCP lease monitoring."""
+"""Campus Network Operations Platform TUI."""
 
 from __future__ import annotations
 
 import curses
 import datetime as dt
+import os
 import re
-import shutil
 import subprocess
 import threading
 import time
 from pathlib import Path
 from typing import Any
 
-try:
-    import requests as _requests
-
-    _HAS_REQUESTS = True
-except ImportError:
-    _requests = None
-    _HAS_REQUESTS = False
 
 WORKDIR = Path(__file__).parent
-OUTPUT_DIR = WORKDIR / "output"
 LAPORAN_DIR = WORKDIR / "laporan"
+BACKUPS_DIR = WORKDIR / "backups"
+CONFIG_FILE = WORKDIR / "config.yaml"
 LOG_FILE = WORKDIR / "schedule.log"
 MENU_WIDTH = 18
 REFRESH_INTERVAL = 5
 MIN_ROWS, MIN_COLS = 24, 60
-TITLE = "UTBK 2026 — DHCP Lease Monitor"
-OLLAMA_BASE_URL = "http://10.45.185.253:11434"
-OLLAMA_MODEL = "qwen3.6:35b-a3b-q8_0"
-OLLAMA_TIMEOUT = 120
+TITLE = "NetOps AI — Campus Network Operations"
+
+
+def _load_dotenv() -> None:
+    """Load .env file into os.environ if present (tanpa dependency python-dotenv)."""
+    env_file = WORKDIR / ".env"
+    if not env_file.exists():
+        return
+    with open(env_file, encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, val = line.partition("=")
+            key = key.strip()
+            val = val.strip()
+            if key and key not in os.environ:  # jangan override env var yang sudah ada
+                os.environ[key] = val
+
+
+_load_dotenv()
 
 C_HEADER = 1
 C_MENU = 2
@@ -46,24 +57,134 @@ SPINNER = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
 
 MENU = [
     ("1", "Dashboard"),
-    ("2", "Jadwal"),
-    ("3", "Collect"),
+    ("2", "Skills"),
+    ("3", "Reachability"),
     ("4", "Laporan"),
     ("5", "Log"),
     ("6", "AI Chat"),
+    ("7", "Aktivitas Agent"),
+    ("8", "Status Agent"),
+    ("9", "Token Metrics"),
 ]
 
-# ── LangGraph agent (optional) ───────────────────────────────────────────────
+# ── Agent module ─────────────────────────────────────────────────────────────
 _HAS_AGENT = False
 _agent_mod = None
 try:
     import agent as _agent_mod
-    _HAS_AGENT = getattr(_agent_mod, "_HAS_LANGGRAPH", False)
+    _HAS_AGENT = True
 except Exception:
     pass
 
+# Shared activity log: written by AIScreen, read by AgentActivityScreen + KanbanScreen
+_agent_activity_log: list[dict] = []
+
+# ── Kanban state ──────────────────────────────────────────────────────────────
+
+AGENT_INFO: dict[str, str] = {
+    "bambang": "supervisor",
+    "eko":     "monitor",
+    "agus":    "diagnosa",
+    "joko":    "config",
+    "satria":  "security",
+    "budi":    "dokumen",
+}
+
+_ROLE_TO_ALIAS: dict[str, str] = {
+    "monitor_agent":  "eko",
+    "diagnose_agent": "agus",
+    "config_agent":   "joko",
+    "security_agent": "satria",
+    "document_agent": "budi",
+    "supervisor":     "bambang",
+}
+
+KANBAN_COLS: list[tuple[str, str]] = [
+    ("standby",  "STANDBY"),
+    ("antrean",  "ANTREAN"),
+    ("berjalan", "BERJALAN"),
+    ("menunggu", "MENUNGGU"),
+    ("selesai",  "SELESAI"),
+    ("gagal",    "GAGAL"),
+]
+
+_KANBAN_COL_COLOR: dict[str, int] = {
+    "standby":  C_DIM,
+    "antrean":  C_WARN,
+    "berjalan": C_OK,
+    "menunggu": C_WARN,
+    "selesai":  C_TITLE,
+    "gagal":    C_ERR,
+}
+
+_kanban_lock = threading.Lock()
+
+
+def _kanban_blank() -> dict:
+    return {"col": "standby", "col_since": time.time(), "tool_count": 0, "last_tool": ""}
+
+
+def _set_col(agents: dict, alias: str, col: str) -> None:
+    """Set agent column and record transition timestamp."""
+    agents[alias]["col"] = col
+    agents[alias]["col_since"] = time.time()
+
+
+_kanban_state: dict = {
+    "query":       "",
+    "query_start": time.time(),
+    "agents":      {alias: _kanban_blank() for alias in AGENT_INFO},
+}
+
+
+def _kanban_reset(query: str) -> None:
+    with _kanban_lock:
+        now = time.time()
+        _kanban_state["query"] = query[:60]
+        _kanban_state["query_start"] = now
+        _kanban_state["agents"] = {alias: _kanban_blank() for alias in AGENT_INFO}
+        _kanban_state["agents"]["bambang"]["col"] = "berjalan"
+        _kanban_state["agents"]["bambang"]["col_since"] = now
+
+
+def _kanban_update(event_type: str, content: str) -> None:
+    m = re.match(r'^\[(\w+)\]\s*(.*)', content, re.DOTALL)
+    if not m:
+        # approval_required content is JSON — map config_agent → joko
+        if event_type == "approval_required":
+            with _kanban_lock:
+                _set_col(_kanban_state["agents"], "joko", "menunggu")
+        return
+
+    alias, msg = m.group(1).strip(), m.group(2).strip()
+
+    with _kanban_lock:
+        agents = _kanban_state["agents"]
+        if alias not in agents:
+            return
+
+        if event_type == "routing":
+            if msg.startswith("→"):
+                target_role = msg.lstrip("→").strip().split()[0]
+                if target_role == "END" or "END" in target_role:
+                    _set_col(agents, "bambang", "selesai")
+                else:
+                    _set_col(agents, "bambang", "selesai")
+                    target = _ROLE_TO_ALIAS.get(target_role, "")
+                    if target:
+                        _set_col(agents, target, "berjalan")
+            elif "←" in msg:
+                _set_col(agents, alias, "selesai")
+
+        elif event_type == "tool_call":
+            agents[alias]["col"] = "berjalan"
+            agents[alias]["tool_count"] += 1
+            agents[alias]["last_tool"] = re.split(r'[\s(]', msg)[0] if msg else ""
+
+        elif event_type == "error":
+            _set_col(agents, alias, "gagal")
+
 _HAS_COLORS = False
-ATQ_RE = re.compile(r"^(\d+)\t(\w{3} \w{3}\s+\d+ \d{2}:\d{2}:\d{2} \d{4})")
 
 
 def cp(pair_id: int) -> int:
@@ -110,44 +231,6 @@ def tail_file(path: Path, n: int = 30) -> list[str]:
         return []
 
 
-def parse_atq() -> list[dict[str, Any]]:
-    """Parse atq output into dictionaries: id, dt, label."""
-    output = run_cmd(["atq"], cwd=WORKDIR, timeout=5)
-    jobs: list[dict[str, Any]] = []
-    for raw in output.splitlines():
-        line = raw.strip("\n")
-        m = ATQ_RE.match(line)
-        if not m:
-            continue
-        job_id = m.group(1)
-        dt_str = m.group(2)
-        try:
-            parsed_dt = dt.datetime.strptime(dt_str, "%a %b %d %H:%M:%S %Y")
-        except ValueError:
-            continue
-        jobs.append({"id": job_id, "dt": parsed_dt, "label": dt_str})
-    return jobs
-
-
-def format_countdown(target: dt.datetime) -> str:
-    """Format countdown from now to target datetime."""
-    if not target:
-        return "-"
-    now = dt.datetime.now()
-    delta = target - now
-    sec = int(delta.total_seconds())
-    if sec < 0:
-        return "overdue"
-    hours = sec // 3600
-    minutes = (sec % 3600) // 60
-    return f"{hours}h {minutes}m"
-
-
-def today_str() -> str:
-    """Return today's date in YYYYMMDD format."""
-    return dt.datetime.now().strftime("%Y%m%d")
-
-
 def strip_markdown(text: str) -> str:
     """Remove common markdown syntax for clean terminal display."""
     import re as _re
@@ -174,120 +257,6 @@ def strip_markdown(text: str) -> str:
     return text.strip()
 
 
-def build_data_context() -> str:
-    """Build a context string from the latest laporan and output summary."""
-    parts: list[str] = []
-
-    reports = sorted(
-        LAPORAN_DIR.glob("*.md"),
-        key=lambda p: p.stat().st_mtime,
-        reverse=True,
-    )
-    if reports:
-        latest_report = reports[0]
-        try:
-            content = latest_report.read_text(encoding="utf-8", errors="replace")
-            if len(content) > 12000:
-                content = (
-                    content[:12000]
-                    + "\n...[laporan terpotong, lihat tool read_report untuk konten lengkap]..."
-                )
-            parts.append(f"=== LAPORAN TERBARU: {latest_report.name} ===\n{content}")
-        except OSError:
-            pass
-
-    txt_files = sorted(
-        OUTPUT_DIR.glob("*.txt"),
-        key=lambda p: p.stat().st_mtime,
-        reverse=True,
-    )
-    if txt_files:
-        by_date: dict[str, int] = {}
-        for file_path in txt_files[:100]:
-            name = file_path.stem
-            parts_name = name.split("-")
-            date_part = ""
-            for part_name in parts_name:
-                if len(part_name) == 8 and part_name.isdigit():
-                    date_part = part_name
-                    break
-            if not date_part and "_" in name:
-                try:
-                    date_part = name.split("_")[0].split("-")[-1]
-                except Exception:
-                    pass
-            if date_part:
-                by_date[date_part] = by_date.get(date_part, 0) + 1
-
-        summary_lines = ["Tanggal-jumlah file output txt:"]
-        for date_value, count in sorted(by_date.items(), reverse=True)[:7]:
-            summary_lines.append(f"  {date_value}: {count} file")
-        summary_lines.append(f"Total: {len(txt_files)} file")
-        parts.append("=== RINGKASAN FILE OUTPUT ===\n" + "\n".join(summary_lines))
-
-    # --- Scheduled at jobs (all of them) ---
-    jobs = parse_atq()
-    now = dt.datetime.now()
-    if jobs:
-        past_jobs = [j for j in jobs if j["dt"] <= now]
-        future_jobs = [j for j in jobs if j["dt"] > now]
-        job_lines = [
-            f"Total: {len(jobs)} job terdaftar "
-            f"({len(future_jobs)} akan datang, {len(past_jobs)} terlewat).",
-            "",
-        ]
-        if future_jobs:
-            job_lines.append("Jadwal yang akan datang:")
-            for job in future_jobs:
-                countdown = format_countdown(job["dt"])
-                day = job["dt"].strftime("%A %d %b %Y")
-                time_str = job["dt"].strftime("%H:%M")
-                job_lines.append(f"  #{job['id']}  {day}  {time_str}  ({countdown})")
-        if past_jobs:
-            job_lines.append("")
-            job_lines.append("Jadwal yang sudah terlewat (mungkin sudah dieksekusi):")
-            for job in past_jobs[-3:]:  # only last 3 past jobs
-                day = job["dt"].strftime("%A %d %b %Y")
-                time_str = job["dt"].strftime("%H:%M")
-                job_lines.append(f"  #{job['id']}  {day}  {time_str}  (terlewat)")
-        parts.append("=== JADWAL AT JOBS ===\n" + "\n".join(job_lines))
-    else:
-        parts.append("=== JADWAL AT JOBS ===\nTidak ada jadwal at yang terdaftar.")
-
-    # --- UTBK schedule context (read from schedule_utbk.sh comments) ---
-    schedule_script = WORKDIR / "schedule_utbk.sh"
-    if schedule_script.exists():
-        try:
-            script_text = schedule_script.read_text(encoding="utf-8", errors="replace")
-            # Extract comment lines at the top that describe the schedule
-            comment_lines: list[str] = []
-            for line in script_text.splitlines():
-                stripped = line.strip()
-                if stripped.startswith("#") and not stripped.startswith("#!/"):
-                    comment_lines.append(stripped.lstrip("# ").strip())
-                elif comment_lines and not stripped.startswith("#"):
-                    # Stop at first non-comment line after we've started collecting
-                    break
-            if comment_lines:
-                parts.append(
-                    "=== INFORMASI JADWAL UTBK ===\n" + "\n".join(comment_lines)
-                )
-        except OSError:
-            pass
-
-    # --- Current time context ---
-    parts.append(
-        f"=== WAKTU SEKARANG ===\n"
-        f"{now.strftime('%A, %d %B %Y %H:%M:%S')}\n"
-        f"(Hari ini: {now.strftime('%Y%m%d')})"
-    )
-
-    if not parts:
-        return "Belum ada data laporan atau output tersedia."
-
-    return "\n\n".join(parts)
-
-
 class Screen:
     """Base screen for refresh/draw/key handling."""
 
@@ -307,192 +276,237 @@ class Screen:
 
 
 class DashboardScreen(Screen):
-    """Overview status and key counters."""
+    """System overview: agent status, routers, laporan, skills."""
 
     def refresh(self) -> None:
-        atd_status = run_cmd(["systemctl", "is-active", "atd"]).strip() or "unknown"
-        at_available = shutil.which("at") is not None
-        jobs = sorted(parse_atq(), key=lambda x: x["dt"])
+        # Agent status
+        agent_status: dict = {}
+        if _HAS_AGENT and _agent_mod is not None:
+            try:
+                agent_status = _agent_mod.get_agent_status()
+            except Exception:
+                pass
 
-        now = dt.datetime.now()
-        next_job = None
-        for item in jobs:
-            if item["dt"] > now:
-                next_job = item
-                break
+        # Routers dari config.yaml
+        routers: list[str] = []
+        if CONFIG_FILE.exists():
+            try:
+                import yaml as _yaml
+                cfg = _yaml.safe_load(CONFIG_FILE.read_text())
+                routers = [r.get("name", "?") for r in cfg.get("routers", [])]
+            except Exception:
+                pass
 
-        txt_today = len(list(OUTPUT_DIR.glob(f"*{today_str()}*.txt")))
-        md_all = len(list(LAPORAN_DIR.glob("*.md")))
-
-        recent = sorted(
-            OUTPUT_DIR.glob("*.txt"),
+        # Laporan files
+        laporan = sorted(
+            LAPORAN_DIR.glob("*.md"),
             key=lambda p: p.stat().st_mtime,
             reverse=True,
-        )[:5]
+        ) if LAPORAN_DIR.exists() else []
+
+        # Backups
+        backup_count = len(list(BACKUPS_DIR.rglob("*.rsc"))) if BACKUPS_DIR.exists() else 0
 
         with self._lock:
-            self.data["atd_status"] = atd_status
-            self.data["at_available"] = at_available
-            self.data["jobs"] = jobs
-            self.data["next_job"] = next_job
-            self.data["txt_today"] = txt_today
-            self.data["md_all"] = md_all
-            self.data["recent_txt"] = [p.name for p in recent]
+            self.data["agent_status"] = agent_status
+            self.data["routers"] = routers
+            self.data["laporan"] = [p.name for p in laporan]
+            self.data["laporan_count"] = len(laporan)
+            self.data["backup_count"] = backup_count
+            self.data["config_ok"] = CONFIG_FILE.exists()
 
     def draw(self, win: Any, rows: int, cols: int) -> None:
         with self._lock:
             data = dict(self.data)
 
-        safe_addstr(win, 0, 1, "Dashboard", cp(C_TITLE) | curses.A_BOLD)
-        safe_addstr(win, 1, 1, "-" * max(1, cols - 2), cp(C_DIM))
+        safe_addstr(win, 0, 1, "Dashboard — NetOps AI", cp(C_TITLE) | curses.A_BOLD)
+        safe_addstr(win, 1, 1, "─" * max(1, cols - 2), cp(C_DIM))
 
-        safe_addstr(win, 3, 2, "Status Sistem", cp(C_TITLE) | curses.A_BOLD)
-        safe_addstr(win, 4, 2, "-------------", cp(C_DIM))
+        row = 2
 
-        atd_active = data.get("atd_status") == "active"
-        if atd_active:
-            safe_addstr(win, 5, 2, "atd service  : ", 0)
-            safe_addstr(win, 5, 17, "● active", cp(C_OK) | curses.A_BOLD)
+        # ── Agent ──
+        safe_addstr(win, row, 2, "Agent", cp(C_TITLE) | curses.A_BOLD)
+        row += 1
+        status = data.get("agent_status", {})
+        if status:
+            model   = status.get("model", "?")
+            skills  = status.get("skills_loaded", 0)
+            url     = status.get("ollama_url", "?")
+            safe_addstr(win, row,     2, f"  Model   : {model}", cp(C_OK))
+            safe_addstr(win, row + 1, 2, f"  Skills  : {skills} loaded", cp(C_OK))
+            safe_addstr(win, row + 2, 2, f"  Ollama  : {url}", cp(C_DIM))
+            row += 3
         else:
-            safe_addstr(win, 5, 2, "atd service  : ", 0)
-            safe_addstr(win, 5, 17, "✗ tidak aktif", cp(C_ERR) | curses.A_BOLD)
+            safe_addstr(win, row, 2, "  Agent tidak tersedia", cp(C_ERR))
+            row += 1
 
-        at_available = bool(data.get("at_available"))
-        if at_available:
-            safe_addstr(win, 6, 2, "at command   : ", 0)
-            safe_addstr(win, 6, 17, "✓ tersedia", cp(C_OK) | curses.A_BOLD)
+        row += 1
+        safe_addstr(win, row, 2, "─" * max(1, cols - 4), cp(C_DIM))
+        row += 1
+
+        # ── Config & Routers ──
+        safe_addstr(win, row, 2, "Konfigurasi", cp(C_TITLE) | curses.A_BOLD)
+        row += 1
+        config_ok = data.get("config_ok", False)
+        cfg_label = "✓ config.yaml" if config_ok else "✗ config.yaml tidak ditemukan"
+        cfg_color = C_OK if config_ok else C_ERR
+        safe_addstr(win, row, 2, f"  {cfg_label}", cp(cfg_color))
+        row += 1
+
+        routers = data.get("routers", [])
+        if routers:
+            safe_addstr(win, row, 2, f"  Routers  : {', '.join(routers)}", cp(C_DIM))
         else:
-            safe_addstr(win, 6, 2, "at command   : ", 0)
-            safe_addstr(win, 6, 17, "✗ tidak ditemukan", cp(C_ERR) | curses.A_BOLD)
+            safe_addstr(win, row, 2, "  Routers  : (belum dikonfigurasi)", cp(C_WARN))
+        row += 2
 
-        safe_addstr(win, 8, 2, "Jadwal Berikutnya", cp(C_TITLE) | curses.A_BOLD)
-        safe_addstr(win, 9, 2, "-----------------", cp(C_DIM))
+        safe_addstr(win, row, 2, "─" * max(1, cols - 4), cp(C_DIM))
+        row += 1
 
-        next_job = data.get("next_job")
-        if next_job:
-            label = next_job["dt"].strftime("%a %b %d %H:%M:%S")
-            safe_addstr(win, 10, 2, f"Job #{next_job['id']}  ->  {label}"[: cols - 3])
-            safe_addstr(win, 11, 2, "Countdown  : ")
-            safe_addstr(
-                win,
-                11,
-                15,
-                format_countdown(next_job["dt"]),
-                cp(C_WARN) | curses.A_BOLD,
-            )
-        else:
-            safe_addstr(win, 10, 2, "Tidak ada jadwal")
-            safe_addstr(win, 11, 2, "Countdown  : -", cp(C_DIM))
+        # ── Laporan ──
+        safe_addstr(win, row, 2, "Laporan", cp(C_TITLE) | curses.A_BOLD)
+        row += 1
+        lcount   = data.get("laporan_count", 0)
+        bcount   = data.get("backup_count", 0)
+        safe_addstr(win, row,     2, f"  .md files : {lcount}", cp(C_DIM))
+        safe_addstr(win, row + 1, 2, f"  Backups   : {bcount} .rsc", cp(C_DIM))
+        row += 2
 
-        safe_addstr(win, 13, 2, "File Hari Ini", cp(C_TITLE) | curses.A_BOLD)
-        safe_addstr(win, 14, 2, "--------------", cp(C_DIM))
-        safe_addstr(win, 15, 2, f".txt output  :  {int(data.get('txt_today', 0))} file")
-        safe_addstr(win, 16, 2, f".md laporan  :  {int(data.get('md_all', 0))} file")
+        laporan = data.get("laporan", [])[:min(5, rows - row - 2)]
+        if laporan:
+            safe_addstr(win, row, 2, "  Terbaru:", cp(C_DIM))
+            row += 1
+            for name in laporan:
+                if row >= rows - 1:
+                    break
+                maxw = max(4, cols - 7)
+                show = name if len(name) <= maxw else name[: maxw - 3] + "..."
+                safe_addstr(win, row, 4, show, cp(C_DIM))
+                row += 1
 
-        safe_addstr(win, 18, 2, "Terbaru:", cp(C_TITLE))
-        recent = data.get("recent_txt", [])
-        for idx, name in enumerate(recent[:5]):
-            maxw = max(4, cols - 7)
-            show = name if len(name) <= maxw else (name[: maxw - 3] + "...")
-            safe_addstr(win, 19 + idx, 4, show)
+        safe_addstr(win, rows - 1, 2, "[R] Refresh", cp(C_MENU))
 
 
-class JadwalScreen(Screen):
-    """Schedule listing and actions for at jobs."""
+class SkillsScreen(Screen):
+    """Daftar semua skill yang loaded — domain, trigger, tools."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.scroll = 0
 
     def refresh(self) -> None:
-        jobs = sorted(parse_atq(), key=lambda x: x["dt"])
-        at_available = shutil.which("at") is not None
+        skills: list[dict] = []
+        if _HAS_AGENT and _agent_mod is not None:
+            try:
+                skills = _agent_mod.get_available_skills()
+            except Exception:
+                pass
         with self._lock:
-            self.data["jobs"] = jobs
-            self.data["at_available"] = at_available
+            self.data["skills"] = skills
 
     def handle_key(self, key: int, app: "App") -> bool:
         ch = chr(key) if 0 < key < 256 else ""
+        with self._lock:
+            n = len(self.data.get("skills", []))
 
-        if ch in ("s", "S"):
-            if app.modal_confirm(["Jalankan ./schedule_utbk.sh?"]):
-                out = run_cmd(["bash", "schedule_utbk.sh"], cwd=WORKDIR, timeout=30)
-                lines = ["Setup selesai."]
-                if out.strip():
-                    lines.extend(out.strip().splitlines()[-3:])
-                app.modal_message(lines[:6], duration=3.0)
-                self.refresh()
+        if key in (curses.KEY_UP, ord("k"), ord("K")):
+            self.scroll = max(0, self.scroll - 1)
             return True
-
-        if ch in ("c", "C"):
-            if app.modal_confirm(["Cancel SEMUA at jobs?"]):
-                out = run_cmd(
-                    ["bash", "schedule_utbk.sh", "--cancel"],
-                    cwd=WORKDIR,
-                    timeout=30,
-                )
-                lines = ["Cancel selesai."]
-                if out.strip():
-                    lines.extend(out.strip().splitlines()[-3:])
-                app.modal_message(lines[:6], duration=3.0)
-                self.refresh()
+        if key in (curses.KEY_DOWN, ord("j"), ord("J")):
+            self.scroll = min(max(0, n - 1), self.scroll + 1)
             return True
-
-        if ch in ("x", "X"):
-            job_id = app.modal_input("Nomor job (contoh: 7): ")
-            if job_id.isdigit():
-                out = run_cmd(["atrm", job_id], cwd=WORKDIR, timeout=10)
-                lines = [f"Job #{job_id} dibatalkan."]
-                if out.strip():
-                    lines.extend(out.strip().splitlines()[-2:])
-                app.modal_message(lines[:5], duration=2.5)
-                self.refresh()
-            else:
-                app.modal_message(["Input tidak valid."], duration=1.5)
+        if ch in ("r", "R"):
+            self.refresh()
+            app._wake.set()
             return True
-
         return False
 
     def draw(self, win: Any, rows: int, cols: int) -> None:
         with self._lock:
-            jobs = list(self.data.get("jobs", []))
-            at_available = bool(self.data.get("at_available", False))
+            skills = list(self.data.get("skills", []))
 
-        safe_addstr(
-            win,
-            0,
-            1,
-            f"Jadwal at Jobs  ({len(jobs)} terjadwal)",
-            cp(C_TITLE) | curses.A_BOLD,
+        enabled  = sum(1 for s in skills if s.get("enabled"))
+        safe_addstr(win, 0, 1,
+                    f"Skills  ({enabled} aktif / {len(skills)} total)",
+                    cp(C_TITLE) | curses.A_BOLD)
+        safe_addstr(win, 1, 1, "─" * max(1, cols - 2), cp(C_DIM))
+
+        if not skills:
+            safe_addstr(win, 3, 2, "Belum ada skill — pastikan agent tersedia.", cp(C_WARN))
+            safe_addstr(win, rows - 1, 2, "[R] Refresh", cp(C_MENU))
+            return
+
+        card_h   = 3
+        content_rows = max(1, rows - 4)
+        max_scroll   = max(0, len(skills) - content_rows // card_h)
+        self.scroll  = min(self.scroll, max_scroll)
+        start = self.scroll
+        row = 2
+        for skill in skills[start:]:
+            if row + card_h > rows - 2:
+                break
+            enabled = skill.get("enabled", True)
+            color   = C_OK if enabled else C_DIM
+            name    = skill.get("name", "?")
+            domain  = skill.get("domain", "?")
+            tools   = skill.get("tools", [])
+            triggers = skill.get("triggers", [])
+            trigger_str = ", ".join(triggers[:3])
+            if len(triggers) > 3:
+                trigger_str += f" +{len(triggers)-3}"
+            status = "✓" if enabled else "✗"
+            safe_addstr(win, row,     2,
+                        f"{status} {name}  [{domain}]  tools: {len(tools)}"[: cols - 3],
+                        cp(color) | curses.A_BOLD)
+            safe_addstr(win, row + 1, 4,
+                        f"triggers: {trigger_str}"[: cols - 5],
+                        cp(C_DIM))
+            safe_addstr(win, row + 2, 2, "·" * max(1, cols - 4), cp(C_DIM))
+            row += card_h
+
+        safe_addstr(win, rows - 1, 2, "[J/K] Scroll  [R] Refresh", cp(C_MENU))
+
+
+_PING_SCRIPT = r"""\
+import sys, re, subprocess, yaml
+from pathlib import Path
+cfg_file = Path(sys.argv[1])
+if not cfg_file.exists():
+    print("config.yaml tidak ditemukan.")
+    sys.exit(1)
+cfg = yaml.safe_load(cfg_file.read_text())
+routers = cfg.get("routers", [])
+if not routers:
+    print("Tidak ada router di config.yaml.")
+    sys.exit(0)
+print(f"Ping {len(routers)} router...")
+print()
+for r in routers:
+    name = r.get("name", "?")
+    host = r.get("host", "")
+    if not host:
+        print(f"  {name:<14} (no host)")
+        continue
+    try:
+        res = subprocess.run(
+            ["ping", "-c", "2", "-W", "3", host],
+            capture_output=True, text=True, timeout=8,
         )
-        safe_addstr(win, 1, 1, "-" * max(1, cols - 2), cp(C_DIM))
-
-        row = 3
-        if not at_available:
-            safe_addstr(win, row, 2, "Perintah 'at' tidak tersedia di sistem.", cp(C_ERR))
-            row += 1
-
-        if not jobs:
-            safe_addstr(win, row, 2, "Tidak ada jadwal terdaftar.", cp(C_DIM))
-        else:
-            for item in jobs:
-                if row >= rows - 4:
-                    break
-                when = item["dt"].strftime("%a %b %d %H:%M:%S %Y")
-                cd = format_countdown(item["dt"])
-                line = f"#{item['id']:<3} {when:<24} ({cd})"
-                safe_addstr(win, row, 2, line[: cols - 3])
-                row += 1
-
-        cmd_row = max(2, rows - 3)
-        safe_addstr(win, cmd_row, 1, "-" * max(1, cols - 2), cp(C_DIM))
-        safe_addstr(
-            win,
-            cmd_row + 1,
-            2,
-            "[S] Setup   [C] Cancel semua   [X] Cancel #",
-            cp(C_MENU),
-        )
+        ok  = res.returncode == 0
+        rtt = "-"
+        m   = re.search(r"rtt.*?= [\d.]+/([\d.]+)", res.stdout)
+        if m: rtt = f"{m.group(1)}ms avg"
+        status = "✓ UP  " if ok else "✗ DOWN"
+        print(f"  {name:<14} {host:<18} {status}  {rtt}")
+    except Exception as e:
+        print(f"  {name:<14} {host:<18} ✗ error: {e}")
+print()
+print("Selesai.")
+"""
 
 
-class CollectScreen(Screen):
-    """Run mikrotik_agent.py and stream output."""
+class ReachabilityScreen(Screen):
+    """Ping check semua router di config.yaml."""
 
     def __init__(self) -> None:
         super().__init__()
@@ -506,21 +520,18 @@ class CollectScreen(Screen):
 
     def refresh(self) -> None:
         with self._lock:
-            proc = self.data.get("proc")
+            proc  = self.data.get("proc")
             start = self.data.get("start")
             state = self.data.get("state", "IDLE")
             if state == "RUNNING" and proc is not None:
                 if proc.poll() is None and start is not None:
                     self.data["elapsed"] = time.time() - float(start)
 
-    def _start_collect(self, app: "App") -> None:
+    def _start_ping(self, app: "App") -> None:
         with self._lock:
             proc = self.data.get("proc")
             if proc is not None and proc.poll() is None:
-                self.data["lines"].append("Collect sedang berjalan...")
-                self.data["lines"] = self.data["lines"][-20:]
                 return
-
             self.data["state"] = "RUNNING"
             self.data["lines"] = []
             self.data["start"] = time.time()
@@ -529,7 +540,7 @@ class CollectScreen(Screen):
 
         try:
             proc = subprocess.Popen(
-                ["python3", "mikrotik_agent.py"],
+                ["python3", "-c", _PING_SCRIPT, str(CONFIG_FILE)],
                 cwd=str(WORKDIR),
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
@@ -539,7 +550,7 @@ class CollectScreen(Screen):
         except Exception as exc:
             with self._lock:
                 self.data["state"] = "FAILED"
-                self.data["lines"] = [f"Gagal start proses: {exc}"]
+                self.data["lines"] = [f"Gagal: {exc}"]
                 self.data["exit_code"] = -1
             app._wake.set()
             return
@@ -554,12 +565,11 @@ class CollectScreen(Screen):
                         with self._lock:
                             lines = list(self.data.get("lines", []))
                             lines.append(line.rstrip())
-                            self.data["lines"] = lines[-20:]
+                            self.data["lines"] = lines[-40:]
                             start = self.data.get("start")
                             if start is not None:
                                 self.data["elapsed"] = time.time() - float(start)
                         app._wake.set()
-
                 proc.wait()
                 with self._lock:
                     start = self.data.get("start")
@@ -571,8 +581,8 @@ class CollectScreen(Screen):
                 with self._lock:
                     self.data["state"] = "FAILED"
                     lines = list(self.data.get("lines", []))
-                    lines.append(f"Reader error: {exc}")
-                    self.data["lines"] = lines[-20:]
+                    lines.append(f"Error: {exc}")
+                    self.data["lines"] = lines[-40:]
                     self.data["exit_code"] = -1
             finally:
                 app._wake.set()
@@ -584,253 +594,109 @@ class CollectScreen(Screen):
         if ch in ("r", "R"):
             with self._lock:
                 state = self.data.get("state", "IDLE")
-            if state == "RUNNING":
-                with self._lock:
-                    lines = list(self.data.get("lines", []))
-                    lines.append("Collect sudah berjalan.")
-                    self.data["lines"] = lines[-20:]
-                return True
-            self._start_collect(app)
+            if state != "RUNNING":
+                self._start_ping(app)
             return True
         return False
 
     def draw(self, win: Any, rows: int, cols: int) -> None:
         with self._lock:
-            state = self.data.get("state", "IDLE")
-            lines = list(self.data.get("lines", []))
-            elapsed = float(self.data.get("elapsed", 0.0))
+            state    = self.data.get("state", "IDLE")
+            lines    = list(self.data.get("lines", []))
+            elapsed  = float(self.data.get("elapsed", 0.0))
             exit_code = self.data.get("exit_code")
 
-        safe_addstr(win, 0, 1, "Collect Data dari Router", cp(C_TITLE) | curses.A_BOLD)
-        safe_addstr(win, 1, 1, "-" * max(1, cols - 2), cp(C_DIM))
+        safe_addstr(win, 0, 1, "Reachability — Ping Semua Router", cp(C_TITLE) | curses.A_BOLD)
+        safe_addstr(win, 1, 1, "─" * max(1, cols - 2), cp(C_DIM))
 
         if state == "IDLE":
-            safe_addstr(win, 3, 2, "Jalankan mikrotik_agent.py untuk mengambil")
-            safe_addstr(win, 4, 2, "data DHCP lease dari semua router.")
-            safe_addstr(win, 6, 2, "Output disimpan ke: output/")
-            safe_addstr(win, 7, 2, "Log: schedule.log")
-            safe_addstr(win, 9, 2, "[R] Mulai collect", cp(C_MENU) | curses.A_BOLD)
+            safe_addstr(win, 3, 2, "Ping semua router dari config.yaml.", cp(C_DIM))
+            safe_addstr(win, 4, 2, "Menampilkan status UP/DOWN dan RTT.", cp(C_DIM))
+            safe_addstr(win, 6, 2, "[R] Mulai ping check", cp(C_MENU) | curses.A_BOLD)
             return
 
         if state == "RUNNING":
             spin = SPINNER[int(time.time() * 8) % len(SPINNER)]
-            safe_addstr(
-                win,
-                3,
-                2,
-                f"{spin} Running... {int(elapsed)}s",
-                cp(C_WARN) | curses.A_BOLD,
-            )
-            view = lines[-15:]
+            safe_addstr(win, 3, 2, f"{spin} Pinging...  {elapsed:.0f}s",
+                        cp(C_WARN) | curses.A_BOLD)
+            view = lines[-(rows - 6):]
             for idx, line in enumerate(view):
                 safe_addstr(win, 5 + idx, 2, line[: cols - 3])
             return
 
-        if state == "DONE":
-            safe_addstr(
-                win,
-                3,
-                2,
-                "✓ Selesai (exit 0)",
-                cp(C_OK) | curses.A_BOLD,
-            )
-            safe_addstr(win, 4, 2, f"Elapsed: {int(elapsed)}s", cp(C_DIM))
-            view = lines[-15:]
-            for idx, line in enumerate(view):
-                safe_addstr(win, 6 + idx, 2, line[: cols - 3])
-            safe_addstr(win, rows - 2, 2, "[R] Jalankan lagi", cp(C_MENU) | curses.A_BOLD)
-            return
-
-        safe_addstr(
-            win,
-            3,
-            2,
-            f"✗ Gagal (exit {exit_code})",
-            cp(C_ERR) | curses.A_BOLD,
-        )
-        safe_addstr(win, 4, 2, f"Elapsed: {int(elapsed)}s", cp(C_DIM))
-        view = lines[-15:]
+        hdr_color = C_OK if state == "DONE" else C_ERR
+        hdr = "✓ Selesai" if state == "DONE" else f"✗ Gagal (exit {exit_code})"
+        safe_addstr(win, 3, 2, f"{hdr}  ({elapsed:.0f}s)", cp(hdr_color) | curses.A_BOLD)
+        view = lines[-(rows - 6):]
         for idx, line in enumerate(view):
-            safe_addstr(win, 6 + idx, 2, line[: cols - 3])
-        safe_addstr(win, rows - 2, 2, "[R] Coba lagi", cp(C_MENU) | curses.A_BOLD)
+            color = C_OK if "✓" in line else C_ERR if "✗" in line else 0
+            safe_addstr(win, 5 + idx, 2, line[: cols - 3], cp(color) if color else 0)
+        safe_addstr(win, rows - 1, 2, "[R] Ulangi", cp(C_MENU))
 
 
 class LaporanScreen(Screen):
-    """Report list and report generation."""
+    """Daftar file laporan di laporan/ — dibuat oleh document_agent via AI Chat."""
 
     def __init__(self) -> None:
         super().__init__()
+        self.scroll = 0
         with self._lock:
             self.data["files"] = []
-            self.data["gen_state"] = "IDLE"
-            self.data["gen_lines"] = []
-            self.data["gen_proc"] = None
-            self.data["gen_start"] = None
-            self.data["gen_elapsed"] = 0.0
-            self.data["gen_exit_code"] = None
 
     def refresh(self) -> None:
         files = sorted(
             LAPORAN_DIR.glob("*.md"),
             key=lambda p: p.stat().st_mtime,
             reverse=True,
-        )
-
+        ) if LAPORAN_DIR.exists() else []
         with self._lock:
             self.data["files"] = files
-            proc = self.data.get("gen_proc")
-            state = self.data.get("gen_state")
-            start = self.data.get("gen_start")
-            if state == "RUNNING" and proc is not None and proc.poll() is None and start:
-                self.data["gen_elapsed"] = time.time() - float(start)
-
-    def _start_generate(self, app: "App", force: bool) -> None:
-        with self._lock:
-            proc = self.data.get("gen_proc")
-            if proc is not None and proc.poll() is None:
-                lines = list(self.data.get("gen_lines", []))
-                lines.append("Generate masih berjalan...")
-                self.data["gen_lines"] = lines[-20:]
-                return
-
-            self.data["gen_state"] = "RUNNING"
-            self.data["gen_lines"] = []
-            self.data["gen_start"] = time.time()
-            self.data["gen_elapsed"] = 0.0
-            self.data["gen_exit_code"] = None
-
-        cmd = ["python3", "generate_reports.py"]
-        if force:
-            cmd.append("--force")
-
-        try:
-            proc = subprocess.Popen(
-                cmd,
-                cwd=str(WORKDIR),
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                bufsize=1,
-            )
-        except Exception as exc:
-            with self._lock:
-                self.data["gen_state"] = "FAILED"
-                self.data["gen_lines"] = [f"Gagal start generate: {exc}"]
-                self.data["gen_exit_code"] = -1
-            app._wake.set()
-            return
-
-        with self._lock:
-            self.data["gen_proc"] = proc
-
-        def reader() -> None:
-            try:
-                if proc.stdout is not None:
-                    for line in proc.stdout:
-                        with self._lock:
-                            out = list(self.data.get("gen_lines", []))
-                            out.append(line.rstrip())
-                            self.data["gen_lines"] = out[-20:]
-                            start = self.data.get("gen_start")
-                            if start is not None:
-                                self.data["gen_elapsed"] = time.time() - float(start)
-                        app._wake.set()
-
-                proc.wait()
-                with self._lock:
-                    start = self.data.get("gen_start")
-                    if start is not None:
-                        self.data["gen_elapsed"] = time.time() - float(start)
-                    self.data["gen_exit_code"] = proc.returncode
-                    self.data["gen_state"] = (
-                        "DONE" if proc.returncode == 0 else "FAILED"
-                    )
-            except Exception as exc:
-                with self._lock:
-                    self.data["gen_state"] = "FAILED"
-                    out = list(self.data.get("gen_lines", []))
-                    out.append(f"Reader error: {exc}")
-                    self.data["gen_lines"] = out[-20:]
-                    self.data["gen_exit_code"] = -1
-            finally:
-                app._wake.set()
-
-        threading.Thread(target=reader, daemon=True).start()
 
     def handle_key(self, key: int, app: "App") -> bool:
         ch = chr(key) if 0 < key < 256 else ""
-        if ch in ("g", "G"):
-            with self._lock:
-                state = self.data.get("gen_state", "IDLE")
-            if state != "RUNNING":
-                self._start_generate(app, force=True)
-            return True
+        with self._lock:
+            n = len(self.data.get("files", []))
 
-        if ch in ("f", "F"):
-            with self._lock:
-                state = self.data.get("gen_state", "IDLE")
-            if state != "RUNNING":
-                self._start_generate(app, force=False)
+        if key in (curses.KEY_UP, ord("k"), ord("K")):
+            self.scroll = max(0, self.scroll - 1)
             return True
-
+        if key in (curses.KEY_DOWN, ord("j"), ord("J")):
+            self.scroll = min(max(0, n - 1), self.scroll + 1)
+            return True
+        if ch in ("r", "R"):
+            self.refresh()
+            app._wake.set()
+            return True
         return False
 
     def draw(self, win: Any, rows: int, cols: int) -> None:
         with self._lock:
             files = list(self.data.get("files", []))
-            gen_state = self.data.get("gen_state", "IDLE")
-            gen_lines = list(self.data.get("gen_lines", []))
-            gen_elapsed = float(self.data.get("gen_elapsed", 0.0))
-            gen_exit_code = self.data.get("gen_exit_code")
 
-        safe_addstr(win, 0, 1, f"Laporan .md ({len(files)} files)", cp(C_TITLE) | curses.A_BOLD)
-        safe_addstr(win, 1, 1, "-" * max(1, cols - 2), cp(C_DIM))
+        safe_addstr(win, 0, 1, f"Laporan  ({len(files)} file)", cp(C_TITLE) | curses.A_BOLD)
+        safe_addstr(win, 1, 1, "─" * max(1, cols - 2), cp(C_DIM))
 
-        row = 2
-        max_list_rows = max(0, rows - 8)
-        for p in files[:max_list_rows]:
-            ts = dt.datetime.fromtimestamp(p.stat().st_mtime).strftime("%Y-%m-%d %H:%M")
-            name_width = max(8, cols - 24)
-            name = p.name
-            if len(name) > name_width:
-                name = name[: name_width - 3] + "..."
-            safe_addstr(win, row, 2, f"{name:<{name_width}}  {ts}"[: cols - 3])
-            row += 1
+        if not files:
+            safe_addstr(win, 3, 2, "Belum ada laporan.", cp(C_DIM))
+            safe_addstr(win, 4, 2, "Gunakan [6] AI Chat untuk meminta document_agent", cp(C_DIM))
+            safe_addstr(win, 5, 2, "membuat dan menyimpan laporan.", cp(C_DIM))
+            safe_addstr(win, rows - 1, 2, "[R] Refresh", cp(C_MENU))
+            return
 
-        cmd_row = max(2, rows - 5)
-        safe_addstr(win, cmd_row, 1, "-" * max(1, cols - 2), cp(C_DIM))
-        safe_addstr(
-            win,
-            cmd_row + 1,
-            2,
-            "[G] Generate --force   [F] Generate fresh",
-            cp(C_MENU),
-        )
+        visible = max(1, rows - 4)
+        max_scroll = max(0, len(files) - visible)
+        self.scroll = min(self.scroll, max_scroll)
+        view = files[self.scroll: self.scroll + visible]
 
-        status_row = cmd_row + 2
-        if gen_state == "RUNNING":
-            spin = SPINNER[int(time.time() * 8) % len(SPINNER)]
-            safe_addstr(
-                win,
-                status_row,
-                2,
-                f"{spin} Generating... {int(gen_elapsed)}s",
-                cp(C_WARN) | curses.A_BOLD,
-            )
-            if gen_lines:
-                safe_addstr(win, min(rows - 1, status_row + 1), 2, gen_lines[-1][: cols - 3], cp(C_DIM))
-        elif gen_state == "DONE":
-            safe_addstr(win, status_row, 2, "✓ Selesai", cp(C_OK) | curses.A_BOLD)
-        elif gen_state == "FAILED":
-            safe_addstr(
-                win,
-                status_row,
-                2,
-                f"✗ Gagal (exit {gen_exit_code})",
-                cp(C_ERR) | curses.A_BOLD,
-            )
-            if gen_lines:
-                safe_addstr(win, min(rows - 1, status_row + 1), 2, gen_lines[-1][: cols - 3], cp(C_DIM))
+        name_w = max(8, cols - 22)
+        for idx, p in enumerate(view):
+            ts   = dt.datetime.fromtimestamp(p.stat().st_mtime).strftime("%Y-%m-%d %H:%M")
+            name = p.name if len(p.name) <= name_w else p.name[: name_w - 3] + "..."
+            size = f"{p.stat().st_size / 1024:.0f}K"
+            line = f"{name:<{name_w}}  {ts}  {size:>5}"
+            safe_addstr(win, 2 + idx, 2, line[: cols - 3])
+
+        safe_addstr(win, rows - 1, 2, "[J/K] Scroll  [R] Refresh  (laporan dibuat via AI Chat)", cp(C_MENU))
 
 
 class LogScreen(Screen):
@@ -879,14 +745,14 @@ class LogScreen(Screen):
             win,
             0,
             1,
-            f"Schedule Log  ({len(lines)} lines, scroll ↑↓)",
+            f"Log  ({len(lines)} baris, scroll ↑↓)",
             cp(C_TITLE) | curses.A_BOLD,
         )
-        safe_addstr(win, 1, 1, "-" * max(1, cols - 2), cp(C_DIM))
+        safe_addstr(win, 1, 1, "─" * max(1, cols - 2), cp(C_DIM))
 
         visible_rows = max(0, rows - 4)
         if not lines:
-            safe_addstr(win, 3, 2, "schedule.log belum ada - jobs belum dieksekusi", cp(C_DIM))
+            safe_addstr(win, 3, 2, "schedule.log belum ada.", cp(C_DIM))
         else:
             start = min(scroll, max(0, len(lines) - visible_rows))
             view = lines[start : start + visible_rows]
@@ -896,18 +762,234 @@ class LogScreen(Screen):
         safe_addstr(win, rows - 1, 2, "[R] Refresh  [J/K] Scroll", cp(C_MENU))
 
 
-class AIScreen(Screen):
-    """Interactive AI chat using Ollama API."""
+class AgentActivityScreen(Screen):
+    """Real-time agent routing and tool activity monitor."""
 
-    SYSTEM_PROMPT = (
-        "Kamu adalah asisten monitoring jaringan DHCP untuk ujian UTBK 2026. "
-        "Kamu membantu menganalisis data DHCP lease dari router Mikrotik. "
-        "Jika ada DATA KONTEKS yang diberikan, gunakan itu untuk menjawab "
-        "pertanyaan spesifik. Jawab dalam Bahasa Indonesia. Gunakan istilah teknis "
-        "jaringan dalam bahasa Inggris dengan backtick, contoh: `bound`, "
-        "`waiting`, `IP`, `MAC`, `DHCP`, `lease`. Jawaban singkat dan langsung ke "
-        "poin kecuali diminta detail."
-    )
+    _EVENT_ICONS = {
+        "routing":          ("→", C_WARN),
+        "tool_call":        ("⚙", C_OK),
+        "tool_result":      ("✓", C_DIM),
+        "approval_required":("⚠", C_ERR),
+        "error":            ("✗", C_ERR),
+    }
+
+    def handle_key(self, key: int, app: "App") -> bool:
+        ch = chr(key) if 0 < key < 256 else ""
+        if ch in ("c", "C"):
+            _agent_activity_log.clear()
+            return True
+        return False
+
+    def draw(self, win: Any, rows: int, cols: int) -> None:
+        safe_addstr(win, 0, 1, "Agent Activity", cp(C_TITLE) | curses.A_BOLD)
+        safe_addstr(win, 1, 1, "─" * max(1, cols - 2), cp(C_DIM))
+
+        if _HAS_AGENT and _agent_mod is not None:
+            status = _agent_mod.get_agent_status()
+            model  = status.get("model", "?")
+            skills = status.get("skills_loaded", 0)
+            safe_addstr(win, 2, 1, f"Model: {model}   Skills: {skills} loaded", cp(C_DIM))
+        else:
+            safe_addstr(win, 2, 1, "Agent tidak tersedia.", cp(C_ERR))
+
+        safe_addstr(win, 3, 1, "─" * max(1, cols - 2), cp(C_DIM))
+
+        log = list(_agent_activity_log)
+        content_rows = rows - 6
+        if not log:
+            safe_addstr(win, 5, 2, "Belum ada aktivitas.", cp(C_DIM))
+            safe_addstr(win, 6, 2, "Kirim pesan di [6] AI Chat untuk melihat aktivitas.", cp(C_DIM))
+        else:
+            start = max(0, len(log) - content_rows)
+            for i, entry in enumerate(log[start:]):
+                if i >= content_rows:
+                    break
+                evt   = entry.get("event_type", "")
+                icon, color = self._EVENT_ICONS.get(evt, ("·", C_DIM))
+                ts    = entry.get("time", "--:--:--")
+                text  = entry.get("content", "")
+                line  = f"[{ts}] {icon} {text}"
+                safe_addstr(win, 4 + i, 2, line[: cols - 4], cp(color))
+
+        safe_addstr(win, rows - 1, 2, "[C] Hapus log", cp(C_MENU))
+
+
+class KanbanScreen(Screen):
+    """Real-time Kanban board — agents as cards, lifecycle columns."""
+
+    def handle_key(self, key: int, app: "App") -> bool:
+        ch = chr(key) if 0 < key < 256 else ""
+        if ch in ("r", "R"):
+            return True
+        return False
+
+    def draw(self, win: Any, rows: int, cols: int) -> None:
+        now = time.time()
+        with _kanban_lock:
+            query        = _kanban_state["query"]
+            query_start  = _kanban_state["query_start"]
+            agents       = {k: dict(v) for k, v in _kanban_state["agents"].items()}
+
+        total_elapsed = now - query_start
+
+        safe_addstr(win, 0, 1, "Status Agent", cp(C_TITLE) | curses.A_BOLD)
+        if query:
+            elapsed_str = f" [{total_elapsed:.0f}s]"
+            safe_addstr(win, 0, 14, f" ← {query[: cols - 22]}", cp(C_DIM))
+            safe_addstr(win, 0, max(14, cols - len(elapsed_str) - 1), elapsed_str, cp(C_WARN))
+        safe_addstr(win, 1, 1, "─" * max(1, cols - 2), cp(C_DIM))
+
+        n_cols   = len(KANBAN_COLS)
+        col_w    = max(10, (cols - 2) // n_cols)
+        header_y = 2
+        cards_y  = 4
+
+        # Column headers
+        for ci, (col_id, col_label) in enumerate(KANBAN_COLS):
+            x = 1 + ci * col_w
+            color = _KANBAN_COL_COLOR.get(col_id, C_DIM)
+            hdr = col_label.center(col_w - 1)[: col_w - 1]
+            safe_addstr(win, header_y, x, hdr, cp(color) | curses.A_BOLD)
+            safe_addstr(win, header_y + 1, x, "─" * (col_w - 1), cp(C_DIM))
+
+        # Agent cards per column
+        col_counts: dict[str, int] = {c: 0 for c, _ in KANBAN_COLS}
+        for alias, info in AGENT_INFO.items():
+            state   = agents[alias]
+            col_id  = state["col"]
+            color   = _KANBAN_COL_COLOR.get(col_id, C_DIM)
+            ci      = next((i for i, (c, _) in enumerate(KANBAN_COLS) if c == col_id), 0)
+            x       = 1 + ci * col_w
+            y       = cards_y + col_counts[col_id] * 3
+            elapsed = now - state.get("col_since", now)
+
+            if y + 2 >= rows - 1:
+                continue
+
+            # Line 1: alias/role + elapsed time right-aligned inside col_w
+            name_part    = f" {alias}/{info}"
+            elapsed_part = f"{elapsed:.0f}s "
+            pad = col_w - 1 - len(name_part) - len(elapsed_part)
+            card_name = (name_part + " " * max(0, pad) + elapsed_part)[: col_w - 1]
+            safe_addstr(win, y, x, card_name, cp(color) | curses.A_BOLD)
+
+            # Line 2: tool count + last tool
+            if state["tool_count"]:
+                detail = f" ⚙{state['tool_count']} {state['last_tool']}"
+            else:
+                detail = ""
+            safe_addstr(win, y + 1, x, detail[: col_w - 1], cp(C_DIM))
+            safe_addstr(win, y + 2, x, "·" * (col_w - 2), cp(C_DIM))
+
+            col_counts[col_id] += 1
+
+        safe_addstr(win, rows - 1, 2, "[R] Refresh  (otomatis update saat AI Chat aktif)", cp(C_MENU))
+
+
+class TokenMetricsScreen(Screen):
+    """Token utilization monitor — ctx%, predict%, tps, done_reason per agent."""
+
+    def handle_key(self, key: int, app: "App") -> bool:
+        ch = chr(key) if 0 < key < 256 else ""
+        if ch in ("r", "R"):
+            return True
+        if ch in ("c", "C"):
+            if _HAS_AGENT and _agent_mod is not None:
+                try:
+                    from agents.metrics import METRICS_PATH  # noqa: PLC0415
+                    if METRICS_PATH.exists():
+                        METRICS_PATH.unlink()
+                except Exception:
+                    pass
+            return True
+        return False
+
+    def draw(self, win: Any, rows: int, cols: int) -> None:
+        safe_addstr(win, 0, 1, "Token Utilization", cp(C_TITLE) | curses.A_BOLD)
+        safe_addstr(win, 1, 1, "─" * max(1, cols - 2), cp(C_DIM))
+
+        entries: list[dict] = []
+        if _HAS_AGENT and _agent_mod is not None and hasattr(_agent_mod, "get_token_metrics"):
+            try:
+                entries = _agent_mod.get_token_metrics(100)
+            except Exception:
+                pass
+
+        if not entries:
+            safe_addstr(win, 3, 2, "Belum ada data. Kirim pesan di [6] AI Chat untuk mulai merekam.", cp(C_DIM))
+            safe_addstr(win, rows - 1, 2, "[R] Refresh   [C] Hapus data", cp(C_MENU))
+            return
+
+        # ── Per-agent summary ─────────────────────────────────────────────────
+        row = 2
+        safe_addstr(win, row, 1, "Per-Agent Summary", cp(C_DIM) | curses.A_BOLD)
+        row += 1
+
+        hdr = f"{'Agent':<20} {'Calls':>5}  {'ctx_avg':>7}  {'predict_avg':>11}  {'tps_avg':>7}  {'⚠':>3}"
+        safe_addstr(win, row, 2, hdr[: cols - 4], cp(C_DIM) | curses.A_UNDERLINE)
+        row += 1
+
+        # Aggregate per agent
+        from collections import defaultdict  # noqa: PLC0415
+        agg: dict[str, dict] = defaultdict(lambda: {"n": 0, "ctx": 0.0, "pred": 0.0, "tps": 0.0, "warn": 0})
+        for e in entries:
+            a = e.get("agent", "?")
+            agg[a]["n"]    += 1
+            agg[a]["ctx"]  += e.get("ctx_util", 0)
+            agg[a]["pred"] += e.get("predict_util", 0)
+            agg[a]["tps"]  += e.get("tps", 0)
+            if e.get("done_reason") == "length":
+                agg[a]["warn"] += 1
+
+        for agent, d in sorted(agg.items()):
+            n = d["n"]
+            ctx_avg  = d["ctx"]  / n
+            pred_avg = d["pred"] / n
+            tps_avg  = d["tps"]  / n
+            warn     = d["warn"]
+            color = C_ERR if warn else C_OK
+            warn_s = f"{warn} ⚠" if warn else "  -"
+            line = f"{agent:<20} {n:>5}  {ctx_avg:>6.1f}%  {pred_avg:>10.1f}%  {tps_avg:>7.1f}  {warn_s:>4}"
+            safe_addstr(win, row, 2, line[: cols - 4], cp(color))
+            row += 1
+            if row >= rows - 7:
+                break
+
+        row += 1
+        safe_addstr(win, row, 1, "─" * max(1, cols - 2), cp(C_DIM))
+        row += 1
+
+        # ── Recent calls ──────────────────────────────────────────────────────
+        safe_addstr(win, row, 1, "Recent Calls", cp(C_DIM) | curses.A_BOLD)
+        row += 1
+
+        col_hdr = f"{'Time':<8}  {'Agent':<20} {'ctx%':>5}  {'predict%':>8}  {'reason':<9}  {'tps':>5}  {'ms':>6}"
+        safe_addstr(win, row, 2, col_hdr[: cols - 4], cp(C_DIM) | curses.A_UNDERLINE)
+        row += 1
+
+        recent = entries[-max(1, rows - row - 2):]
+        for e in reversed(recent):
+            if row >= rows - 1:
+                break
+            ts          = e.get("ts", "")[-8:]   # HH:MM:SS
+            agent       = e.get("agent", "?")
+            ctx_u       = e.get("ctx_util", 0)
+            pred_u      = e.get("predict_util", 0)
+            done        = e.get("done_reason", "?")
+            tps         = e.get("tps", 0)
+            ms          = e.get("total_ms", 0)
+            is_warn     = done == "length"
+            color       = C_ERR if is_warn else C_OK
+            reason_s    = f"{done} ⚠" if is_warn else done
+            line = f"{ts:<8}  {agent:<20} {ctx_u:>4.1f}%  {pred_u:>7.1f}%  {reason_s:<9}  {tps:>5.1f}  {ms:>6.0f}"
+            safe_addstr(win, row, 2, line[: cols - 4], cp(color))
+            row += 1
+
+        safe_addstr(win, rows - 1, 2, "[R] Refresh   [C] Hapus data", cp(C_MENU))
+
+
+class AIScreen(Screen):
+    """Interactive AI chat powered by NetOps multi-agent."""
 
     def __init__(self) -> None:
         super().__init__()
@@ -915,22 +997,20 @@ class AIScreen(Screen):
             self.data["history"] = []
             self.data["state"] = "IDLE"
             self.data["scroll"] = 0
-            self.data["error"] = ""
             self.data["input_buf"] = ""
             self.data["input_mode"] = True
-            self.data["use_context"] = True
-        self._langgraph_agent: Any = None
-        self._langgraph_config: dict[str, Any] = {}
+            self.data["pending_approval"] = None
+            self.data["exec_start"] = None
+        self._agent: Any = None
+        self._agent_config: dict[str, Any] = {}
         if _HAS_AGENT and _agent_mod is not None:
             try:
-                self._langgraph_agent, self._langgraph_config = \
+                self._agent, self._agent_config = \
                     _agent_mod.create_agent(thread_id=str(id(self)))
-            except Exception as _e:
-                err_str = str(_e)
-                self.data["error"] = f"Agent init error: {err_str}"
+            except Exception as exc:
                 self.data["history"].append({
                     "role": "assistant",
-                    "content": f"⚠ Agent init gagal (fallback ke Ollama): {err_str}",
+                    "content": f"⚠ Agent init gagal: {exc}",
                 })
 
     def refresh(self) -> None:
@@ -944,226 +1024,169 @@ class AIScreen(Screen):
             self.data["history"].append({"role": "user", "content": buf})
             self.data["input_buf"] = ""
             self.data["state"] = "WAITING"
-            history_copy = list(self.data["history"])
-            use_context = self.data.get("use_context", True)
-            self.data["scroll"] = 999999  # will be clamped to max in draw
+            self.data["scroll"] = 999999
+            user_msg = buf
 
         threading.Thread(
             target=self._call_agent,
-            args=(history_copy, use_context, app),
+            args=(user_msg, app),
             daemon=True,
         ).start()
 
-    def _call_agent(self, history: list[dict[str, str]], use_context: bool, app: "App") -> None:
-        """Run LangGraph agent in background thread. Falls back to _call_ollama if unavailable."""
-        if not _HAS_AGENT or self._langgraph_agent is None:
-            self._call_ollama(history, use_context, app)
-            return
-
-        user_msg = history[-1]["content"]
-
-        # Inject file-based context only on first message of the session
-        if use_context and len(history) == 1:
-            ctx = build_data_context()
-            if ctx:
-                user_msg = f"[KONTEKS DATA SISTEM]\n{ctx}\n[/KONTEKS]\n\n{user_msg}"
-
-        ai_chunks: list[str] = []
-        try:
-            import agent as _am
-            for event_type, content in _am.stream_agent_response(
-                self._langgraph_agent, self._langgraph_config, user_msg
-            ):
-                with self._lock:
-                    if event_type == "tool_call":
-                        self.data["history"].append({
-                            "role": "agent_event",
-                            "content": f"[🔧 {content}]",
-                        })
-                        self.data["scroll"] = 999999
-                    elif event_type == "tool_result":
-                        self.data["history"].append({
-                            "role": "agent_event",
-                            "content": f"[✓ {content}]",
-                        })
-                        self.data["scroll"] = 999999
-                    elif event_type == "ai":
-                        ai_chunks.append(content)
-                app._wake.set()
-
-            final = "\n".join(ai_chunks).strip()
+    def _call_agent(self, user_msg: str, app: "App") -> None:
+        """Stream agent response in a background thread."""
+        if not _HAS_AGENT or self._agent is None:
             with self._lock:
-                if final:
-                    self.data["history"].append({"role": "assistant", "content": final})
-                self.data["state"] = "IDLE"
-                self.data["scroll"] = 999999
-        except Exception as exc:
-            err_msg = str(exc)
-            if "GraphRecursionError" in err_msg or "recursion" in err_msg.lower():
-                err_msg = "Terlalu banyak iterasi tool (max 15). Coba pertanyaan yang lebih spesifik."
-                with self._lock:
-                    self.data["history"].append({
-                        "role": "assistant",
-                        "content": f"⚠ {err_msg}",
-                    })
-                    self.data["state"] = "IDLE"
-            elif "INVALIDCHATHISTORY" in err_msg or "do not have a corresponding ToolMessage" in err_msg:
-                # Auto-reset: create a new thread to clear corrupt history, then retry
-                reset_ok = False
-                if _HAS_AGENT and _agent_mod is not None:
-                    try:
-                        new_tid = f"{id(self)}-{int(time.time())}"
-                        self._langgraph_agent, self._langgraph_config = \
-                            _agent_mod.create_agent(thread_id=new_tid)
-                        reset_ok = True
-                    except Exception:
-                        pass
-
-                if reset_ok:
-                    with self._lock:
-                        self.data["history"].append({
-                            "role": "agent_event",
-                            "content": "[↺ Riwayat agent direset otomatis, mencoba ulang...]",
-                        })
-                        self.data["scroll"] = 999999
-
-                    app._wake.set()
-
-                    # Retry with fresh agent (no context injection on retry)
-                    retry_chunks: list[str] = []
-                    try:
-                        import agent as _am
-                        for event_type, content in _am.stream_agent_response(
-                            self._langgraph_agent, self._langgraph_config, user_msg
-                        ):
-                            with self._lock:
-                                if event_type == "tool_call":
-                                    self.data["history"].append({
-                                        "role": "agent_event",
-                                        "content": f"[🔧 {content}]",
-                                    })
-                                    self.data["scroll"] = 999999
-                                elif event_type == "tool_result":
-                                    self.data["history"].append({
-                                        "role": "agent_event",
-                                        "content": f"[✓ {content}]",
-                                    })
-                                    self.data["scroll"] = 999999
-                                elif event_type == "ai":
-                                    retry_chunks.append(content)
-                            app._wake.set()
-
-                        final = "\n".join(retry_chunks).strip()
-                        with self._lock:
-                            if final:
-                                self.data["history"].append({"role": "assistant", "content": final})
-                            self.data["state"] = "IDLE"
-                            self.data["scroll"] = 999999
-                    except Exception as retry_exc:
-                        with self._lock:
-                            self.data["history"].append({
-                                "role": "assistant",
-                                "content": f"⚠ Gagal setelah reset: {retry_exc}",
-                            })
-                            self.data["state"] = "IDLE"
-                else:
-                    with self._lock:
-                        self.data["history"].append({
-                            "role": "assistant",
-                            "content": "⚠ Riwayat chat rusak dan reset gagal. Tekan [C] untuk hapus riwayat secara manual.",
-                        })
-                        self.data["state"] = "IDLE"
-            else:
-                with self._lock:
-                    self.data["history"].append({
-                        "role": "assistant",
-                        "content": f"⚠ Agent error: {err_msg}",
-                    })
-                    self.data["state"] = "IDLE"
-        app._wake.set()
-
-    def _call_ollama(
-        self,
-        history: list[dict[str, str]],
-        use_context: bool,
-        app: "App",
-    ) -> None:
-        """Run Ollama API call in a background thread."""
-        if not _HAS_REQUESTS:
-            with self._lock:
-                self.data["history"].append(
-                    {
-                        "role": "assistant",
-                        "content": (
-                            "Error: library 'requests' tidak tersedia. "
-                            "Install dengan: pip install requests"
-                        ),
-                    }
-                )
+                self.data["history"].append({
+                    "role": "assistant",
+                    "content": "⚠ Agent tidak tersedia. Pastikan modul agent.py dan dependencies terinstall.",
+                })
                 self.data["state"] = "IDLE"
             app._wake.set()
             return
 
-        messages = [{"role": "system", "content": self.SYSTEM_PROMPT}]
-
-        if use_context:
-            context_data = build_data_context()
-            if context_data:
-                messages.append(
-                    {
-                        "role": "user",
-                        "content": (
-                            f"[KONTEKS DATA SISTEM]\n{context_data}\n[AKHIR KONTEKS]"
-                        ),
-                    }
-                )
-                messages.append(
-                    {
-                        "role": "assistant",
-                        "content": (
-                            "Baik, saya sudah membaca data konteks sistem. "
-                            "Silakan tanya."
-                        ),
-                    }
-                )
-
-        for msg in history:
-            messages.append(
-                {
-                    "role": msg.get("role", "user"),
-                    "content": msg.get("content", ""),
-                }
-            )
-
-        payload = {
-            "model": OLLAMA_MODEL,
-            "messages": messages,
-            "stream": False,
-            "think": False,
-            "options": {
-                "num_predict": 512,
-                "temperature": 0.4,
-            },
-        }
-
-        try:
-            resp = _requests.post(
-                f"{OLLAMA_BASE_URL}/api/chat",
-                json=payload,
-                timeout=OLLAMA_TIMEOUT,
-            )
-            resp.raise_for_status()
-            data = resp.json()
-            content = data.get("message", {}).get("content", "").strip()
-            if not content:
-                content = "(Tidak ada respons dari AI)"
-        except Exception as exc:
-            content = f"Error: {exc}"
-
+        _kanban_reset(user_msg)
+        t_start = time.time()
         with self._lock:
-            self.data["history"].append({"role": "assistant", "content": content})
-            self.data["state"] = "IDLE"
-            self.data["scroll"] = 999999  # will be clamped to max in draw
+            self.data["exec_start"] = t_start
+        ai_chunks: list[str] = []
+        try:
+            for event_type, content in _agent_mod.stream_agent_response(
+                self._agent, self._agent_config, user_msg
+            ):
+                _kanban_update(event_type, content)
+                ts = dt.datetime.now().strftime("%H:%M:%S")
+                with self._lock:
+                    if event_type in ("routing", "tool_call", "tool_result"):
+                        icon = {"routing": "→", "tool_call": "⚙", "tool_result": "✓"}.get(event_type, "·")
+                        self.data["history"].append({
+                            "role": "agent_event",
+                            "content": f"[{icon} {content}]",
+                        })
+                        self.data["scroll"] = 999999
+                        _agent_activity_log.append({
+                            "event_type": event_type,
+                            "content": content,
+                            "time": ts,
+                        })
+                    elif event_type == "ai":
+                        ai_chunks.append(content)
+                    elif event_type == "error":
+                        self.data["history"].append({
+                            "role": "assistant",
+                            "content": f"⚠ Agent error: {content}",
+                        })
+                        self.data["scroll"] = 999999
+                    elif event_type == "approval_required":
+                        self.data["pending_approval"] = content
+                        self.data["state"] = "APPROVAL"
+                        self.data["scroll"] = 999999
+                        _agent_activity_log.append({
+                            "event_type": "approval_required",
+                            "content": content,
+                            "time": ts,
+                        })
+                app._wake.set()
+                if event_type == "approval_required":
+                    return
+
+            elapsed = time.time() - t_start
+            final = "\n".join(ai_chunks).strip()
+            with self._lock:
+                if final:
+                    self.data["history"].append({"role": "assistant", "content": final})
+                self.data["history"].append({
+                    "role": "agent_event",
+                    "content": f"[⏱ selesai dalam {elapsed:.1f}s]",
+                })
+                self.data["state"] = "IDLE"
+                self.data["exec_start"] = None
+                self.data["scroll"] = 999999
+        except Exception as exc:
+            elapsed = time.time() - t_start
+            with self._lock:
+                self.data["history"].append({
+                    "role": "assistant",
+                    "content": f"⚠ Agent error: {exc}",
+                })
+                self.data["history"].append({
+                    "role": "agent_event",
+                    "content": f"[⏱ gagal setelah {elapsed:.1f}s]",
+                })
+                self.data["state"] = "IDLE"
+                self.data["exec_start"] = None
+        app._wake.set()
+
+    def _submit_approval(self, decision: str, app: "App") -> None:
+        """Submit approval decision and resume the paused graph."""
+        with self._lock:
+            self.data["pending_approval"] = None
+            self.data["state"] = "WAITING"
+            self.data["history"].append({
+                "role": "agent_event",
+                "content": f"[✓ Operator: {decision.upper()}]",
+            })
+            self.data["scroll"] = 999999
+        app._wake.set()
+        threading.Thread(
+            target=self._resume_after_approval,
+            args=(decision, app),
+            daemon=True,
+        ).start()
+
+    def _resume_after_approval(self, decision: str, app: "App") -> None:
+        t_start = time.time()
+        ai_chunks: list[str] = []
+        try:
+            for event_type, content in _agent_mod.resume_after_approval(
+                self._agent, self._agent_config, decision
+            ):
+                _kanban_update(event_type, content)
+                ts = dt.datetime.now().strftime("%H:%M:%S")
+                with self._lock:
+                    if event_type in ("routing", "tool_call", "tool_result"):
+                        icon = {"routing": "→", "tool_call": "⚙", "tool_result": "✓"}.get(event_type, "·")
+                        self.data["history"].append({
+                            "role": "agent_event",
+                            "content": f"[{icon} {content}]",
+                        })
+                        self.data["scroll"] = 999999
+                    elif event_type == "ai":
+                        ai_chunks.append(content)
+                    elif event_type == "error":
+                        self.data["history"].append({
+                            "role": "assistant",
+                            "content": f"⚠ Agent error: {content}",
+                        })
+                        self.data["scroll"] = 999999
+                    elif event_type == "approval_required":
+                        self.data["pending_approval"] = content
+                        self.data["state"] = "APPROVAL"
+                        self.data["scroll"] = 999999
+                app._wake.set()
+                if event_type == "approval_required":
+                    return  # tunggu approval berikutnya dari operator
+
+            elapsed = time.time() - t_start
+            with self._lock:
+                if ai_chunks:
+                    final = "\n".join(ai_chunks).strip()
+                    if final:
+                        self.data["history"].append({"role": "assistant", "content": final})
+                self.data["history"].append({
+                    "role": "agent_event",
+                    "content": f"[⏱ selesai dalam {elapsed:.1f}s]",
+                })
+                self.data["state"] = "IDLE"
+                self.data["exec_start"] = None
+                self.data["scroll"] = 999999
+        except Exception as exc:
+            with self._lock:
+                self.data["history"].append({
+                    "role": "assistant",
+                    "content": f"⚠ Resume setelah approval gagal: {exc}",
+                })
+                self.data["state"] = "IDLE"
         app._wake.set()
 
     def handle_key(self, key: int, app: "App") -> bool:
@@ -1216,21 +1239,22 @@ class AIScreen(Screen):
                     self.data["input_buf"] = self.data.get("input_buf", "") + chr(key)
                 return True
 
-            if key == 4:
-                with self._lock:
-                    self.data["use_context"] = not self.data.get("use_context", True)
-                return True
-
             return False
+
+        # Approval response (Y/N) when waiting for operator decision
+        with self._lock:
+            state = self.data.get("state", "IDLE")
+        if state == "APPROVAL":
+            if ch in ("y", "Y"):
+                self._submit_approval("approved", app)
+                return True
+            if ch in ("n", "N"):
+                self._submit_approval("rejected", app)
+                return True
 
         if ch in ("i", "I") or key in (10, 13):
             with self._lock:
                 self.data["input_mode"] = True
-            return True
-
-        if ch in ("d", "D"):
-            with self._lock:
-                self.data["use_context"] = not self.data.get("use_context", True)
             return True
 
         if ch in ("c", "C"):
@@ -1240,14 +1264,13 @@ class AIScreen(Screen):
                     self.data["state"] = "IDLE"
                     self.data["scroll"] = 0
                     self.data["input_buf"] = ""
-            # Reset LangGraph memory for fresh conversation
-            if _HAS_AGENT and _agent_mod is not None:
-                try:
-                    new_tid = f"{id(self)}-{int(time.time())}"
-                    self._langgraph_agent, self._langgraph_config = \
-                        _agent_mod.create_agent(thread_id=new_tid)
-                except Exception:
-                    pass
+                if _HAS_AGENT and _agent_mod is not None:
+                    try:
+                        new_tid = f"{id(self)}-{int(time.time())}"
+                        self._agent, self._agent_config = \
+                            _agent_mod.create_agent(thread_id=new_tid)
+                    except Exception:
+                        pass
             return True
 
         if ch in ("j", "J"):
@@ -1274,28 +1297,14 @@ class AIScreen(Screen):
             scroll = int(self.data.get("scroll", 0))
             input_buf = self.data.get("input_buf", "")
             input_mode = self.data.get("input_mode", True)
-            use_context = self.data.get("use_context", True)
 
-        ctx_indicator = "[D:ON] " if use_context else "[D:OFF]"
-        if _HAS_AGENT and self._langgraph_agent is not None:
-            agent_label = "Agent+SSH"
-        elif _HAS_AGENT and self.data.get("error"):
-            agent_label = "Ollama (init error)"
-        else:
-            agent_label = "Ollama"
+        agent_label = "NetOps Agent" if (_HAS_AGENT and self._agent is not None) else "Agent tidak tersedia"
         safe_addstr(
-            win,
-            0,
-            1,
-            f"AI Chat  ({agent_label})  {ctx_indicator}",
+            win, 0, 1,
+            f"AI Chat  [{agent_label}]",
             cp(C_TITLE) | curses.A_BOLD,
         )
         safe_addstr(win, 1, 1, "─" * max(1, cols - 2), cp(C_DIM))
-
-        if not _HAS_REQUESTS:
-            safe_addstr(win, 3, 2, "requests tidak terinstall.", cp(C_ERR))
-            safe_addstr(win, 4, 2, "Jalankan: pip install requests", cp(C_WARN))
-            return
 
         input_sep_row = rows - 4
         input_row = rows - 3
@@ -1373,13 +1382,33 @@ class AIScreen(Screen):
 
         safe_addstr(win, input_sep_row, 1, "─" * max(1, cols - 2), cp(C_DIM))
 
-        if state == "WAITING":
+        if state == "APPROVAL":
+            with self._lock:
+                approval_data = self.data.get("pending_approval", "")
+            safe_addstr(win, input_sep_row - 2, 1, "─" * max(1, cols - 2), cp(C_ERR))
+            safe_addstr(win, input_sep_row - 1, 2,
+                        "⚠ APPROVAL REQUIRED — agent meminta izin sebelum melanjutkan",
+                        cp(C_ERR) | curses.A_BOLD)
+            safe_addstr(win, input_row, 2,
+                        f"Aksi: {str(approval_data)[:cols-10]}",
+                        cp(C_WARN))
+            safe_addstr(win, status_row, 2,
+                        "[Y] Setuju   [N] Tolak",
+                        cp(C_OK) | curses.A_BOLD)
+            safe_addstr(win, hint_row, 1,
+                        "Operator harus menyetujui aksi config agent sebelum dieksekusi.",
+                        cp(C_DIM))
+            return
+        elif state == "WAITING":
             spin = SPINNER[int(time.time() * 8) % len(SPINNER)]
+            with self._lock:
+                exec_start = self.data.get("exec_start")
+            live_elapsed = f"  {time.time() - exec_start:.0f}s" if exec_start else ""
             safe_addstr(
                 win,
                 input_row,
                 2,
-                f"{spin} AI sedang berpikir...",
+                f"{spin} Agent sedang bekerja...{live_elapsed}",
                 cp(C_WARN) | curses.A_BOLD,
             )
         else:
@@ -1410,32 +1439,18 @@ class AIScreen(Screen):
 
         mode_label = "INSERT" if input_mode else "NORMAL"
         mode_attr = cp(C_OK) if input_mode else cp(C_WARN)
-        safe_addstr(
-            win,
-            status_row,
-            2,
-            f"Mode: {mode_label}",
-            mode_attr | curses.A_BOLD,
-        )
-        if use_context:
-            safe_addstr(win, status_row, 14, "  Data: ✓ terhubung ke laporan", cp(C_DIM))
-        else:
-            safe_addstr(win, status_row, 14, "  Data: ✗ konteks dinonaktifkan", cp(C_DIM))
+        safe_addstr(win, status_row, 2, f"Mode: {mode_label}", mode_attr | curses.A_BOLD)
 
         if input_mode:
             safe_addstr(
-                win,
-                hint_row,
-                1,
-                "[Enter] Kirim  [Esc] Nav  [^U] Hapus baris  [↑↓] Scroll  [^D] Toggle data",
+                win, hint_row, 1,
+                "[Enter] Kirim  [Esc] Nav  [^U] Hapus baris  [↑↓] Scroll",
                 cp(C_MENU),
             )
         else:
             safe_addstr(
-                win,
-                hint_row,
-                1,
-                "[I] Insert  [C] Hapus riwayat  [D] Toggle data  [J/K] Scroll  [1-6] Menu",
+                win, hint_row, 1,
+                "[I] Insert  [C] Hapus riwayat  [J/K] Scroll  [1-8] Menu  [8] Kanban",
                 cp(C_MENU),
             )
 
@@ -1445,14 +1460,16 @@ class App:
 
     def __init__(self) -> None:
         LAPORAN_DIR.mkdir(parents=True, exist_ok=True)
-        OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
         self.screens: list[Screen] = [
             DashboardScreen(),
-            JadwalScreen(),
-            CollectScreen(),
+            SkillsScreen(),
+            ReachabilityScreen(),
             LaporanScreen(),
             LogScreen(),
             AIScreen(),
+            AgentActivityScreen(),
+            KanbanScreen(),
+            TokenMetricsScreen(),
         ]
         self.current = 0
         self._wake = threading.Event()
@@ -1549,7 +1566,7 @@ class App:
 
         if self.current == 5:
             ai_screen = self.screens[5]
-            if ai_screen.data.get("input_mode", True):
+            if ai_screen.data.get("input_mode", True) or ai_screen.data.get("state") == "APPROVAL":
                 consumed = ai_screen.handle_key(key, self)
                 if consumed:
                     self._wake.set()
@@ -1558,7 +1575,7 @@ class App:
         if ch in ("q", "Q"):
             return False
 
-        if ch and ch in "123456":
+        if ch and ch in "123456789":
             idx = int(ch) - 1
             if idx != self.current:
                 self.current = idx
@@ -1685,7 +1702,7 @@ class App:
 
     def _draw_footer(self, rows: int, cols: int) -> None:
         """Draw footer with key hints."""
-        hints = " [1-6] Menu  [↑↓] Nav  [Q] Keluar  [R] Refresh "
+        hints = " [1-8] Menu  [↑↓] Nav  [Q] Keluar  [R] Refresh "
         safe_addstr(
             self.stdscr,
             rows - 1,
@@ -1773,11 +1790,95 @@ class App:
             pass
 
 
+def _run_headless(args: list[str]) -> None:
+    """
+    Headless mode — tanpa curses, cocok untuk dijalankan dari non-interactive shell.
+
+    Satu pesan:   python tui.py --headless "status jaringan"
+    Interaktif:   python tui.py --headless          (baca dari stdin, Ctrl+D untuk keluar)
+    Debug mode:   python tui.py --headless --debug "pesan"
+    """
+    import json as _json
+    import logging
+    import sys
+
+    debug = "--debug" in args
+    if debug:
+        args = [a for a in args if a != "--debug"]
+        logging.basicConfig(
+            level=logging.DEBUG,
+            format="%(name)s %(levelname)s: %(message)s",
+            stream=sys.stdout,
+        )
+        logging.getLogger("agents.nodes").setLevel(logging.DEBUG)
+    else:
+        logging.basicConfig(level=logging.WARNING, stream=sys.stderr)
+
+    if not _HAS_AGENT or _agent_mod is None:
+        print("ERROR: agent module tidak tersedia. Pastikan dependencies terinstall.", flush=True)
+        return
+
+    graph, config = _agent_mod.create_agent(thread_id="headless")
+
+    def _send(msg: str) -> None:
+        print(f"\n>>> {msg}", flush=True)
+        for event_type, content in _agent_mod.stream_agent_response(graph, config, msg):
+            if event_type == "ai":
+                print(f"\nAI: {content}\n", flush=True)
+            elif event_type in ("routing", "tool_call", "tool_result"):
+                icon = {"routing": "→", "tool_call": "⚙", "tool_result": "✓"}.get(event_type, "·")
+                preview = content[:120] + "…" if len(content) > 120 else content
+                print(f"  [{icon}] {preview}", flush=True)
+            elif event_type == "error":
+                print(f"\nERROR: {content}\n", flush=True)
+            elif event_type == "approval_required":
+                try:
+                    data = _json.loads(content)
+                    action = data.get("action", content)
+                except Exception:
+                    action = content
+                print(f"\nAPPROVAL_REQUIRED: {action}", flush=True)
+                decision = input("Ketik 'approved' atau 'rejected': ").strip()
+                _agent_mod.submit_approval(graph, config, decision or "rejected")
+
+    if args:
+        _send(" ".join(args))
+    else:
+        print("NetOps AI — Headless Mode  (Ctrl+D atau 'exit' untuk keluar)", flush=True)
+        while True:
+            try:
+                msg = input("\n> ").strip()
+            except EOFError:
+                break
+            if msg.lower() in ("exit", "quit", "keluar"):
+                break
+            if msg:
+                _send(msg)
+
+
 if __name__ == "__main__":
     import locale
+    import logging
+    import sys
+
+    if "--headless" in sys.argv:
+        args = [a for a in sys.argv[1:] if a != "--headless"]
+        _run_headless(args)
+        sys.exit(0)
+
+    # Redirect stderr ke log file — mencegah traceback paramiko/library lain
+    # merusak tampilan curses di terminal.
+    _stderr_log = open(WORKDIR / "netops_stderr.log", "a", buffering=1)
+    sys.stderr = _stderr_log
+
+    # Suppress paramiko transport thread exception noise
+    logging.getLogger("paramiko").setLevel(logging.CRITICAL)
+    logging.getLogger("paramiko.transport").setLevel(logging.CRITICAL)
 
     locale.setlocale(locale.LC_ALL, "")
     try:
         App().run()
     except KeyboardInterrupt:
         pass
+    finally:
+        _stderr_log.close()

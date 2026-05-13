@@ -13,3 +13,10 @@ laporan/
 # Log files
 *.log
 schedule.log
+
+# Config backups (berisi konfigurasi router lengkap)
+backups/
+!backups/.gitkeep
+
+# SQLite checkpoints (berisi riwayat percakapan)
+data/

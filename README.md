@@ -1,98 +1,107 @@
-# MikroTik DHCP Lease Monitoring - UTBK 2026
+# NetOps AI — Campus Network Operations Platform
 
-Sistem monitoring DHCP lease berbasis Python untuk operasional ujian UTBK 2026 di lingkungan universitas. Proyek ini mengambil data lease dari **17 router MikroTik** secara paralel, menyajikannya ke terminal/TUI, lalu menghasilkan laporan harian dengan analisis AI.
-
-Fokus utama proyek:
-- Visibilitas cepat kondisi lease DHCP lintas fakultas/gedung.
-- Pemantauan terpusat selama sesi ujian UTBK.
-- Audit dan diagnosa jaringan melalui AI agent berbasis LangGraph + Ollama.
+Platform operasional jaringan kampus berbasis multi-agent AI. Dibangun di atas project monitoring DHCP UTBK 2026 (`main`), branch ini (`netops`) memperluas cakupan ke operasional jaringan kampus secara menyeluruh dengan arsitektur LangGraph multi-agent, skill system berbasis Markdown, dan human-in-the-loop approval.
 
 ## Fitur Utama
 
-- Koleksi DHCP lease dari 17 router secara paralel (`ThreadPoolExecutor`).
-- Kompatibel dengan RouterOS v6 dan v7.
-- Parsing status lease: `bound`, `waiting`, `disabled`.
-- Curses TUI dengan 6 layar operasional: Dashboard, Jadwal, Collect, Laporan, Log, AI Chat.
-- Auto-refresh dashboard setiap 5 detik.
-- Integrasi AI agent (`agent.py`) dengan 18 tools operasional jaringan.
-- Fallback AI chat ke Ollama HTTP saat alur LangGraph tidak tersedia.
-- Generasi laporan markdown harian dari data mentah di `output/`.
-- Dukungan mode uji parser via `--dry-run`.
+- **Multi-agent LangGraph**: Supervisor + 5 specialist agents (monitor/eko, diagnose/agus, config/joko, security/satria, document/budi)
+- **Skill System**: Operator mendefinisikan prosedur kerja dalam Markdown — tanpa coding Python; template sistem untuk panduan format laporan
+- **32 tools atomic**: SSH ke MikroTik RouterOS v6/v7, mencakup traffic stats, config backup, diagnostik, security audit, document writing
+- **Hot reload**: Tambah atau edit skill dan template langsung aktif tanpa restart sistem
+- **Human-in-the-loop**: Operasi berisiko (config backup) memerlukan persetujuan operator Y/N
+- **TUI 7 layar**: Termasuk layar Agent Activity untuk monitoring komunikasi antar agent secara real-time
+- **Zero LLM logic di tui.py**: Semua orchestration di `agent.py`, TUI hanya consume public API
 
-## Arsitektur Komponen
+## Arsitektur
 
-### Ringkasan Alur
-
-```text
-[MikroTik Routers x17]
-          |
-          v
- [mikrotik_agent.py] --(raw txt)--> [output/*.txt]
-          |                               |
-          |                               v
-          |                    [generate_reports.py]
-          |                               |
-          |                        [laporan/*.md]
-          |
-          v
-      [tui.py] <-------------------- baca laporan
-          |
-          v
- [agent.py (LangGraph ReAct + Ollama)]
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    TUI (tui.py, 7 layar)                    │
+│   AI Chat  ──►  agent.py public API  ◄──  Agent Activity   │
+└─────────────────────────┬───────────────────────────────────┘
+                           │ stream_agent_response()
+┌─────────────────────────▼───────────────────────────────────┐
+│                  agent.py (Orchestration)                   │
+│                                                             │
+│   SkillLibrary (hot reload)    LangGraph StateGraph         │
+│   skills/**/*.md          ───► supervisor → specialists     │
+└──────────────────────────────────────────┬──────────────────┘
+                                           │ tools SSH
+┌──────────────────────────────────────────▼──────────────────┐
+│                     tools/*.py (28 tools)                   │
+│         SSH Commands → MikroTik Routers (ROS v6/v7)        │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-### Detail Komponen
+### Struktur File
 
-| Komponen | Peran | Output/Integrasi |
-|---|---|---|
-| `mikrotik_agent.py` | Kolektor SSH paralel, parser lease DHCP, dukungan ROS v6/v7 | Tabel terminal + `output/*.txt` |
-| `tui.py` | Antarmuka curses 6 layar, auto-refresh 5 detik, orkestrasi subprocess | Menjalankan `mikrotik_agent.py`, baca `laporan/*.md`, AI Chat |
-| `agent.py` | LangGraph ReAct agent (MemorySaver, `recursion_limit=50`) + 18 tools | Analisis/audit jaringan via Ollama |
-| `generate_reports.py` | Agregasi semua raw output dan generate laporan harian markdown + analisis AI | `laporan/*.md` |
-| `schedule_utbk.sh` | Otomasi penjadwalan pengambilan data | Eksekusi periodik collector/report |
+```
+llmnetops/
+├── agent.py              ← Public API + NetworkOpsState + SkillLibrary singleton
+├── tui.py                ← UI only (zero LLM logic)
+├── generate_reports.py   ← Standalone DHCP report generator
+│
+├── agents/
+│   ├── graph.py          ← StateGraph builder
+│   ├── nodes.py          ← supervisor_node + 5 specialist nodes + config_node; AGENT_ALIAS
+│   └── tools.py          ← Tool registries per agent domain
+│
+├── skills/
+│   ├── library.py        ← SkillLibrary class + hot reload
+│   ├── dhcp/             ← diagnose-dhcp-client, dhcp-pool-audit, utbk-client-monitor
+│   ├── routing/          ← ospf-neighbor-down, bgp-diagnostics
+│   ├── monitoring/       ← network-health-check, router-unreachable
+│   ├── security/         ← security-audit
+│   ├── config/           ← config-backup-procedure
+│   └── documents/        ← write-report; templates/security-assessment.md
+│
+├── tools/                ← 32 atomic SSH tools
+│   ├── base.py           ← SSH helper, config loader
+│   ├── traffic.py        ← TX/RX rates, top talkers, queue stats
+│   ├── config_backup.py  ← Export, diff, list backups
+│   ├── document.py       ← list_templates, read_template, write_document, create_template
+│   └── ...               ← reachability, system, routing, dhcp, log, dll
+│
+├── legacy/               ← Script main-branch (DHCP collector, report generator, scheduler)
+│   ├── mikrotik_agent.py ← SSH DHCP collector (dipakai CollectScreen via subprocess)
+│   ├── generate_reports.py ← DHCP report generator (dipakai LaporanScreen via subprocess)
+│   ├── schedule_utbk.sh  ← Scheduler UTBK 2026
+│   └── test_regex.py     ← One-off test script
+│
+├── backups/              ← Config backups (gitignored)
+├── docs/                 ← PRD, Architecture, Implementation Plan, Skill Authoring Guide
+└── laporan/              ← Generated reports (gitignored)
+```
 
 ## Prerequisites
 
-- Python `3.10+`
-- Linux/macOS terminal (untuk mode curses TUI)
-- Akses jaringan ke router MikroTik melalui SSH
-- Ollama (lokal atau endpoint remote)
-- Kredensial router dan daftar DHCP server yang valid
+- Python 3.11+
+- Linux terminal (curses TUI)
+- Akses SSH ke router MikroTik
+- [Ollama](https://ollama.ai) dengan model `gemma4:e4b` (atau model lain via `OLLAMA_MODEL`)
 
 ## Setup
 
 ```bash
+git checkout netops
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
-# edit OLLAMA_BASE_URL dan OLLAMA_MODEL
-# buat config.yaml manual (tidak ada template karena berisi password)
+# Edit OLLAMA_BASE_URL dan OLLAMA_MODEL di .env
+# Buat config.yaml (lihat seksi Konfigurasi)
 ```
 
 ## Konfigurasi
 
-### 1. `.env` (Tidak Di-commit)
-
-Contoh:
+### `.env`
 
 ```env
 OLLAMA_BASE_URL=http://localhost:11434
-OLLAMA_MODEL=qwen3.6:35b-a3b-q8_0
+OLLAMA_MODEL=gemma4:e4b
 ```
 
-Keterangan:
-- `OLLAMA_BASE_URL`: URL endpoint Ollama.
-- `OLLAMA_MODEL`: Nama model default untuk AI agent dan report generator.
-
-### 2. `config.yaml` (Tidak Di-commit)
-
-Berisi:
-- SSH credentials: `username`, `password`, `timeout`, `port`.
-- Daftar 17 router UTBK berikut DHCP server per router.
-- `ros_version` per router (`6` atau `7`).
-
-Contoh struktur minimum:
+### `config.yaml` (tidak di-commit)
 
 ```yaml
 ssh:
@@ -111,122 +120,189 @@ routers:
 
 ## Cara Penggunaan
 
-Pastikan virtual environment aktif:
-
 ```bash
 source .venv/bin/activate
-```
-
-### A. Jalankan TUI Operasional
-
-```bash
 python tui.py
 ```
 
-Layar TUI:
-- `Dashboard`: status ringkas lease lintas router.
-- `Jadwal`: informasi jadwal pengumpulan/monitoring.
-- `Collect`: trigger koleksi data via `mikrotik_agent.py`.
-- `Laporan`: baca file markdown di `laporan/`.
-- `Log`: catatan aktivitas/eksekusi.
-- `AI Chat`: interaksi agent (`agent.py`) dengan fallback Ollama HTTP.
+### Layar TUI
 
-### B. Koleksi Data DHCP Saja
-
-```bash
-python mikrotik_agent.py
-```
-
-Opsi CLI penting:
-
-```bash
-python mikrotik_agent.py --config config.yaml
-python mikrotik_agent.py --detail
-python mikrotik_agent.py --no-save
-python mikrotik_agent.py --dry-run FILE
-```
-
-### C. Generate Laporan Harian
-
-```bash
-python generate_reports.py
-```
-
-### D. Uji Parser dari File Lokal
-
-```bash
-python mikrotik_agent.py --dry-run output/dhcp-lease-sample.txt
-```
-
-## Daftar Tools AI Agent (`agent.py`)
-
-| No | Tool | Fungsi Singkat |
+| Nomor | Layar | Fungsi |
 |---|---|---|
-| 1 | `list_routers` | Daftar router dan DHCP server |
-| 2 | `check_reachability` | Uji konektivitas/ping router |
-| 3 | `get_system_info` | Info CPU/RAM/uptime via SSH |
-| 4 | `get_dhcp_leases` | Ambil lease dari satu DHCP server |
-| 5 | `get_all_leases_for_router` | Agregasi lease semua server per router |
-| 6 | `get_router_config` | Ambil 20+ section konfigurasi router |
-| 7 | `get_routing_full` | Cek protokol routing secara menyeluruh |
-| 8 | `get_router_log` | Baca log sistem router |
-| 9 | `audit_all_routers` | Audit DHCP paralel semua router |
-| 10 | `search_device` | Cari IP/MAC lintas router |
-| 11 | `get_current_time` | Waktu lokal WIB (UTC+7) |
-| 12 | `list_reports` | Daftar file laporan |
-| 13 | `get_report_toc` | Ambil daftar isi laporan |
-| 14 | `read_report` | Baca isi laporan (limit 8000 karakter) |
-| 15 | `read_report_section` | Baca section spesifik laporan |
-| 16 | `run_command` | Perintah read-only MikroTik dengan blocklist |
-| 17 | `run_diagnostic` | Traceroute/ping dengan timeout 60 detik |
-| 18 | `run_command_all_routers` | Eksekusi command paralel ke semua router |
+| 1 | Dashboard | Status ringkas lease DHCP lintas router |
+| 2 | Jadwal | Informasi jadwal pengumpulan data |
+| 3 | Collect | Trigger koleksi data via `mikrotik_agent.py` |
+| 4 | Laporan | Baca file markdown di `laporan/` |
+| 5 | Log | Catatan aktivitas/eksekusi |
+| 6 | AI Chat | Interaksi multi-agent dengan approval modal |
+| 7 | Activity | Log routing, tool calls, tool results real-time |
+
+### AI Chat — Contoh Query
+
+```
+cek status jaringan kampus
+kenapa Lab5 tidak dapat IP?
+audit keamanan router FILKOM-CORE
+backup konfigurasi DTI
+cek traffic ether1 di GKB
+simpan laporan health check ke file
+tulis laporan keamanan jaringan DTI
+```
+
+### Invoke Skill Eksplisit
+
+```
+/skill diagnose-dhcp-client
+/skill ospf-neighbor-down
+/skill security-audit
+```
+
+## Tools AI Agent (28 tool)
+
+### Monitoring & Status
+
+| Tool | Fungsi |
+|---|---|
+| `list_routers` | Daftar router dan DHCP server |
+| `check_reachability` | Ping ke router |
+| `get_system_info` | CPU, RAM, uptime |
+| `get_interface_stats` | Error dan drop per interface |
+| `get_interface_traffic` | TX/RX rate realtime |
+| `get_traffic_summary` | Ringkasan traffic semua interface |
+| `get_top_talkers` | IP dengan traffic tertinggi |
+| `get_queue_stats` | Statistik queue dan drop |
+| `get_traffic_all` | Traffic stats semua router paralel |
+| `get_current_time` | Waktu lokal WIB (UTC+7) |
+
+### DHCP
+
+| Tool | Fungsi |
+|---|---|
+| `get_dhcp_leases` | Lease dari satu DHCP server |
+| `get_router_leases` | Semua lease di satu router |
+| `audit_dhcp` | Audit DHCP semua router |
+| `search_device` | Cari perangkat by IP atau MAC |
+
+### Routing & Config
+
+| Tool | Fungsi |
+|---|---|
+| `get_routing_full` | Route table + OSPF + BGP |
+| `get_router_config` | Konfigurasi router (berbagai section) |
+| `run_command` | Command read-only di satu router |
+| `run_command_all` | Command yang sama di semua router paralel |
+
+### Config Backup
+
+| Tool | Fungsi |
+|---|---|
+| `backup_router_config` | `/export` → `backups/<router>/<ts>.rsc` (**butuh approval**) |
+| `list_backups` | Daftar backup tersimpan |
+| `diff_config` | Diff dua versi config |
+
+### Log, Diagnostik, Security, Report
+
+| Tool | Fungsi |
+|---|---|
+| `get_router_log` | Log router (bisa filter per topic) |
+| `run_diagnostic` | Ping atau traceroute dari router |
+| `audit_security` | Audit user accounts, NTP, firewall |
+| `list_reports` | Daftar file laporan |
+| `get_report` | Baca laporan Markdown |
+| `get_report_section` | Baca section tertentu dari laporan |
+| `get_report_toc` | Daftar isi laporan |
+
+### Document
+
+| Tool | Fungsi |
+|---|---|
+| `list_templates` | Daftar template laporan di `skills/documents/templates/` |
+| `read_template` | Baca isi file template |
+| `write_document` | Tulis dokumen laporan ke `laporan/` (konvensi nama otomatis) |
+| `create_template` | Buat atau perbarui template — langsung aktif tanpa restart |
+
+## Skill System
+
+Skill adalah file Markdown di `skills/` yang mendefinisikan prosedur kerja untuk agent. Operator jaringan bisa menulis skill baru tanpa menyentuh kode Python.
+
+```bash
+# Buat skill baru
+vim skills/routing/bgp-flap.md
+# Langsung aktif — tidak perlu restart
+```
+
+Format minimal:
+
+```markdown
+---
+name: nama-skill
+domain: routing
+triggers:
+  - kata kunci yang memicu skill ini
+tools:
+  - get_routing_full
+  - get_router_log
+approval_required: false
+enabled: true
+---
+
+## Konteks
+Kapan skill ini digunakan.
+
+## Prosedur
+Langkah-langkah yang harus diikuti agent.
+```
+
+Lihat [docs/SKILL_AUTHORING_GUIDE.md](docs/SKILL_AUTHORING_GUIDE.md) untuk panduan lengkap.
+
+## Human-in-the-Loop
+
+Operasi `backup_router_config` memerlukan persetujuan operator sebelum dieksekusi:
+
+```
+┌─ APPROVAL REQUIRED ─────────────────────────┐
+│ Agent  : config_agent                       │
+│ Aksi   : Backup config router 'DTI'        │
+│ Risk   : MEDIUM                             │
+│ [Y] Approve    [N] Reject                   │
+└─────────────────────────────────────────────┘
+```
 
 ## Requirements
 
-`requirements.txt`:
-
-```txt
-paramiko>=3.0
-pyyaml>=6.0
-tabulate>=0.9
-requests>=2.28
+```
 langchain-ollama>=0.3.0
 langchain-core>=0.3.0
-langgraph>=0.2.0
-```
-
-## Struktur Direktori
-
-```text
-llmnetops/
-|-- agent.py             # LangGraph ReAct AI agent (18 tools)
-|-- tui.py               # Curses TUI (6 screens)
-|-- mikrotik_agent.py    # SSH collector + parser
-|-- generate_reports.py  # Laporan markdown harian
-|-- schedule_utbk.sh     # Shell scheduler
-|-- config.yaml          # Router credentials (TIDAK di-commit)
-|-- .env                 # Ollama config (TIDAK di-commit)
-|-- .env.example         # Template .env
-|-- requirements.txt     # Python dependencies
-|-- output/              # Raw DHCP data (TIDAK di-commit)
-`-- laporan/             # Generated reports (TIDAK di-commit)
+langgraph>=1.1.0
+pyyaml>=6.0
+paramiko>=3.0
+watchfiles>=0.21
+tabulate>=0.9
 ```
 
 ## Security Notes
 
-- Jangan commit `config.yaml`, `.env`, isi `output/`, dan `laporan/` yang sensitif.
-- Gunakan kredensial SSH minimum privilege khusus monitoring.
-- Tool `run_command` dibatasi blocklist kata destruktif, tetapi tetap perlakukan sebagai fitur sensitif.
-- Validasi endpoint `OLLAMA_BASE_URL` bila menggunakan host non-lokal.
-- Simpan backup konfigurasi router di lokasi terpisah dan terenkripsi.
+- Jangan commit `config.yaml`, `.env`, isi `output/`, `laporan/`, dan `backups/`.
+- Gunakan kredensial SSH minimum privilege khusus monitoring (read-only).
+- `run_command` dibatasi blocklist kata destruktif.
+- File backup di `backups/` dikecualikan dari git via `.gitignore`.
+- Credentials (SSH password) tidak pernah muncul di log atau output agent.
 
-## Known Limitations
+## Dokumentasi
 
-- Pembacaan `OLLAMA_BASE_URL` dan `OLLAMA_MODEL` di jalur TUI masih memiliki bagian hardcoded (known issue).
-- `read_report` dibatasi 8000 karakter per panggilan tool (untuk menjaga ukuran konteks AI).
-- Kinerja sangat bergantung pada stabilitas SSH dan latensi antar-segmen jaringan kampus.
-- Parsing lease bergantung pada format output RouterOS; perubahan versi mayor dapat memerlukan penyesuaian parser.
+| Dokumen | Isi |
+|---|---|
+| [docs/PRD.md](docs/PRD.md) | Requirements dan success metrics |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Desain sistem, state, API |
+| [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md) | Rencana implementasi 8 phase |
+| [docs/SKILL_AUTHORING_GUIDE.md](docs/SKILL_AUTHORING_GUIDE.md) | Panduan menulis skill baru |
+| [docs/LANGGRAPH_FUNDAMENTALS.md](docs/LANGGRAPH_FUNDAMENTALS.md) | Node, edge, dan state di LangGraph |
+| [docs/AGENT_COMMUNICATION_PATTERNS.md](docs/AGENT_COMMUNICATION_PATTERNS.md) | Pola komunikasi antar agent |
+| [docs/PERSISTENCE_AND_MEMORY.md](docs/PERSISTENCE_AND_MEMORY.md) | Checkpointing dan memory di LangGraph |
 
-## Konteks Operasional UTBK 2026
+## Branch
 
-Proyek ini dirancang untuk fase operasional April 2026 dalam mendukung monitoring jaringan ujian UTBK. Prioritas desain saat ini adalah keandalan koleksi data, visibilitas cepat melalui TUI, dan dukungan troubleshooting berbasis AI untuk tim jaringan lapangan.
+| Branch | Deskripsi |
+|---|---|
+| `main` | DHCP lease monitoring UTBK 2026 (original) |
+| `netops` | Campus network operations platform (branch ini) |
