@@ -12,20 +12,27 @@ from tools.base import validate_router, get_router_entries
 
 
 @tool
-def check_reachability(router_name: str) -> str:
+def check_reachability(router_name: str = "", host: str = "") -> str:
     """
-    Cek apakah router dapat dijangkau via ping dari host lokal.
+    Cek apakah router atau host dapat dijangkau via ping dari host lokal.
     Args:
-        router_name: Nama router (contoh: DTI, FIB, FILKOM).
+        router_name: Nama router terdaftar (contoh: DTI, FIB, FILKOM).
                      Gunakan list_routers() untuk daftar valid.
+        host:        Raw IP address (contoh: 103.78.233.5). Gunakan ini saat router
+                     belum terdaftar di config — misal saat discovery router baru.
     """
-    router_name = validate_router(router_name)
-    hosts = list({e["host"] for e in get_router_entries(router_name)})
+    if host:
+        hosts = [host]
+        label = host
+    else:
+        router_name = validate_router(router_name)
+        hosts = list({e["host"] for e in get_router_entries(router_name)})
+        label = router_name
     results = []
-    for host in hosts:
+    for h in hosts:
         try:
             res = subprocess.run(
-                ["ping", "-c", "1", "-W", "3", host],
+                ["ping", "-c", "1", "-W", "3", h],
                 capture_output=True,
                 text=True,
                 timeout=5,
@@ -36,29 +43,36 @@ def check_reachability(router_name: str) -> str:
             if m:
                 rtt = f"{m.group(1)} ms"
             results.append(
-                f"{host}: {'✓ reachable' if reachable else '✗ unreachable'} (RTT: {rtt})"
+                f"{h}: {'✓ reachable' if reachable else '✗ unreachable'} (RTT: {rtt})"
             )
         except Exception as e:
-            results.append(f"{host}: error — {e}")
-    return f"Reachability {router_name}:\n" + "\n".join(results)
+            results.append(f"{h}: error — {e}")
+    return f"Reachability {label}:\n" + "\n".join(results)
 
 
 @tool
-def check_ssh_access(router_name: str) -> str:
+def check_ssh_access(router_name: str = "", host: str = "") -> str:
     """
     Diagnosa akses SSH ke router: ICMP ping + TCP port 22 + SSH banner check.
     Membedakan 4 skenario: routing failure, firewall DROP, firewall REJECT/SSH non-aktif,
     atau SSH ACL (source IP dibatasi di router).
     Gunakan tool ini saat get_system_info atau tool SSH lain gagal di router tertentu.
     Args:
-        router_name: Nama router. Gunakan list_routers() untuk daftar valid.
+        router_name: Nama router terdaftar. Gunakan list_routers() untuk daftar valid.
+        host:        Raw IP address. Gunakan ini saat router belum terdaftar di config —
+                     misal saat discovery router baru dari NetBox atau BGP peer.
     """
-    router_name = validate_router(router_name)
-    hosts = list({e["host"] for e in get_router_entries(router_name)})
+    if host:
+        hosts = [host]
+        label = host
+    else:
+        router_name = validate_router(router_name)
+        hosts = list({e["host"] for e in get_router_entries(router_name)})
+        label = router_name
     results = []
 
     for host in hosts:
-        lines = [f"Diagnosa SSH {router_name} ({host}):"]
+        lines = [f"Diagnosa SSH {label} ({host}):"]
 
         # 1. ICMP ping
         icmp_ok = False

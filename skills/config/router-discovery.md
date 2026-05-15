@@ -66,13 +66,11 @@ check_ssh_access(host=<IP>)
 Jika port 22 tidak respond → skip ke IP berikutnya.
 
 ### Step 2c — RouterOS Confirm
-```
-run_command(router_name=<nama_terdekat_di_config>, command="/system/resource/print")
-```
 
-Catatan: karena router belum ada di config, gunakan tool `check_reachability` dengan
-parameter `host=<IP>` langsung, bukan `router_name`. Untuk ROS confirm, pakai SSH
-manual via `check_ssh_access` dan observasi banner-nya.
+Jalankan kembali `check_ssh_access(host=<IP>)` dan periksa SSH banner yang diterima.
+MikroTik RouterOS selalu mengirim banner yang dimulai dengan `SSH-2.0-ROSSSH`.
+Jika banner mengandung `ROSSSH` → RouterOS confirmed.
+Jika banner kosong atau bukan ROSSSH → bukan MikroTik, skip IP ini.
 
 Jika ketiga step sukses → **IP ini VALID** → lanjut ke Fase 4.
 
