@@ -18,6 +18,11 @@ from tools.report import list_reports, get_report, get_report_section, get_repor
 from tools.utility import list_routers, get_current_time
 from tools.document import list_templates, read_template, write_document, create_template, write_skill
 from tools.web import fetch_url
+from tools.netbox import (
+    get_netbox_devices, get_netbox_device_interfaces, get_netbox_device_ips,
+    get_netbox_drift_report, add_netbox_ip_address, update_netbox_interface,
+    populate_netbox_from_router,
+)
 
 _ALL_TOOLS = [
     list_routers, get_current_time,
@@ -35,6 +40,9 @@ _ALL_TOOLS = [
     list_reports, get_report, get_report_section, get_report_toc,
     list_templates, read_template, write_document, create_template, write_skill,
     fetch_url,
+    get_netbox_devices, get_netbox_device_interfaces, get_netbox_device_ips,
+    get_netbox_drift_report, add_netbox_ip_address, update_netbox_interface,
+    populate_netbox_from_router,
 ]
 
 # Flat map: tool name → callable

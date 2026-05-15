@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 from datetime import datetime, timezone, timedelta
 from typing import TYPE_CHECKING, Any
 
@@ -166,7 +167,7 @@ def _is_greeting(messages: list) -> bool:
     # Must be short (≤ 60 chars) to avoid false positives on "halo, cek router..."
     if len(text) > 60:
         return False
-    return any(pat in text for pat in _GREETING_PATTERNS)
+    return any(re.search(rf'\b{re.escape(pat)}\b', text) for pat in _GREETING_PATTERNS)
 
 
 _KEYWORD_ROUTES: list[tuple[list[str], str]] = [
