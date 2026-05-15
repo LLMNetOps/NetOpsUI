@@ -23,16 +23,26 @@ def _human_bytes(n: int) -> str:
 
 
 def _parse_iface_stats(raw: str) -> list[dict]:
-    """Parse output /interface print stats ROS v7 → list of dicts."""
+    """Parse output /interface print stats ROS v7 → list of dicts.
+
+    MikroTik format: idx flags name  RX-BYTE  TX-BYTE  ...
+    Columns are separated by 2+ spaces; thousand-separators use single spaces.
+    Capture only the first numeric column (RX-BYTE).
+    """
     entries = []
     comment = ""
     for line in raw.splitlines():
         if ";;;" in line:
             comment = line.split(";;;", 1)[1].strip()
             continue
-        # Baris data: "  0 RS ether1   14 768 998 935"
-        # Nama interface tidak punya spasi; bytes pakai spasi ribuan
-        m = re.match(r'^\s*\d+\s+[A-Z]+\s+(\S+)\s+([\d ]+)\s*$', line)
+        # Match idx + flags + name, then first number column (RX-BYTE).
+        # \d{1,3}(?:\s\d{3})* captures e.g. "14 768 998 935" but stops
+        # at double-space column boundary.
+        m = re.match(
+            r'^\s*\d+\s+[A-Z]+\s+(\S+)\s+'
+            r'(\d{1,3}(?:\s\d{3})*)',
+            line,
+        )
         if not m:
             continue
         name = m.group(1)
@@ -45,13 +55,13 @@ def _parse_iface_stats(raw: str) -> list[dict]:
     return entries
 
 
-def _fetch(host: str, command: str, ros: int) -> tuple[bool, str, str]:
+def _fetch(entry: dict[str, Any], command: str) -> tuple[bool, str, str]:
     creds = ssh_creds_for(entry)
     cmd = command.strip()
-    if ros == 6 and cmd.startswith("/"):
+    if entry["ros_version"] == 6 and cmd.startswith("/"):
         cmd = cmd.lstrip("/").replace("/", " ")
     return ssh_run_command(
-        host=host,
+        host=entry["host"],
         username=creds["username"],
         password=creds["password"],
         command=cmd,
@@ -75,13 +85,12 @@ def get_interface_traffic(router_name: str, interface: str = "") -> str:
 
     if interface:
         cmd = f"/interface/monitor-traffic {interface} once"
-        ok, out, err = _fetch(entry["host"], cmd, entry["ros_version"])
+        ok, out, err = _fetch(entry, cmd)
         if not ok:
             return f"Gagal ambil traffic {interface} dari {router_name}: {err}"
         return f"Traffic {interface} — {router_name}\n{'─'*60}\n{out.strip()}"
 
-    ok, out, err = _fetch(entry["host"], "/interface/print stats where running=yes",
-                          entry["ros_version"])
+    ok, out, err = _fetch(entry, "/interface/print stats where running=yes")
     if not ok:
         return f"Gagal ambil traffic stats dari {router_name}: {err}"
     if not out.strip():
@@ -125,7 +134,7 @@ def get_traffic_summary(router_name: str) -> str:
     router_name = validate_router(router_name)
     entry = get_router_entries(router_name)[0]
 
-    ok, out, err = _fetch(entry["host"], "/interface/print stats", entry["ros_version"])
+    ok, out, err = _fetch(entry, "/interface/print stats")
     if not ok:
         return f"Gagal ambil traffic summary dari {router_name}: {err}"
 
@@ -151,11 +160,11 @@ def get_top_talkers(router_name: str, limit: int = 10) -> str:
 
     # Connection tracking sorted by bytes — works on both ROS v6 and v7
     cmd = f"/ip/firewall/connection/print count-only"
-    ok, out, err = _fetch(entry["host"], cmd, entry["ros_version"])
+    ok, out, err = _fetch(entry, cmd)
     conn_count = out.strip() if ok else "?"
 
     cmd2 = f"/ip/firewall/connection/print"
-    ok2, out2, err2 = _fetch(entry["host"], cmd2, entry["ros_version"])
+    ok2, out2, err2 = _fetch(entry, cmd2)
 
     if not ok2 or not out2.strip():
         return (
@@ -188,14 +197,14 @@ def get_queue_stats(router_name: str) -> str:
     results = []
 
     # Simple queues
-    ok, out, _ = _fetch(entry["host"], "/queue/simple/print stats", entry["ros_version"])
+    ok, out, _ = _fetch(entry, "/queue/simple/print stats")
     if ok and out.strip():
         results.append("=== Simple Queues ===\n" + out.strip())
     elif ok:
         results.append("=== Simple Queues: (tidak ada) ===")
 
     # Queue tree
-    ok2, out2, _ = _fetch(entry["host"], "/queue/tree/print stats", entry["ros_version"])
+    ok2, out2, _ = _fetch(entry, "/queue/tree/print stats")
     if ok2 and out2.strip():
         results.append("=== Queue Tree ===\n" + out2.strip())
     elif ok2:
@@ -209,25 +218,29 @@ def get_queue_stats(router_name: str) -> str:
 
 
 @tool
-def get_top_interfaces_all(limit: int = 10) -> str:
+def get_top_interfaces_all(limit: int = 10, roles: str = "") -> str:
     """
     Ambil top N interface dengan RX bytes tertinggi dari SEMUA router secara paralel.
     Berguna untuk identifikasi interface paling sibuk secara global di seluruh kampus.
     Lebih akurat dari get_traffic_all untuk pencarian top-N karena data tidak dipotong.
     Args:
         limit: Jumlah interface teratas yang ditampilkan (default 10, max 30).
+        roles: Filter router berdasarkan role, dipisah koma (contoh: "gate_idren" atau
+               "backbone,access"). Kosong = semua router.
     """
     limit = min(int(limit), 30)
+    role_filter = {r.strip() for r in roles.split(",") if r.strip()} if roles else set()
 
     def _check_one(entry: dict[str, Any]) -> dict[str, Any]:
-        ok, out, err = _fetch(entry["host"], "/interface/print stats where running=yes",
-                              entry["ros_version"])
+        ok, out, err = _fetch(entry, "/interface/print stats where running=yes")
         if not ok or not out.strip():
             return {"name": entry["name"], "host": entry["host"], "ifaces": [], "error": err}
         return {"name": entry["name"], "host": entry["host"],
                 "ifaces": _parse_iface_stats(out), "error": ""}
 
     unique = get_unique_router_entries()
+    if role_filter:
+        unique = [e for e in unique if e.get("role", "") in role_filter]
     results: list[dict[str, Any]] = []
     with ThreadPoolExecutor(max_workers=8) as executor:
         futures = {executor.submit(_check_one, e): e for e in unique}
@@ -256,8 +269,9 @@ def get_top_interfaces_all(limit: int = 10) -> str:
     ok_count   = sum(1 for r in results if not r["error"])
     fail_count = sum(1 for r in results if r["error"])
 
+    scope_label = f"roles={roles}" if role_filter else "semua router"
     lines = [
-        f"Top {limit} Interface — seluruh kampus ({len(results)} router)",
+        f"Top {limit} Interface — {scope_label} ({len(results)} router)",
         f"Berhasil: {ok_count} router  |  Gagal: {fail_count} router",
         "─" * 72,
         f"{'#':<4} {'Router':<22} {'Interface':<28} {'RX':>12}  Keterangan",
@@ -294,7 +308,7 @@ def get_traffic_all(metric: str = "stats") -> str:
     cmd = cmd_map[metric]
 
     def _check_one(entry: dict[str, Any]) -> dict[str, Any]:
-        ok, out, err = _fetch(entry["host"], cmd, entry["ros_version"])
+        ok, out, err = _fetch(entry, cmd)
         return {
             "name": entry["name"], "host": entry["host"],
             "ok": ok,

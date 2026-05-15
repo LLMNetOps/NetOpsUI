@@ -7,7 +7,8 @@ description: >
 model: qwen3.5:9b
 num_ctx: 32768
 num_predict: 8192
-context_window: 20
+context_window: 5
+max_iters: 35
 timeout: 600
 tools:
   - list_routers

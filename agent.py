@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import atexit
 import json
 import os
 from pathlib import Path
@@ -71,6 +72,7 @@ from skills import SkillLibrary  # noqa: E402
 
 _skill_lib = SkillLibrary(Path(__file__).parent / "skills")
 _skill_lib.start_watcher()
+atexit.register(_skill_lib.stop_watcher)
 
 # ── Graph cache ────────────────────────────────────────────────────────────────
 

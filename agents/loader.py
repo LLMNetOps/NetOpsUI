@@ -37,6 +37,8 @@ class AgentDefinition:
     ollama_host: str = ""
     # Enable think/reasoning mode (qwen3.5 and compatible models only)
     reasoning: bool = False
+    # Max ReAct iterations (tool calls) before forced summary
+    max_iters: int = 20
 
 
 def _parse_definition_file(path: Path) -> Optional[AgentDefinition]:
@@ -87,6 +89,7 @@ def _parse_definition_file(path: Path) -> Optional[AgentDefinition]:
         chat_prompt=str(fm.get("chat_prompt", "")),
         ollama_host=str(fm.get("ollama_host", "")),
         reasoning=bool(fm.get("reasoning", False)),
+        max_iters=int(fm.get("max_iters", 20)),
     )
 
 

@@ -143,6 +143,8 @@ class SkillLibrary:
 
     def stop_watcher(self) -> None:
         self._stop.set()
+        if self._watcher and self._watcher.is_alive():
+            self._watcher.join(timeout=3)
 
     def _watch_loop(self) -> None:
         try:

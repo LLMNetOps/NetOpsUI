@@ -607,6 +607,7 @@ def _make_specialist_node(agent_name: str):
     _timeout = defn.timeout if defn else 300
     _ollama_host = defn.ollama_host if defn else ""
     _reasoning = defn.reasoning if defn else False
+    _max_iters = defn.max_iters if defn else 20
     llm_with_tools = _make_llm(
         temperature=0.3,
         model=_model,
@@ -638,6 +639,7 @@ def _make_specialist_node(agent_name: str):
             [sys_msg] + context_msgs,
             tool_map_local,
             agent_name,
+            max_iters=_max_iters,
         )
 
         final_msg = all_msgs[-1]

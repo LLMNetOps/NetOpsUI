@@ -56,6 +56,27 @@ Contoh:
 - "cek pagi IDREN" → hanya gate_idren
 - "morning check kampus" → backbone + access saja
 
+## Aturan Kritis — Wajib Dibaca Sebelum Mulai
+
+**JANGAN tulis output atau ringkasan sebelum SEMUA langkah berikut selesai dieksekusi:**
+
+| Langkah | Tool yang WAJIB dipanggil | Selesai? |
+|---------|--------------------------|----------|
+| 0 | `recall_all_router_facts`, `list_routers` | — |
+| 1 | `check_reachability` untuk setiap router dalam scope | — |
+| 2 | `get_system_info` untuk router backbone/access yang reachable | — |
+| 3 | `get_bgp_sessions` untuk setiap router gate_idren | — |
+| 4 | `get_top_interfaces_all` | — |
+| 5 | `get_router_log` untuk setiap router IDREN (dan kampus jika ada anomali) | — |
+| 6 | `get_netbox_drift_report` untuk setiap router gate_idren | — |
+
+**LARANGAN KERAS:**
+- JANGAN tulis "N/A (belum cek...)" — jika belum dikerjakan, kerjakan dulu
+- JANGAN tulis action items untuk langkah yang belum dilakukan — lakukan langkah itu sekarang
+- JANGAN berhenti di tengah prosedur dan menulis ringkasan parsial
+
+Jika scope IDREN saja: skip Langkah 2 (resource kampus), tapi Langkah 0,1,3,4,5,6 WAJIB semua.
+
 ## Prosedur
 
 ### Langkah 0: Cek Memory + Dapatkan Daftar Router
@@ -102,9 +123,19 @@ Cek per router:
 - Session `down` / `idle` → ✗ — catat peer name dan ISP yang terdampak
 - Prefix count nol atau turun > 50% → ⚠ kemungkinan route leak / filter masalah
 
+**LARANGAN**: Setelah Langkah 3 selesai, JANGAN panggil `get_bgp_sessions` lagi di langkah manapun.
+Data BGP sudah lengkap di sini. Jika log (Langkah 5) menunjukkan event BGP,
+gunakan data yang sudah ada di context — bukan fetch ulang.
+
 ### Langkah 4: Anomali Traffic
 
-Jalankan `get_top_interfaces_all` — hasilnya mencakup semua router sekaligus.
+Jalankan `get_top_interfaces_all` dengan filter `roles` sesuai scope:
+
+| Scope | Perintah |
+|-------|---------|
+| IDREN | `get_top_interfaces_all(roles="gate_idren")` |
+| Kampus | `get_top_interfaces_all(roles="backbone,access")` |
+| Semua | `get_top_interfaces_all()` |
 
 Flag:
 - Interface uplink > 80% → ⚠ HAMPIR PENUH
@@ -113,7 +144,7 @@ Flag:
 
 ### Langkah 5: Log Error 24 Jam Terakhir
 
-Untuk setiap router IDREN (role `gate_idren`), jalankan `get_router_log(router_name, lines=100)`.
+Untuk setiap router IDREN (role `gate_idren`), jalankan `get_router_log(router_name, lines=50)`.
 
 Cari:
 - `critical` atau `error` → flag

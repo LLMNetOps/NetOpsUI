@@ -360,7 +360,11 @@ def get_netbox_drift_report(router_name: str, device_name: str = "", instance: s
             if not nb_device:
                 return f"Device '{device_name}' tidak ditemukan di NetBox."
         else:
-            nb_device = _find_nb_device_by_host(nb, router_host)
+            # 1. Name-based match (router_name == NetBox device name)
+            nb_device = nb.dcim.devices.get(name=router_name)
+            # 2. Fallback: IP-based match
+            if not nb_device:
+                nb_device = _find_nb_device_by_host(nb, router_host)
             if not nb_device:
                 return (
                     f"Router '{router_name}' (host={router_host}) tidak cocok dengan device manapun di NetBox.\n"
