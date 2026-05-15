@@ -31,12 +31,14 @@ tools:
   - run_command
   - get_router_log
   - run_command_all
+  - get_netbox_drift_report
   - list_reports
   - get_report
   - get_report_section
   - get_report_toc
   - get_current_time
 skills:
+  - morning-check
   - network-health-check
   - network-reachability
   - network-traffic-analysis

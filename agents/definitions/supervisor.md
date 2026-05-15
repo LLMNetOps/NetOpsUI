@@ -69,6 +69,8 @@ Jika permintaan mengandung kata **"laporan"**, **"buat dokumen"**, **"tulis file
 
 ### Permintaan tanpa laporan file
 
+- **Morning check / cek pagi** (kata kunci: "morning check", "cek pagi", "pengecekan pagi",
+  "status pagi", "kondisi jaringan pagi") → monitor_agent, relevant_skills: ["morning-check"], lalu END
 - Diagnosa teknis tanpa kata "laporan" → diagnose_agent, lalu END
 - Monitoring status → monitor_agent, lalu END
 - **Konfigurasi / perubahan / write ops** → config_agent, lalu END
