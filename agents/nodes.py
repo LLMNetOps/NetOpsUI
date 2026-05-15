@@ -216,6 +216,36 @@ def _parse_supervisor_response(raw: str) -> dict | None:
     return None
 
 
+# ── Intent continuation (deterministic, no LLM) ──────────────────────────────
+
+_MONITORING_KW = {"cek", "status", "check", "monitor", "kondisi", "health",
+                  "ping", "sistem", "uptime", "resource", "reachability"}
+_DIAGNOSE_KW   = {"diagnosa", "analisis", "bgp", "ospf", "routing",
+                  "troubleshoot", "kenapa", "masalah", "lambat", "putus"}
+
+
+def _intent_continuation(intent: str, prev_agent: str, valid_agents: set[str]) -> str | None:
+    """
+    Setelah prev_agent selesai, cek apakah original_intent belum terpenuhi.
+    Return nama agent berikutnya, atau None jika intent sudah selesai (→ END).
+    Deterministic — tidak memanggil LLM.
+    """
+    if not intent or not prev_agent:
+        return None
+    t = intent.lower()
+    # Setelah config_agent (discovery/tambah router): lanjut ke monitoring/diagnosa jika itu intent-nya
+    if prev_agent == "config_agent":
+        if any(kw in t for kw in _MONITORING_KW) and "monitor_agent" in valid_agents:
+            return "monitor_agent"
+        if any(kw in t for kw in _DIAGNOSE_KW) and "diagnose_agent" in valid_agents:
+            return "diagnose_agent"
+    # Setelah netbox_agent (discovery): lanjut ke monitoring jika intent adalah monitoring
+    if prev_agent == "netbox_agent":
+        if any(kw in t for kw in _MONITORING_KW) and "monitor_agent" in valid_agents:
+            return "monitor_agent"
+    return None
+
+
 # ── Supervisor node ───────────────────────────────────────────────────────────
 
 _SUPERVISOR_SYS = """\
@@ -239,6 +269,7 @@ Contoh format yang benar:
 
 Field next_agent harus salah satu: {valid_agents}, END
 Gunakan END jika pertanyaan sudah dijawab AI sebelumnya dalam percakapan ini.
+{intent_context}
 """
 
 
@@ -258,7 +289,30 @@ def supervisor_node(state: "NetworkOpsState") -> dict:
             kw in (_early_human.content or "").lower() for kw in _early_save_kw
         ))
         _early_prev = state.get("active_agent", "")
-        # Jika data-agent baru selesai dan user minta file → langsung route ke document_agent
+        _early_intent = state.get("original_intent", "")
+
+        # Priority 1: Jika intent awal belum terpenuhi, lanjut ke agent berikutnya
+        _early_valid = {d.name for d in _agent_loader.all() if d.name != "supervisor"}
+        _continuation = _intent_continuation(_early_intent, _early_prev, _early_valid)
+        if _continuation and _continuation != _early_prev:
+            _cont_log = (
+                f"→ {_continuation}  skills: []  | "
+                f"intent-continuation: '{_early_intent[:60]}' belum terpenuhi setelah {_early_prev}"
+            )
+            _cont_msg = HumanMessage(content=(
+                f"Lanjutkan task awal operator: {_early_intent}\n"
+                f"Agent sebelumnya ({_early_prev}) sudah selesai. "
+                f"Sekarang kerjakan bagian yang belum: {_early_intent}"
+            ))
+            return {
+                "next_agent": _continuation,
+                "active_agent": "supervisor",
+                "injected_skills": [],
+                "messages": [_cont_msg],
+                "agent_log": [_log("supervisor", "routing", _cont_log)],
+            }
+
+        # Priority 2: Jika data-agent baru selesai dan user minta file → route ke document_agent
         if _early_wants_file and _early_prev in ("monitor_agent", "security_agent", "diagnose_agent"):
             _doc_log = f"→ document_agent  skills: ['document-writing']  | file-save: {_early_prev} selesai, route ke document_agent"
             # Deteksi tipe laporan untuk memilih template yang tepat
@@ -294,6 +348,7 @@ def supervisor_node(state: "NetworkOpsState") -> dict:
                 "messages": [_doc_instruction],
                 "agent_log": [_log("supervisor", "routing", _doc_log)],
             }
+
         return {
             "next_agent": "END",
             "active_agent": "supervisor",
@@ -351,6 +406,24 @@ def supervisor_node(state: "NetworkOpsState") -> dict:
     from tools.base import get_router_names as _get_router_names  # noqa: PLC0415
     router_list = "  " + ", ".join(_get_router_names()) if _get_router_names() else "  (kosong)"
 
+    # Simpan original_intent dari HumanMessage pertama jika belum ada
+    _current_intent = state.get("original_intent", "")
+    if not _current_intent:
+        _first_human = next((m for m in messages if isinstance(m, HumanMessage)), None)
+        _current_intent = (_first_human.content or "").strip() if _first_human else ""
+
+    # Inject intent context ke prompt hanya jika ada dan ada agent yang sudah selesai
+    _prev_for_intent = state.get("active_agent", "")
+    if _current_intent and _prev_for_intent and _prev_for_intent != "supervisor":
+        _intent_ctx = (
+            f"\nIntent awal operator: \"{_current_intent}\"\n"
+            f"Agent terakhir yang selesai: {_prev_for_intent}\n"
+            f"Cek apakah intent ini sudah terpenuhi. Jika belum, route ke agent yang tepat. "
+            f"Jika sudah → END."
+        )
+    else:
+        _intent_ctx = ""
+
     _supervisor_defn = _agent_loader.get("supervisor")
     _supervisor_model = _supervisor_defn.model if _supervisor_defn else None
 
@@ -360,6 +433,7 @@ def supervisor_node(state: "NetworkOpsState") -> dict:
         skill_list=skill_list,
         router_list=router_list,
         valid_agents=valid_agents_str,
+        intent_context=_intent_ctx,
     ))
     _sup_ctx_window = _supervisor_defn.context_window if _supervisor_defn else 6
     recent = [m for m in messages if isinstance(m, (HumanMessage, AIMessage))][-_sup_ctx_window:]
@@ -451,6 +525,7 @@ def supervisor_node(state: "NetworkOpsState") -> dict:
         "next_agent": next_agent,
         "active_agent": "supervisor",
         "injected_skills": skills,
+        "original_intent": _current_intent,
         "agent_log": [_log("supervisor", "routing", log_msg)],
     }
 

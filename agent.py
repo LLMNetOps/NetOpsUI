@@ -62,6 +62,7 @@ class NetworkOpsState(TypedDict):
     agent_log:         Annotated[list[AgentLogEntry], _append]
     pending_approval:  ApprovalRequest | None
     approval_decision: str | None
+    original_intent:   str
 
 
 # ── SkillLibrary singleton ─────────────────────────────────────────────────────
