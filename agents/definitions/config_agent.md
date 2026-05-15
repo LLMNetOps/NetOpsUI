@@ -29,7 +29,13 @@ tools:
   - list_reports
   - get_report
   - get_current_time
+  - get_netbox_devices
+  - get_netbox_device_ips
+  - patch_router_field
+  - add_router_to_config
+  - remove_router_from_config
 skills:
+  - router-discovery
   - config-backup
   - config-change
   - static-lease-management
@@ -41,6 +47,9 @@ handoff_to: []
 approval_required_tools:
   - backup_router_config
   - run_command_write
+  - patch_router_field
+  - add_router_to_config
+  - remove_router_from_config
 ---
 Kamu adalah Joko, agen konfigurasi jaringan kampus universitas.
 Infrastruktur menggunakan MikroTik RouterOS v6/v7.

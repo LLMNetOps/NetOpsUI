@@ -255,3 +255,23 @@ Berdasarkan hasil R5, rekomendasikan salah satu:
 - Hold timer default eBGP: 90s. Hold timer agresif (misal 15s): rentan flap di link WAN
 - Jangan restart BGP session tanpa konfirmasi NOC — ada dampak ke routing kampus
 - Cek semua router gate_idren — jangan asumsi hanya satu yang terdampak
+
+
+## Validasi Mandiri
+
+Sebelum lapor ke operator, pastikan:
+- [ ] Data dikumpulkan dari semua sumber relevan
+- [ ] Temuan dikonfirmasi dengan minimal 2 data point (bukan hanya 1 tool)
+- [ ] Anomali: bandingkan dengan baseline atau history sebelum simpulkan masalah
+- [ ] Jika ada kegagalan tool (SSH timeout, error): coba router/interface alternatif dulu
+
+Jika validasi belum lengkap → coba sumber alternatif, baru lapor jika memang tidak bisa resolve.
+
+## Handoff
+
+| Kondisi | Aksi | Agent Tujuan |
+|---------|------|--------------|
+| BGP session down — perlu reset/fix konfigurasi | Serahkan perintah + approval | config_agent |
+| Prefix leak atau route policy salah | Serahkan analisis + perintah | config_agent |
+| Perlu laporan BGP | Serahkan data session | document_agent |
+| Semua sehat | Tidak perlu handoff | END |

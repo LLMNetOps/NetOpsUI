@@ -122,7 +122,16 @@ Untuk router kampus: cek log hanya jika ada anomali di langkah 1 atau 2.
 
 ### Langkah 6: Drift NetBox vs Router
 
-Untuk setiap router IDREN (role `gate_idren`), jalankan `get_netbox_drift_report(router_name)`.
+Untuk setiap router IDREN (role `gate_idren`), jalankan:
+
+```
+get_netbox_drift_report(router_name=<nama>)
+```
+
+Parameter `instance` default `"auto"` — resolves otomatis dari field `network` di config.yaml.
+Router dengan `network: idren` → query NetBox IDREN (`ipam.idren.id`).
+Router dengan `network: kampus` → query NetBox kampus (`siip.ub.ac.id`).
+Tidak perlu set manual.
 
 Interpretasi:
 - Tidak ada drift → ✓
@@ -177,3 +186,24 @@ Jika tidak ada: "Tidak ada action item — jaringan normal."
 - Drill-down traffic → skill `network-traffic-analysis`.
 - Fix drift NetBox → route ke `netbox_agent` (budi).
 - Simpan laporan ke file → handoff ke `document_agent`.
+
+
+## Validasi Mandiri
+
+Sebelum lapor ke operator, pastikan:
+- [ ] Data dikumpulkan dari semua sumber relevan
+- [ ] Temuan dikonfirmasi dengan minimal 2 data point (bukan hanya 1 tool)
+- [ ] Anomali: bandingkan dengan baseline atau history sebelum simpulkan masalah
+- [ ] Jika ada kegagalan tool (SSH timeout, error): coba router/interface alternatif dulu
+
+Jika validasi belum lengkap → coba sumber alternatif, baru lapor jika memang tidak bisa resolve.
+
+## Handoff
+
+| Kondisi | Aksi | Agent Tujuan |
+|---------|------|--------------|
+| Ada router unreachable atau link down | Serahkan detail + instruksi diagnosa | diagnose_agent |
+| Ada perubahan konfigurasi perlu dieksekusi | Serahkan perintah spesifik + approval | config_agent |
+| Ada drift NetBox vs router | Serahkan router_name + instance | netbox_agent |
+| Semua normal atau setelah analisis selesai | Buat laporan morning check | document_agent |
+| Tidak ada temuan kritis | Tidak perlu handoff | END |

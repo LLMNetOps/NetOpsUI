@@ -135,3 +135,21 @@ Laporan harus berisi:
 - Pastikan semua router di path punya MTU yang sama
 - Duplex mismatch menyebabkan error tinggi dan packet loss
 - VDSL/DSL biasanya harus MTU=1492 (untuk PPPoE)
+
+
+## Validasi Mandiri
+
+Sebelum lapor ke operator, pastikan:
+- [ ] Data dikumpulkan dari semua sumber relevan
+- [ ] Temuan dikonfirmasi dengan minimal 2 data point (bukan hanya 1 tool)
+- [ ] Anomali: bandingkan dengan baseline atau history sebelum simpulkan masalah
+- [ ] Jika ada kegagalan tool (SSH timeout, error): coba router/interface alternatif dulu
+
+Jika validasi belum lengkap → coba sumber alternatif, baru lapor jika memang tidak bisa resolve.
+
+## Handoff
+
+| Kondisi | Aksi | Agent Tujuan |
+|---------|------|--------------|
+| MTU mismatch ditemukan — perlu fix | Serahkan interface + perintah MTU fix | config_agent |
+| Tidak ada mismatch | Tidak perlu handoff | END |

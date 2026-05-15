@@ -40,6 +40,13 @@ NetBox adalah master — jangan ubah NetBox untuk menyesuaikan router.
 get_netbox_drift_report(router_name="<nama-router>")
 ```
 
+Parameter `instance` default `"auto"` — resolves dari field `network` di config.yaml:
+- Router `network: idren` → NetBox IDREN (`ipam.idren.id`)
+- Router `network: kampus` → NetBox kampus (`siip.ub.ac.id`)
+
+Override eksplisit hanya jika perlu: `instance="idren"` atau `instance="kampus"`.
+Sama berlaku untuk `get_netbox_device_interfaces` dan `get_netbox_device_ips`.
+
 Catat dengan teliti:
 - Interface yang perlu DIBUAT di router (ada di NetBox, belum ada di router)
 - IP yang perlu DITAMBAH di router (ada di NetBox, belum ada di router)
@@ -201,3 +208,22 @@ interface tersebut **tidak bisa dikonfigurasi** sampai data dilengkapi.
 
 **Nama interface harus konsisten** antara NetBox dan MikroTik — gunakan nama yang sama
 persis. Ini yang dipakai sebagai key untuk mendeteksi drift.
+
+
+## Validasi Mandiri
+
+Sebelum lapor ke operator, pastikan:
+- [ ] Data dikumpulkan dari semua sumber relevan
+- [ ] Temuan dikonfirmasi dengan minimal 2 data point (bukan hanya 1 tool)
+- [ ] Anomali: bandingkan dengan baseline atau history sebelum simpulkan masalah
+- [ ] Jika ada kegagalan tool (SSH timeout, error): coba router/interface alternatif dulu
+
+Jika validasi belum lengkap → coba sumber alternatif, baru lapor jika memang tidak bisa resolve.
+
+## Handoff
+
+| Kondisi | Aksi | Agent Tujuan |
+|---------|------|--------------|
+| Interface/IP perlu dikonfigurasi di router | Serahkan perintah eksekusi + approval | config_agent |
+| Sinkronisasi selesai — perlu laporan | Serahkan ringkasan perubahan | document_agent |
+| Tidak ada drift | Tidak perlu handoff | END |

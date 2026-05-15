@@ -22,9 +22,14 @@ tools:
   - get_next_available_vlan
   - get_netbox_vlan_group_detail
   - create_netbox_vlan_interface
+  - populate_netbox_bgp
+  - get_netbox_bgp_drift
+  - resolve_router_host
+  - patch_router_host
   - run_command
   - check_reachability
 skills:
+  - router-discovery
   - netbox-read
   - netbox-sync
   - vlan-provisioning

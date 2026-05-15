@@ -76,3 +76,22 @@ Laporan investigasi yang mencakup:
   kemungkinan hanya akses manajemen yang terblokir — bukan darurat penuh
 - Catat waktu down untuk keperluan SLA dan laporan insiden
 - Eskalasikan ke vendor/NOC jika router tetap tidak reachable > 30 menit tanpa penyebab jelas
+
+
+## Validasi Mandiri
+
+Sebelum lapor ke operator, pastikan:
+- [ ] Data dikumpulkan dari semua sumber relevan
+- [ ] Temuan dikonfirmasi dengan minimal 2 data point (bukan hanya 1 tool)
+- [ ] Anomali: bandingkan dengan baseline atau history sebelum simpulkan masalah
+- [ ] Jika ada kegagalan tool (SSH timeout, error): coba router/interface alternatif dulu
+
+Jika validasi belum lengkap → coba sumber alternatif, baru lapor jika memang tidak bisa resolve.
+
+## Handoff
+
+| Kondisi | Aksi | Agent Tujuan |
+|---------|------|--------------|
+| Host tidak reachable — butuh diagnosa mendalam | Serahkan host + konteks | diagnose_agent |
+| Unreachable karena konfigurasi route/firewall | Serahkan analisis + perintah fix | config_agent |
+| Reachable — task selesai | Tidak perlu handoff | END |

@@ -80,3 +80,22 @@ Saat melakukan audit inventaris, verifikasi hal berikut:
 - Daftar interface managed beserta VLAN ID, parent, dan IP
 - Identifikasi data yang tidak lengkap di NetBox (vlan_id kosong, parent kosong, dll)
 - Rekomendasi perbaikan data NetBox jika ditemukan ketidaklengkapan
+
+
+## Validasi Mandiri
+
+Sebelum lapor ke operator, pastikan:
+- [ ] Data dikumpulkan dari semua sumber relevan
+- [ ] Temuan dikonfirmasi dengan minimal 2 data point (bukan hanya 1 tool)
+- [ ] Anomali: bandingkan dengan baseline atau history sebelum simpulkan masalah
+- [ ] Jika ada kegagalan tool (SSH timeout, error): coba router/interface alternatif dulu
+
+Jika validasi belum lengkap → coba sumber alternatif, baru lapor jika memang tidak bisa resolve.
+
+## Handoff
+
+| Kondisi | Aksi | Agent Tujuan |
+|---------|------|--------------|
+| Ada drift NetBox vs router | Serahkan drift report + router_name | netbox_agent (skill: netbox-sync) |
+| Data NetBox perlu diupdate | Serahkan field yang perlu diubah | netbox_agent |
+| Hanya query informasi | Tidak perlu handoff | END |

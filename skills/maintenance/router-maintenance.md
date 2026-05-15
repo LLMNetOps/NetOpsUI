@@ -161,3 +161,22 @@ Jalankan secara rutin setiap bulan untuk semua router:
 - Jika upgrade gagal dan router tidak bisa diakses → akses konsol fisik untuk recovery
 - Simpan catatan maintenance (tanggal, versi sebelum/sesudah, nama teknisi) ke laporan
 - Router yang menjalankan BGP IDREN: koordinasi dengan NOC IDREN sebelum maintenance
+
+
+## Validasi Mandiri
+
+Sebelum lapor ke operator, pastikan:
+- [ ] Data dikumpulkan dari semua sumber relevan
+- [ ] Temuan dikonfirmasi dengan minimal 2 data point (bukan hanya 1 tool)
+- [ ] Anomali: bandingkan dengan baseline atau history sebelum simpulkan masalah
+- [ ] Jika ada kegagalan tool (SSH timeout, error): coba router/interface alternatif dulu
+
+Jika validasi belum lengkap → coba sumber alternatif, baru lapor jika memang tidak bisa resolve.
+
+## Handoff
+
+| Kondisi | Aksi | Agent Tujuan |
+|---------|------|--------------|
+| Maintenance perlu dieksekusi (upgrade, reboot) | Serahkan perintah + approval | config_agent |
+| Maintenance selesai — perlu laporan | Serahkan hasil maintenance | document_agent |
+| Hanya jadwal/review | Tidak perlu handoff | END |

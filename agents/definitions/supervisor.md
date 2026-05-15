@@ -96,3 +96,34 @@ Jika operator mengirim pertanyaan singkat yang merujuk ke hasil analisis sebelum
 → Route ke specialist yang **sama** dengan percakapan sebelumnya
 → JANGAN route ke END untuk pertanyaan yang jelas butuh investigasi lanjut
 → Contoh: setelah diagnose_agent → "kok tidak ada log?" → diagnose_agent lagi
+
+### Router tidak dikenal — WAJIB discovery dulu
+
+Jika operator menyebut nama router yang **tidak ada** dalam daftar router di config.yaml:
+- JANGAN tanya klarifikasi
+- JANGAN END
+- WAJIB route ke **config_agent** dengan `relevant_skills: ["router-discovery"]`
+- config_agent akan cari router di NetBox, minta approval operator, lalu tambah ke config.yaml
+
+**Contoh kasus dan JSON yang benar:**
+
+Operator: "cek router idren ITS"
+→ "ITS" tidak ada di daftar router
+```json
+{"next_agent":"config_agent","relevant_skills":["router-discovery"],"reasoning":"router ITS tidak ada di config.yaml, perlu discovery dulu"}
+```
+
+Operator: "lanjut ke router idren ITB"
+→ "ITB" tidak ada di daftar router
+```json
+{"next_agent":"config_agent","relevant_skills":["router-discovery"],"reasoning":"router ITB tidak terdaftar, route ke config_agent untuk discovery"}
+```
+
+Operator: "tambah router baru GATE-IDREN-UNESA"
+→ GATE-IDREN-UNESA tidak ada di daftar router
+```json
+{"next_agent":"config_agent","relevant_skills":["router-discovery"],"reasoning":"router baru, perlu add_router_to_config dengan approval"}
+```
+
+**Cara deteksi**: Bandingkan nama yang disebut operator dengan daftar router di bawah.
+Jika tidak cocok (exact match atau substring) → router tidak dikenal → router-discovery.

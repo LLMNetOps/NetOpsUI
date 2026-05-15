@@ -8,7 +8,10 @@ from typing import Any
 import yaml
 from langchain_core.tools import tool
 
-from tools.base import CONFIG_FILE, validate_router, get_router_entries, ssh_creds, ssh_run_command
+from tools.base import (
+    CONFIG_FILE, validate_router, get_router_entries, get_unique_router_entries,
+    ssh_creds, ssh_creds_for, ssh_run_command,
+)
 
 
 # ── NetBox client ─────────────────────────────────────────────────────────────
@@ -83,6 +86,20 @@ def _resolve_instance(router_name: str | None, instance: str) -> str:
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
+_NB_PATHS: dict[str, str] = {
+    "ip-address": "ipam/ip-addresses",
+    "interface": "dcim/interfaces",
+    "device": "dcim/devices",
+    "bgp-session": "plugins/bgp/session",
+}
+
+
+def _nb_url(base_url: str, obj_type: str, obj_id: int) -> str:
+    """Build direct NetBox UI URL untuk object tertentu."""
+    path = _NB_PATHS.get(obj_type, obj_type)
+    return f"{base_url.rstrip('/')}/{path}/{obj_id}/"
+
 
 def _extract_vlan_id(name: str) -> int | None:
     """Extract VLAN ID dari nama interface. Handle: vlan450-..., VLAN-702-..., vlan-450-..."""
@@ -330,7 +347,7 @@ def get_netbox_drift_report(router_name: str, device_name: str = "", instance: s
     try:
         router_name = validate_router(router_name)
         entry = get_router_entries(router_name)[0]
-        creds = ssh_creds()
+        creds = ssh_creds_for(entry)
         router_host = entry["host"]
         ros = entry["ros_version"]
         instance = _resolve_instance(router_name, instance)
@@ -640,6 +657,7 @@ def create_netbox_vlan_interface(
     """
     try:
         instance = _resolve_instance(device_name, instance)
+        cfg = _get_netbox_cfg(instance)
         nb = _nb(instance)
 
         device = nb.dcim.devices.get(name=device_name)
@@ -678,10 +696,11 @@ def create_netbox_vlan_interface(
         return (
             f"Interface berhasil dibuat di NetBox.\n"
             f"  Device     : {device_name}\n"
-            f"  Interface  : {interface_name}  (ID={result.id})\n"
+            f"  Interface  : {interface_name}\n"
             f"  Parent     : {parent_interface}\n"
             f"  VLAN ID    : {vlan_id}\n"
-            f"  Description: {description}\n"
+            f"  Deskripsi  : {description}\n"
+            f"  NetBox     : {_nb_url(cfg['url'], 'interface', result.id)}\n"
             f"\nLangkah berikutnya: add_netbox_ip_address() untuk assign IP ke interface ini."
         )
     except Exception as e:
@@ -710,11 +729,26 @@ def add_netbox_ip_address(
     """
     try:
         instance = _resolve_instance(device_name, instance)
+        cfg = _get_netbox_cfg(instance)
         nb = _nb(instance)
         interfaces = list(nb.dcim.interfaces.filter(device=device_name, name=interface_name))
         if not interfaces:
             return f"Interface '{interface_name}' tidak ditemukan untuk device '{device_name}' di NetBox."
         iface = interfaces[0]
+
+        # Duplicate check: same address + same interface
+        existing = list(nb.ipam.ip_addresses.filter(address=ip_with_prefix, interface_id=iface.id))
+        if existing:
+            ex = existing[0]
+            return (
+                f"IP '{ip_with_prefix}' sudah terdaftar di NetBox — tidak dibuat ulang.\n"
+                f"  Device    : {device_name}\n"
+                f"  Interface : {interface_name}\n"
+                f"  Status    : {ex.status}\n"
+                f"  Deskripsi : {ex.description or '(kosong)'}\n"
+                f"  NetBox    : {_nb_url(cfg['url'], 'ip-address', ex.id)}\n"
+                f"Gunakan update_netbox_interface() jika perlu ubah deskripsi."
+            )
 
         payload: dict[str, Any] = {
             "address": ip_with_prefix,
@@ -728,10 +762,12 @@ def add_netbox_ip_address(
         result = nb.ipam.ip_addresses.create(**payload)
         return (
             f"IP address berhasil ditambahkan di NetBox.\n"
-            f"  ID       : {result.id}\n"
-            f"  Address  : {result.address}\n"
-            f"  Device   : {device_name}\n"
-            f"  Interface: {interface_name}"
+            f"  Device    : {device_name}\n"
+            f"  Interface : {interface_name}\n"
+            f"  Address   : {result.address}\n"
+            f"  Status    : {result.status}\n"
+            f"  Deskripsi : {result.description or '(kosong)'}\n"
+            f"  NetBox    : {_nb_url(cfg['url'], 'ip-address', result.id)}"
         )
     except Exception as e:
         return f"Gagal menambahkan IP address ke NetBox: {e}"
@@ -757,6 +793,7 @@ def update_netbox_interface(
     """
     try:
         instance = _resolve_instance(device_name, instance)
+        cfg = _get_netbox_cfg(instance)
         nb = _nb(instance)
         interfaces = list(nb.dcim.interfaces.filter(device=device_name, name=interface_name))
         if not interfaces:
@@ -778,7 +815,8 @@ def update_netbox_interface(
             f"Interface berhasil diupdate di NetBox.\n"
             f"  Device    : {device_name}\n"
             f"  Interface : {interface_name}\n"
-            f"  Perubahan : {changed}"
+            f"  Perubahan : {changed}\n"
+            f"  NetBox    : {_nb_url(cfg['url'], 'interface', iface.id)}"
         )
     except Exception as e:
         return f"Gagal update interface di NetBox: {e}"
@@ -813,7 +851,7 @@ def populate_netbox_from_router(
     try:
         router_name = validate_router(router_name)
         entry = get_router_entries(router_name)[0]
-        creds = ssh_creds()
+        creds = ssh_creds_for(entry)
         router_host = entry["host"]
         ros = entry["ros_version"]
         instance = _resolve_instance(router_name, instance)
@@ -1057,3 +1095,501 @@ def populate_netbox_from_router(
 
     except Exception as e:
         return f"Gagal populate NetBox dari router: {e}"
+
+
+# ── BGP plugin helpers ────────────────────────────────────────────────────────
+
+def _bgp_auth_headers(cfg: dict[str, Any]) -> dict[str, str]:
+    return {"Authorization": f"Token {cfg['token']}"}
+
+
+def _bgp_api(nb, cfg: dict[str, Any], endpoint: str, **params) -> list[dict]:
+    """GET all from NetBox BGP plugin endpoint."""
+    url = f"{cfg['url'].rstrip('/')}/api/plugins/bgp/{endpoint}/"
+    params.setdefault("limit", 1000)
+    r = nb.http_session.get(url, params=params, headers=_bgp_auth_headers(cfg))
+    r.raise_for_status()
+    return r.json().get("results", [])
+
+
+def _bgp_create(nb, cfg: dict[str, Any], endpoint: str, payload: dict) -> dict:
+    url = f"{cfg['url'].rstrip('/')}/api/plugins/bgp/{endpoint}/"
+    r = nb.http_session.post(url, json=payload, headers=_bgp_auth_headers(cfg))
+    r.raise_for_status()
+    return r.json()
+
+
+def _bgp_patch(nb, cfg: dict[str, Any], endpoint: str, obj_id: int, payload: dict) -> dict:
+    url = f"{cfg['url'].rstrip('/')}/api/plugins/bgp/{endpoint}/{obj_id}/"
+    r = nb.http_session.patch(url, json=payload, headers=_bgp_auth_headers(cfg))
+    r.raise_for_status()
+    return r.json()
+
+
+def _get_bgp_sessions_raw(entry: dict, creds: dict) -> tuple[bool, str, str]:
+    ros = entry["ros_version"]
+    cmd = "/routing/bgp/session/print" if ros == 7 else "routing bgp peer print"
+    return ssh_run_command(
+        host=entry["host"], username=creds["username"], password=creds["password"],
+        command=cmd, port=creds["port"], timeout=creds["timeout"],
+    )
+
+
+def _get_bgp_filter_map(entry: dict, creds: dict) -> dict[str, dict[str, list[str]]]:
+    """Return {conn_name: {input: [policy_names], output: [policy_names]}}."""
+    ros = entry["ros_version"]
+    cmd = "/routing/bgp/connection/print detail" if ros == 7 else "routing bgp peer print detail"
+    ok, out, _ = ssh_run_command(
+        host=entry["host"], username=creds["username"], password=creds["password"],
+        command=cmd, port=creds["port"], timeout=creds["timeout"],
+    )
+    if not ok:
+        return {}
+
+    result: dict[str, dict[str, list[str]]] = {}
+    current: str | None = None
+
+    for raw_line in out.splitlines():
+        s = raw_line.strip()
+        if ros == 7:
+            m_name = re.search(r'name="([^"]+)"', s)
+        else:
+            m_name = re.match(r'name=(\S+)', s)
+        if m_name:
+            current = m_name.group(1)
+            result.setdefault(current, {"input": [], "output": []})
+            continue
+        if not current:
+            continue
+        if ros == 7:
+            for m in re.finditer(r'input\.filter-chain=(\S+)', s):
+                result[current]["input"].append(m.group(1))
+            for m in re.finditer(r'output\.filter-chain=(\S+)', s):
+                result[current]["output"].append(m.group(1))
+        else:
+            m_in = re.search(r'in-filter=(\S+)', s)
+            m_out = re.search(r'out-filter=(\S+)', s)
+            if m_in:
+                result[current]["input"].append(m_in.group(1))
+            if m_out:
+                result[current]["output"].append(m_out.group(1))
+
+    return result
+
+
+@tool
+def populate_netbox_bgp(
+    router_name: str = "",
+    instance: str = "idren",
+) -> str:
+    """
+    Populate NetBox BGP plugin dengan data session dan routing-policy dari router MikroTik.
+    Upsert: update jika session sudah ada (key: nama session), insert jika belum.
+    Secara default memproses semua router role gate_idren. Routing-policy diambil
+    dari filter chain di konfigurasi BGP connection/peer router.
+    Args:
+        router_name: Nama router spesifik. Kosong = semua router role gate_idren.
+        instance: Instance NetBox — 'idren' (default), 'kampus', atau 'auto'.
+    """
+    from tools.routing import _parse_bgp_sessions
+
+    try:
+        if router_name.strip():
+            rn = validate_router(router_name)
+            entries = [get_router_entries(rn)[0]]
+        else:
+            entries = [e for e in get_unique_router_entries() if e.get("role") == "gate_idren"]
+
+        if not entries:
+            return "Tidak ada router gate_idren di config.yaml."
+
+        cfg = _get_netbox_cfg(instance)
+        nb = _nb(instance)
+        all_lines: list[str] = []
+
+        for entry in entries:
+            creds = ssh_creds_for(entry)
+            r_name = entry["name"]
+            lines: list[str] = [f"\n── {r_name} ({entry['host']}) ──"]
+
+            device = nb.dcim.devices.get(name=r_name)
+            if not device:
+                lines.append(f"  ✗ Device '{r_name}' tidak ada di NetBox DCIM — skip.")
+                all_lines.extend(lines)
+                continue
+
+            ok, out, err = _get_bgp_sessions_raw(entry, creds)
+            if not ok:
+                lines.append(f"  ✗ SSH gagal: {err}")
+                all_lines.extend(lines)
+                continue
+
+            sessions = _parse_bgp_sessions(out)
+            if not sessions:
+                lines.append("  Tidak ada BGP session.")
+                all_lines.extend(lines)
+                continue
+
+            filter_map = _get_bgp_filter_map(entry, creds)
+
+            def _match_filters(sname: str) -> dict[str, list[str]]:
+                for conn, f in filter_map.items():
+                    if sname == conn or sname.startswith(conn):
+                        return f
+                return {"input": [], "output": []}
+
+            # Get default RIR for auto-created ASNs (use first available)
+            _rirs = list(nb.ipam.rirs.all())
+            _default_rir_id: int | None = _rirs[0].id if _rirs else None
+
+            def _get_or_create_ip(ip: str, desc: str = "") -> int | None:
+                if not ip:
+                    return None
+                for q in [ip, ip.split("/")[0] + "/32"]:
+                    res = list(nb.ipam.ip_addresses.filter(address=q))
+                    if res:
+                        return res[0].id
+                # Auto-create as /32
+                addr = ip.split("/")[0] + "/32"
+                payload: dict[str, Any] = {"address": addr, "status": "active"}
+                if desc:
+                    payload["description"] = desc
+                obj = nb.ipam.ip_addresses.create(**payload)
+                lines.append(f"    [auto-create IP] {addr}")
+                return obj.id
+
+            def _get_or_create_asn(asn_str: str) -> int | None:
+                if not asn_str:
+                    return None
+                try:
+                    asn_num = int(asn_str)
+                    res = list(nb.ipam.asns.filter(asn=asn_num))
+                    if res:
+                        return res[0].id
+                    p: dict[str, Any] = {"asn": asn_num}
+                    if _default_rir_id:
+                        p["rir"] = _default_rir_id
+                    obj = nb.ipam.asns.create(**p)
+                    lines.append(f"    [auto-create ASN] AS{asn_num}")
+                    return obj.id
+                except Exception:
+                    return None
+
+            created = updated = skipped = 0
+
+            for s in sessions:
+                remote_addr = s.get("remote_addr", "").split("%")[0]
+                local_addr  = s.get("local_addr", "").split("%")[0]
+                remote_as_str = s.get("remote_as", "")
+                local_as_str  = s.get("local_as", "")
+
+                # local_addr fallback: use device primary IP when parser couldn't capture it
+                if not local_addr and device.primary_ip:
+                    local_ip_id: int | None = device.primary_ip.id
+                else:
+                    local_ip_id = _get_or_create_ip(local_addr, f"BGP local — {r_name}")
+
+                remote_ip_id = _get_or_create_ip(remote_addr, f"BGP peer — {s['name']}")
+                local_as_id  = _get_or_create_asn(local_as_str)
+                remote_as_id = _get_or_create_asn(remote_as_str)
+
+                if not local_ip_id or not remote_ip_id or not local_as_id or not remote_as_id:
+                    missing: list[str] = []
+                    if not local_ip_id:
+                        missing.append(f"local_ip (tidak ada primary_ip di NetBox)")
+                    if not remote_ip_id:
+                        missing.append(f"remote_addr={remote_addr or '?'}")
+                    if not local_as_id:
+                        missing.append(f"local_as={local_as_str or '?'}")
+                    if not remote_as_id:
+                        missing.append(f"remote_as={remote_as_str or '?'}")
+                    lines.append(f"  ✗ {s['name']}: unresolvable — {'; '.join(missing)}")
+                    skipped += 1
+                    continue
+
+                filters = _match_filters(s["name"])
+                import_ids: list[int] = []
+                export_ids: list[int] = []
+
+                for pname in filters.get("input", []):
+                    existing = _bgp_api(nb, cfg, "routing-policy", name=pname)
+                    if existing:
+                        import_ids.append(existing[0]["id"])
+                    else:
+                        obj = _bgp_create(nb, cfg, "routing-policy", {
+                            "name": pname, "description": f"Input filter — {r_name}"
+                        })
+                        import_ids.append(obj["id"])
+
+                for pname in filters.get("output", []):
+                    existing = _bgp_api(nb, cfg, "routing-policy", name=pname)
+                    if existing:
+                        export_ids.append(existing[0]["id"])
+                    else:
+                        obj = _bgp_create(nb, cfg, "routing-policy", {
+                            "name": pname, "description": f"Output filter — {r_name}"
+                        })
+                        export_ids.append(obj["id"])
+
+                payload: dict[str, Any] = {
+                    "name": s["name"],
+                    "device": device.id,
+                    "local_address": local_ip_id,
+                    "remote_address": remote_ip_id,
+                    "local_as": local_as_id,
+                    "remote_as": remote_as_id,
+                    "status": "active" if s.get("established") else "offline",
+                }
+                if import_ids:
+                    payload["import_policies"] = import_ids
+                if export_ids:
+                    payload["export_policies"] = export_ids
+
+                try:
+                    existing_sessions = _bgp_api(nb, cfg, "session", name=s["name"])
+                    if existing_sessions:
+                        _bgp_patch(nb, cfg, "session", existing_sessions[0]["id"], payload)
+                        action = "updated"
+                        updated += 1
+                    else:
+                        _bgp_create(nb, cfg, "session", payload)
+                        action = "created"
+                        created += 1
+                    icon = "✓" if s["established"] else "✗"
+                    lines.append(f"  [{action}] {icon} {s['name']}  AS{remote_as_str}")
+                except Exception as ex:
+                    lines.append(f"  ✗ {s['name']}: {ex}")
+                    skipped += 1
+
+            lines.append(f"\n  Ringkasan: {created} dibuat, {updated} diupdate, {skipped} dilewati")
+            all_lines.extend(lines)
+
+        return "\n".join(all_lines) or "Tidak ada data untuk diproses."
+
+    except Exception as e:
+        return f"Gagal populate NetBox BGP: {e}"
+
+
+@tool
+def resolve_router_host(router_name: str) -> str:
+    """
+    Auto-discover dan set host IP untuk router yang host-nya kosong di config.yaml.
+    Strategi berurutan:
+    1. NetBox primary_ip — lookup device by name di NetBox instance yang sesuai
+    2. NetBox BGP sessions — ambil local_address dari session BGP milik device ini
+    3. BGP peer discovery — SSH ke router lain yang sudah punya host, cari remote_addr
+       dari session yang mengarah ke router target
+    Jika IP ditemukan: update primary_ip di NetBox + update cache in-memory.
+    Config.yaml tidak diubah — NetBox adalah source of truth.
+    Args:
+        router_name: Nama router di config.yaml yang host-nya kosong atau perlu diverifikasi.
+    """
+    from tools.routing import _parse_bgp_sessions
+    from tools.base import (
+        validate_router, get_router_entries, get_unique_router_entries,
+        ssh_creds_for,
+    )
+
+    try:
+        router_name = validate_router(router_name)
+        entries = get_router_entries(router_name)
+        if not entries:
+            return f"Router '{router_name}' tidak ditemukan di config.yaml."
+
+        entry = entries[0]
+        current_host = entry.get("host", "").strip()
+        if current_host:
+            return (
+                f"Router '{router_name}' sudah punya host={current_host}.\n"
+                f"Tidak perlu resolusi. Gunakan tool SSH langsung."
+            )
+
+        network = entry.get("network", "kampus")
+        cfg = _get_netbox_cfg(network)
+        nb = _nb(network)
+
+        discovered_ip: str | None = None
+        method: str = ""
+
+        # === Strategi 1: NetBox primary_ip ===
+        device = nb.dcim.devices.get(name=router_name)
+        if device and device.primary_ip:
+            discovered_ip = str(device.primary_ip.address).split("/")[0]
+            method = "NetBox primary_ip"
+
+        # === Strategi 2: NetBox BGP sessions — local_address ===
+        if not discovered_ip and device:
+            bgp_sessions = _bgp_api(nb, cfg, "session", device_id=device.id)
+            for s in bgp_sessions:
+                la = s.get("local_address", {})
+                addr = la.get("address", "") if isinstance(la, dict) else str(la)
+                if addr:
+                    discovered_ip = addr.split("/")[0]
+                    method = f"NetBox BGP session local_address (session={s.get('name', '?')})"
+                    break
+
+        # === Strategi 3: BGP peer discovery via router lain ===
+        if not discovered_ip:
+            candidates = [
+                e for e in get_unique_router_entries()
+                if e.get("network") == network
+                and e.get("host", "").strip()
+                and e["name"] != router_name
+            ]
+            for c in candidates:
+                c_creds = ssh_creds_for(c)
+                cmd = "/routing/bgp/session/print" if c["ros_version"] == 7 else "routing bgp peer print"
+                ok, out, _ = ssh_run_command(
+                    host=c["host"], username=c_creds["username"], password=c_creds["password"],
+                    command=cmd, port=c_creds["port"], timeout=c_creds["timeout"],
+                )
+                if not ok:
+                    continue
+                for s in _parse_bgp_sessions(out):
+                    if router_name.lower() in s.get("name", "").lower():
+                        remote_addr = s.get("remote_addr", "").split("%")[0]
+                        if remote_addr:
+                            discovered_ip = remote_addr
+                            method = f"BGP peer discovery via {c['name']} (session={s['name']})"
+                            break
+                if discovered_ip:
+                    break
+
+        if not discovered_ip:
+            return (
+                f"Tidak bisa auto-discover host IP untuk router '{router_name}'.\n"
+                f"Strategi dicoba: NetBox primary_ip → NetBox BGP sessions → BGP peer discovery.\n"
+                f"Tambahkan host IP manual di config.yaml atau set primary_ip di NetBox."
+            )
+
+        # === Update NetBox primary_ip ===
+        nb_update_msg = "(NetBox: device tidak ditemukan — primary_ip tidak diupdate)"
+        if device:
+            ip_objs = list(nb.ipam.ip_addresses.filter(address=f"{discovered_ip}/32"))
+            if not ip_objs:
+                ip_objs = list(nb.ipam.ip_addresses.filter(address=discovered_ip))
+            if ip_objs:
+                try:
+                    device.update({"primary_ip4": ip_objs[0].id})
+                    nb_update_msg = (
+                        f"NetBox primary_ip diupdate → {discovered_ip}\n"
+                        f"  NetBox    : {_nb_url(cfg['url'], 'device', device.id)}"
+                    )
+                except Exception as ex:
+                    nb_update_msg = f"NetBox primary_ip update gagal: {ex}"
+            else:
+                nb_update_msg = (
+                    f"NetBox: IP {discovered_ip} belum ada di IPAM — primary_ip tidak diupdate.\n"
+                    f"Jalankan add_netbox_ip_address() untuk tambah IP dulu."
+                )
+
+        # === Update config.yaml + reload in-memory ===
+        from tools.config_yaml import patch_router_host as _patch_host
+        cfg_result = _patch_host.invoke({"router_name": router_name, "host": discovered_ip})
+
+        return (
+            f"Host IP berhasil di-resolve untuk router '{router_name}'.\n"
+            f"  IP     : {discovered_ip}\n"
+            f"  Metode : {method}\n"
+            f"  {nb_update_msg}\n"
+            f"  {cfg_result}"
+        )
+
+    except Exception as e:
+        return f"Gagal resolve host untuk '{router_name}': {e}"
+
+
+@tool
+def get_netbox_bgp_drift(
+    router_name: str = "",
+    instance: str = "idren",
+) -> str:
+    """
+    Bandingkan BGP sessions di NetBox (expected) vs live di router (actual).
+    Laporan: session hanya di NetBox, hanya di router, atau status mismatch.
+    Gunakan setelah populate_netbox_bgp() untuk verifikasi sinkronisasi.
+    Args:
+        router_name: Nama router spesifik. Kosong = semua router role gate_idren.
+        instance: Instance NetBox — 'idren' (default), 'kampus', atau 'auto'.
+    """
+    from tools.routing import _parse_bgp_sessions
+
+    try:
+        if router_name.strip():
+            rn = validate_router(router_name)
+            entries = [get_router_entries(rn)[0]]
+        else:
+            entries = [e for e in get_unique_router_entries() if e.get("role") == "gate_idren"]
+
+        if not entries:
+            return "Tidak ada router gate_idren di config.yaml."
+
+        cfg = _get_netbox_cfg(instance)
+        nb = _nb(instance)
+
+        lines = [f"BGP Drift — NetBox vs Router  [{instance.upper()}]", "═" * 70]
+        any_drift = False
+
+        for entry in entries:
+            creds = ssh_creds_for(entry)
+            r_name = entry["name"]
+            lines.append(f"\n── {r_name} ({entry['host']}) ──")
+
+            device = nb.dcim.devices.get(name=r_name)
+            if not device:
+                lines.append(f"  ✗ Device '{r_name}' tidak ada di NetBox — skip.")
+                continue
+
+            nb_raw = _bgp_api(nb, cfg, "session", device_id=device.id)
+            nb_sessions = {s["name"]: s for s in nb_raw}
+
+            ok, out, err = _get_bgp_sessions_raw(entry, creds)
+            if not ok:
+                lines.append(f"  ✗ SSH gagal: {err}")
+                continue
+            live_sessions = {s["name"]: s for s in _parse_bgp_sessions(out)}
+
+            only_nb     = set(nb_sessions) - set(live_sessions)
+            only_router = set(live_sessions) - set(nb_sessions)
+            common      = set(nb_sessions) & set(live_sessions)
+
+            if only_nb:
+                any_drift = True
+                lines.append(f"  ⚠ Di NetBox, tidak di router ({len(only_nb)}):")
+                for n in sorted(only_nb):
+                    lines.append(f"    - {n}")
+
+            if only_router:
+                any_drift = True
+                lines.append(f"  ⚠ Di router, tidak di NetBox ({len(only_router)}):")
+                for n in sorted(only_router):
+                    ls = live_sessions[n]
+                    icon = "✓" if ls["established"] else "✗"
+                    lines.append(f"    - {n}  AS{ls.get('remote_as', '?')}  {icon}")
+
+            mismatches: list[tuple[str, str, str]] = []
+            for n in common:
+                nb_st_raw = nb_sessions[n].get("status", {})
+                nb_st = nb_st_raw.get("value", "") if isinstance(nb_st_raw, dict) else str(nb_st_raw)
+                live_st = "active" if live_sessions[n]["established"] else "offline"
+                if nb_st != live_st:
+                    mismatches.append((n, nb_st, live_st))
+
+            if mismatches:
+                any_drift = True
+                lines.append(f"  ⚠ Status mismatch ({len(mismatches)}):")
+                for n, nb_st, live_st in mismatches:
+                    lines.append(f"    - {n}: NetBox={nb_st} ↔ Router={live_st}")
+
+            if not only_nb and not only_router and not mismatches:
+                lines.append(f"  ✓ Sinkron — {len(nb_sessions)} session cocok.")
+
+        lines.append("\n" + "═" * 70)
+        lines.append(
+            "Ada drift. Jalankan populate_netbox_bgp() untuk sinkronisasi."
+            if any_drift else "✓ Semua router sinkron."
+        )
+        return "\n".join(lines)
+
+    except Exception as e:
+        return f"Gagal get BGP drift: {e}"

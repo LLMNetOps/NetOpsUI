@@ -210,3 +210,20 @@ Sebelum menyimpan skill baru atau update, verifikasi:
 - [ ] **Panjang skill** di bawah 150 baris
 - [ ] **Tidak ada instruksi ambigu** seperti "analisis dengan bijak" atau "pertimbangkan faktor"
 - [ ] Jalankan `python tests/eval.py` — pastikan scenario terkait tetap pass
+
+
+## Validasi Mandiri
+
+Sebelum lapor ke operator, pastikan:
+- [ ] Data dikumpulkan dari semua sumber relevan
+- [ ] Temuan dikonfirmasi dengan minimal 2 data point (bukan hanya 1 tool)
+- [ ] Anomali: bandingkan dengan baseline atau history sebelum simpulkan masalah
+- [ ] Jika ada kegagalan tool (SSH timeout, error): coba router/interface alternatif dulu
+
+Jika validasi belum lengkap → coba sumber alternatif, baru lapor jika memang tidak bisa resolve.
+
+## Handoff
+
+| Kondisi | Aksi | Agent Tujuan |
+|---------|------|--------------|
+| Skill baru berhasil ditulis | Tidak perlu handoff | END |

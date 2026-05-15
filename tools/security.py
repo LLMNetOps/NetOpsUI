@@ -9,13 +9,13 @@ from langchain_core.tools import tool
 
 from tools.base import (
     validate_router, get_router_entries, get_all_routers, get_router_names,
-    ssh_creds, ssh_run_command,
+    ssh_creds, ssh_creds_for, ssh_run_command,
 )
 
 
 def _audit_one(entry: dict[str, Any]) -> dict[str, Any]:
     """Audit satu router: user, NTP, default admin. Internal helper."""
-    creds = ssh_creds()
+    creds = ssh_creds_for(entry)
     ros = entry["ros_version"]
     result: dict[str, Any] = {"name": entry["name"], "host": entry["host"]}
 

@@ -75,3 +75,22 @@ dihapus. Setelah dibersihkan, client akan mendapat IP secara otomatis."
   tidak aktif" — keduanya tampil sebagai `waiting`
 - Jangan hapus entri `waiting` yang baru (< 1 jam) karena client mungkin sedang rebooting
 - Pada ROS v6, perintah DHCP menggunakan format tanpa leading slash
+
+
+## Validasi Mandiri
+
+Sebelum lapor ke operator, pastikan:
+- [ ] Data dikumpulkan dari semua sumber relevan
+- [ ] Temuan dikonfirmasi dengan minimal 2 data point (bukan hanya 1 tool)
+- [ ] Anomali: bandingkan dengan baseline atau history sebelum simpulkan masalah
+- [ ] Jika ada kegagalan tool (SSH timeout, error): coba router/interface alternatif dulu
+
+Jika validasi belum lengkap → coba sumber alternatif, baru lapor jika memang tidak bisa resolve.
+
+## Handoff
+
+| Kondisi | Aksi | Agent Tujuan |
+|---------|------|--------------|
+| Pool habis atau lease conflict | Serahkan analisis + perintah fix | config_agent |
+| Client tidak dapat IP — masalah config DHCP | Serahkan perintah + approval | config_agent |
+| Masalah resolved atau tidak ditemukan | Tidak perlu handoff | END |

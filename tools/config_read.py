@@ -10,7 +10,7 @@ from langchain_core.tools import tool
 
 from tools.base import (
     validate_router, get_router_entries, get_unique_router_entries,
-    ssh_creds, ssh_run_command,
+    ssh_creds, ssh_creds_for, ssh_run_command,
 )
 
 _BLOCKED_KEYWORDS = [
@@ -50,7 +50,7 @@ def run_command(router_name: str, command: str) -> str:
         )
 
     entry = get_router_entries(router_name)[0]
-    creds = ssh_creds()
+    creds = ssh_creds_for(entry)
     ok, out, err = ssh_run_command(
         host=entry["host"],
         username=creds["username"],
@@ -96,7 +96,7 @@ def run_command_all(command: str) -> str:
             unique_entries.append(entry)
 
     def _check_one(entry: dict[str, Any]) -> dict[str, Any]:
-        creds = ssh_creds()
+        creds = ssh_creds_for(entry)
         cmd = command.strip()
         if entry["ros_version"] == 6 and cmd.startswith("/"):
             cmd = cmd.lstrip("/").replace("/", " ")

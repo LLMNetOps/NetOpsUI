@@ -11,7 +11,7 @@ from langchain_core.tools import tool
 
 from tools.base import (
     validate_router, get_router_entries,
-    ssh_creds, ssh_run_command, WORKDIR,
+    ssh_creds, ssh_creds_for, ssh_run_command, WORKDIR,
 )
 
 BACKUP_DIR = WORKDIR / "backups"
@@ -40,7 +40,7 @@ def backup_router_config(router_name: str) -> str:
         return f"Error: nama router tidak valid untuk path file: '{router_name}'"
 
     entry = get_router_entries(router_name)[0]
-    creds = ssh_creds()
+    creds = ssh_creds_for(entry)
 
     # RouterOS v6/v7 both support /export
     cmd = "/export"

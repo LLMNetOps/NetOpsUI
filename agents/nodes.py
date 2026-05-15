@@ -227,6 +227,12 @@ Agent tersedia:
 Skill tersedia (nama → trigger):
 {skill_list}
 
+Router yang terdaftar di config.yaml:
+{router_list}
+
+Jika operator menyebut nama router yang TIDAK ada dalam daftar di atas, inject skill
+'router-discovery' dan route ke config_agent — jangan langsung END atau tanya klarifikasi.
+
 Balas HANYA dengan JSON valid, tanpa teks lain sebelum atau sesudah JSON.
 Contoh format yang benar:
 {{"next_agent":"monitor_agent","relevant_skills":[],"reasoning":"query status jaringan"}}
@@ -342,6 +348,9 @@ def supervisor_node(state: "NetworkOpsState") -> dict:
         for s in _skill_lib.list_enabled()
     ) or "  (tidak ada skill aktif)"
 
+    from tools.base import get_router_names as _get_router_names  # noqa: PLC0415
+    router_list = "  " + ", ".join(_get_router_names()) if _get_router_names() else "  (kosong)"
+
     _supervisor_defn = _agent_loader.get("supervisor")
     _supervisor_model = _supervisor_defn.model if _supervisor_defn else None
 
@@ -349,6 +358,7 @@ def supervisor_node(state: "NetworkOpsState") -> dict:
         supervisor_body=_agent_loader.system_prompt("supervisor"),
         agent_descriptions=agent_descriptions,
         skill_list=skill_list,
+        router_list=router_list,
         valid_agents=valid_agents_str,
     ))
     _sup_ctx_window = _supervisor_defn.context_window if _supervisor_defn else 6
@@ -415,6 +425,25 @@ def supervisor_node(state: "NetworkOpsState") -> dict:
     if next_agent == _prev_agent and _prev_agent in valid_agent_names:
         next_agent = "END"
         data["reasoning"] = f"loop guard: {_prev_agent} baru selesai, cegah re-route ke agent sama"
+
+    # Router discovery override: jika ada error "tidak dikenal" dari validate_router(),
+    # route ke config_agent/netbox_agent dengan skill router-discovery untuk auto-discover.
+    if next_agent == "END":
+        _recent_content = " ".join(
+            (m.content or "") for m in messages[-6:]
+            if hasattr(m, "content") and isinstance(m.content, str)
+        )
+        _router_error = "tidak dikenal" in _recent_content or "tidak ditemukan" in _recent_content
+        _discovery_agent = next(
+            (a for a in ("config_agent", "netbox_agent") if a in valid_agent_names),
+            None,
+        )
+        if _router_error and _discovery_agent and _prev_agent != _discovery_agent:
+            next_agent = _discovery_agent
+            data["reasoning"] = (
+                f"router-discovery override: error 'tidak dikenal' → {_discovery_agent}"
+            )
+            data["relevant_skills"] = ["router-discovery"]
 
     skills = data.get("relevant_skills", [])
     log_msg = f"→ {next_agent}  skills: {skills}  | {data.get('reasoning','')}"
@@ -706,4 +735,5 @@ monitor_node  = _make_specialist_node("monitor_agent")
 diagnose_node = _make_specialist_node("diagnose_agent")
 security_node = _make_specialist_node("security_agent")
 document_node = _make_specialist_node("document_agent")
+netbox_node   = _make_specialist_node("netbox_agent")
 # config_node defined above with interrupt() support

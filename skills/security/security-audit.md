@@ -130,3 +130,22 @@ Format temuan per router:
 - Blokir IP brute force: gunakan skill `brute-force-response` untuk prosedur lengkap
 - Audit security sebaiknya dilakukan dari jaringan manajemen yang terisolasi
 - Simpan hasil audit ke laporan menggunakan template `security-assessment.md`
+
+
+## Validasi Mandiri
+
+Sebelum lapor ke operator, pastikan:
+- [ ] Data dikumpulkan dari semua sumber relevan
+- [ ] Temuan dikonfirmasi dengan minimal 2 data point (bukan hanya 1 tool)
+- [ ] Anomali: bandingkan dengan baseline atau history sebelum simpulkan masalah
+- [ ] Jika ada kegagalan tool (SSH timeout, error): coba router/interface alternatif dulu
+
+Jika validasi belum lengkap → coba sumber alternatif, baru lapor jika memang tidak bisa resolve.
+
+## Handoff
+
+| Kondisi | Aksi | Agent Tujuan |
+|---------|------|--------------|
+| Temuan kritis (port terbuka, akses tidak sah) | Serahkan temuan + perintah remediation | config_agent |
+| Temuan perlu didokumentasikan | Serahkan hasil audit + severity | document_agent |
+| Tidak ada temuan | Tidak perlu handoff | END |

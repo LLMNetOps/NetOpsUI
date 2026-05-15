@@ -10,7 +10,7 @@ from langchain_core.tools import tool
 
 from tools.base import (
     validate_router, get_router_entries, get_unique_router_entries,
-    ssh_creds, ssh_run_command,
+    ssh_creds, ssh_creds_for, ssh_run_command,
 )
 
 
@@ -46,7 +46,7 @@ def _parse_iface_stats(raw: str) -> list[dict]:
 
 
 def _fetch(host: str, command: str, ros: int) -> tuple[bool, str, str]:
-    creds = ssh_creds()
+    creds = ssh_creds_for(entry)
     cmd = command.strip()
     if ros == 6 and cmd.startswith("/"):
         cmd = cmd.lstrip("/").replace("/", " ")

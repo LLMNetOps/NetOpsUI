@@ -9,13 +9,13 @@ from langchain_core.tools import tool
 
 from tools.base import (
     validate_router, get_router_entries, get_all_routers,
-    ssh_creds, ssh_get_dhcp_leases, parse_mikrotik_dhcp_output,
+    ssh_creds, ssh_creds_for, ssh_get_dhcp_leases, parse_mikrotik_dhcp_output,
 )
 
 
 def _query_leases(entry: dict[str, Any]) -> dict[str, Any]:
     """SSH ke satu router entry dan return parsed stats. Internal helper."""
-    creds = ssh_creds()
+    creds = ssh_creds_for(entry)
     ok, raw, err = ssh_get_dhcp_leases(
         host=entry["host"],
         username=creds["username"],

@@ -158,3 +158,22 @@ Laporan OSPF yang mencakup:
   menyebabkan neighbor stuck di Init
 - MTU mismatch menyebabkan OSPF DBD/LSA di-drop — neighbor bisa stuck di ExStart/Exchange
 - state-changes=0 setelah boot normal → OSPF baru start dan belum pernah ada perubahan state
+
+
+## Validasi Mandiri
+
+Sebelum lapor ke operator, pastikan:
+- [ ] Data dikumpulkan dari semua sumber relevan
+- [ ] Temuan dikonfirmasi dengan minimal 2 data point (bukan hanya 1 tool)
+- [ ] Anomali: bandingkan dengan baseline atau history sebelum simpulkan masalah
+- [ ] Jika ada kegagalan tool (SSH timeout, error): coba router/interface alternatif dulu
+
+Jika validasi belum lengkap → coba sumber alternatif, baru lapor jika memang tidak bisa resolve.
+
+## Handoff
+
+| Kondisi | Aksi | Agent Tujuan |
+|---------|------|--------------|
+| OSPF neighbor down atau adjacency flapping | Serahkan perintah debug + fix | config_agent |
+| Cost/metric perlu disesuaikan | Serahkan perintah + approval | config_agent |
+| Semua neighbor normal | Tidak perlu handoff | END |

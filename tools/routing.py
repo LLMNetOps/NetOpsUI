@@ -6,7 +6,7 @@ import re
 
 from langchain_core.tools import tool
 
-from tools.base import validate_router, get_router_entries, ssh_creds, ssh_run_command
+from tools.base import validate_router, get_router_entries, ssh_creds, ssh_creds_for, ssh_run_command
 
 
 def _parse_bgp_sessions(raw: str) -> list[dict]:
@@ -27,6 +27,7 @@ def _parse_bgp_sessions(raw: str) -> list[dict]:
                 "remote_as":    "",
                 "remote_addr":  "",
                 "local_as":     "",
+                "local_addr":   "",
                 "bgp_type":     "",
                 "uptime":       "—",
                 "prefix_count": 0,
@@ -48,6 +49,9 @@ def _parse_bgp_sessions(raw: str) -> list[dict]:
                 cur["remote_as"] = m3.group(1)
 
         if s.startswith("local.") and ".as=" in s:
+            m_la = re.search(r'local\.address=(\S+)', s)
+            if m_la:
+                cur["local_addr"] = m_la.group(1).split("/")[0]
             m4 = re.search(r'local(?:\.role=\S+)?\s+\.address=\S+\s+\.as=(\d+)', s)
             if not m4:
                 m4 = re.search(r'\.as=(\d+)', s)
@@ -154,7 +158,7 @@ def get_routing_full(router_name: str) -> str:
     """
     router_name = validate_router(router_name)
     entry = get_router_entries(router_name)[0]
-    creds = ssh_creds()
+    creds = ssh_creds_for(entry)
     ros = entry["ros_version"]
 
     sections_v7 = [
@@ -218,7 +222,7 @@ def get_bgp_sessions(router_name: str) -> str:
     """
     router_name = validate_router(router_name)
     entry = get_router_entries(router_name)[0]
-    creds = ssh_creds()
+    creds = ssh_creds_for(entry)
     ros = entry["ros_version"]
 
     cmd = "/routing/bgp/session/print" if ros == 7 else "routing bgp peer print"
@@ -282,7 +286,7 @@ def get_ospf_neighbors(router_name: str) -> str:
     """
     router_name = validate_router(router_name)
     entry = get_router_entries(router_name)[0]
-    creds = ssh_creds()
+    creds = ssh_creds_for(entry)
     ros = entry["ros_version"]
 
     cmd = "/routing/ospf/neighbor/print" if ros == 7 else "routing ospf neighbor print"
@@ -377,7 +381,7 @@ def get_router_config(router_name: str, section: str = "export") -> str:
     """
     router_name = validate_router(router_name)
     entry = get_router_entries(router_name)[0]
-    creds = ssh_creds()
+    creds = ssh_creds_for(entry)
     ros = entry["ros_version"]
     section = section.strip().lower()
 

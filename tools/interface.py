@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from langchain_core.tools import tool
 
-from tools.base import validate_router, get_router_entries, ssh_creds, ssh_run_command
+from tools.base import validate_router, get_router_entries, ssh_creds, ssh_creds_for, ssh_run_command
 
 
 @tool
@@ -17,7 +17,7 @@ def get_interface_stats(router_name: str) -> str:
     """
     router_name = validate_router(router_name)
     entry = get_router_entries(router_name)[0]
-    creds = ssh_creds()
+    creds = ssh_creds_for(entry)
     ros = entry["ros_version"]
 
     cmd = (

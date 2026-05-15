@@ -160,3 +160,22 @@ Catat nama server yang tersedia di router tersebut.
 - Dokumentasikan semua static lease: siapa yang minta, perangkat apa, lokasi fisik
 - Static lease DHCP tidak sama dengan IP static yang dikonfigurasi langsung di perangkat —
   keduanya bisa dikombinasikan tapi harus konsisten
+
+
+## Validasi Mandiri
+
+Sebelum lapor ke operator, pastikan:
+- [ ] Data dikumpulkan dari semua sumber relevan
+- [ ] Temuan dikonfirmasi dengan minimal 2 data point (bukan hanya 1 tool)
+- [ ] Anomali: bandingkan dengan baseline atau history sebelum simpulkan masalah
+- [ ] Jika ada kegagalan tool (SSH timeout, error): coba router/interface alternatif dulu
+
+Jika validasi belum lengkap → coba sumber alternatif, baru lapor jika memang tidak bisa resolve.
+
+## Handoff
+
+| Kondisi | Aksi | Agent Tujuan |
+|---------|------|--------------|
+| Static lease perlu ditambah/diubah/dihapus | Serahkan perintah DHCP + approval | config_agent |
+| Konflik IP/MAC ditemukan | Serahkan analisis konflik | config_agent |
+| Hanya review — tidak ada perubahan | Tidak perlu handoff | END |

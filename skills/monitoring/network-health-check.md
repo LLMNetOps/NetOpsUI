@@ -119,3 +119,22 @@ Status Overall: ✓ NORMAL / ⚠ PERLU PERHATIAN / ✗ ADA MASALAH
 - Jika BGP/OSPF bermasalah → skill `bgp-diagnostics` atau `ospf-diagnostics`
 - Jika interface error → skill `link-diagnostics`
 - Jika DHCP hampir penuh → skill `dhcp-pool-audit`
+
+
+## Validasi Mandiri
+
+Sebelum lapor ke operator, pastikan:
+- [ ] Data dikumpulkan dari semua sumber relevan
+- [ ] Temuan dikonfirmasi dengan minimal 2 data point (bukan hanya 1 tool)
+- [ ] Anomali: bandingkan dengan baseline atau history sebelum simpulkan masalah
+- [ ] Jika ada kegagalan tool (SSH timeout, error): coba router/interface alternatif dulu
+
+Jika validasi belum lengkap → coba sumber alternatif, baru lapor jika memang tidak bisa resolve.
+
+## Handoff
+
+| Kondisi | Aksi | Agent Tujuan |
+|---------|------|--------------|
+| Interface down atau packet loss tinggi | Serahkan detail interface + router | diagnose_agent |
+| Konfigurasi perlu diperbaiki | Serahkan perintah + approval | config_agent |
+| Semua sehat | Tidak perlu handoff | END |

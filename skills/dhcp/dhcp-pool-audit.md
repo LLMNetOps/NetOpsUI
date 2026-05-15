@@ -62,3 +62,22 @@ Tambahkan rekomendasi jika ada pool yang mendekati kapasitas.
   untuk melihat tren
 - UTBK session biasanya menggunakan hostname `utbk-os` — kolom UTBK di audit
   menunjukkan jumlah client ujian yang terhubung
+
+
+## Validasi Mandiri
+
+Sebelum lapor ke operator, pastikan:
+- [ ] Data dikumpulkan dari semua sumber relevan
+- [ ] Temuan dikonfirmasi dengan minimal 2 data point (bukan hanya 1 tool)
+- [ ] Anomali: bandingkan dengan baseline atau history sebelum simpulkan masalah
+- [ ] Jika ada kegagalan tool (SSH timeout, error): coba router/interface alternatif dulu
+
+Jika validasi belum lengkap → coba sumber alternatif, baru lapor jika memang tidak bisa resolve.
+
+## Handoff
+
+| Kondisi | Aksi | Agent Tujuan |
+|---------|------|--------------|
+| Pool mendekati kapasitas penuh (>80%) | Serahkan rekomendasi expand pool | config_agent |
+| Banyak lease stale/expired perlu dibersihkan | Serahkan perintah clear lease | config_agent |
+| Semua pool normal | Tidak perlu handoff | END |

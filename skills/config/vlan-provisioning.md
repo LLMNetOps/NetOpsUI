@@ -35,6 +35,19 @@ Alur: **NetBox dulu, router kemudian** — NetBox adalah source of truth.
 
 Arah: Buat di NetBox → handoff ke config_agent untuk eksekusi di router.
 
+## Parameter `instance` — Pilih NetBox yang Benar
+
+Semua VLAN tools di skill ini (`get_netbox_vlan_groups`, `get_next_available_vlan`,
+`get_netbox_vlan_group_detail`, `create_netbox_vlan_interface`) default ke `instance="idren"`
+karena provisioning VLAN di skill ini khusus untuk jaringan IDREN.
+
+Jika perlu provisioning untuk jaringan kampus, set `instance="kampus"` secara eksplisit.
+
+Opsi `instance`:
+- `"idren"` — NetBox IDREN (`ipam.idren.id`) — **default untuk skill ini**
+- `"kampus"` — NetBox kampus (`siip.ub.ac.id`)
+- `"auto"` — resolves dari field `network` router di config.yaml (untuk tools berbasis router_name)
+
 ## Validasi Input
 
 Sebelum mulai, pastikan operator sudah berikan info lengkap.
@@ -229,3 +242,22 @@ IP ditambahkan via `add_netbox_ip_address` setelah koordinasi dengan ISP/peer se
 - Nama interface di router WAJIB `vlan<ID>` — bukan nama panjang dari NetBox lama
 - Approval diperlukan untuk setiap write ke NetBox dan ke router
 - Setelah VLAN aktif: update VLAN group di NetBox (tandai ID sebagai "Active")
+
+
+## Validasi Mandiri
+
+Sebelum lapor ke operator, pastikan:
+- [ ] Data dikumpulkan dari semua sumber relevan
+- [ ] Temuan dikonfirmasi dengan minimal 2 data point (bukan hanya 1 tool)
+- [ ] Anomali: bandingkan dengan baseline atau history sebelum simpulkan masalah
+- [ ] Jika ada kegagalan tool (SSH timeout, error): coba router/interface alternatif dulu
+
+Jika validasi belum lengkap → coba sumber alternatif, baru lapor jika memang tidak bisa resolve.
+
+## Handoff
+
+| Kondisi | Aksi | Agent Tujuan |
+|---------|------|--------------|
+| VLAN interface sudah dibuat di NetBox | Serahkan perintah create interface di router | config_agent |
+| Provisioning selesai — perlu dokumentasi | Serahkan detail VLAN baru | document_agent |
+| Operator belum setuju | Tunggu instruksi, tidak perlu handoff | END |

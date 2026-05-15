@@ -78,3 +78,22 @@ Cocok untuk deteksi anomali cepat, BUKAN untuk ranking interface.
 - **Queue drop > 0** → congestion, perlu evaluasi bandwidth atau QoS policy
 - **Top talker dari IP internal** → investigasi aktivitas pengguna
 - **Top talker dari IP eksternal** → kemungkinan download massal atau serangan
+
+
+## Validasi Mandiri
+
+Sebelum lapor ke operator, pastikan:
+- [ ] Data dikumpulkan dari semua sumber relevan
+- [ ] Temuan dikonfirmasi dengan minimal 2 data point (bukan hanya 1 tool)
+- [ ] Anomali: bandingkan dengan baseline atau history sebelum simpulkan masalah
+- [ ] Jika ada kegagalan tool (SSH timeout, error): coba router/interface alternatif dulu
+
+Jika validasi belum lengkap → coba sumber alternatif, baru lapor jika memang tidak bisa resolve.
+
+## Handoff
+
+| Kondisi | Aksi | Agent Tujuan |
+|---------|------|--------------|
+| Traffic anomali — perlu QoS atau rate-limit | Serahkan interface + rekomendasi | config_agent |
+| Perlu laporan traffic | Serahkan data analisis | document_agent |
+| Tidak ada anomali | Tidak perlu handoff | END |

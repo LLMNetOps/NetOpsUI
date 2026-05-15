@@ -24,6 +24,12 @@ from tools.netbox import (
     populate_netbox_from_router,
     get_netbox_vlan_groups, get_next_available_vlan, create_netbox_vlan_interface,
     get_netbox_vlan_group_detail,
+    populate_netbox_bgp, get_netbox_bgp_drift,
+    resolve_router_host,
+)
+from tools.config_yaml import (
+    patch_router_host, patch_router_field,
+    add_router_to_config, remove_router_from_config,
 )
 
 _ALL_TOOLS = [
@@ -47,6 +53,10 @@ _ALL_TOOLS = [
     populate_netbox_from_router,
     get_netbox_vlan_groups, get_next_available_vlan, create_netbox_vlan_interface,
     get_netbox_vlan_group_detail,
+    populate_netbox_bgp, get_netbox_bgp_drift,
+    resolve_router_host,
+    patch_router_host, patch_router_field,
+    add_router_to_config, remove_router_from_config,
 ]
 
 # Flat map: tool name → callable

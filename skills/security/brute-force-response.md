@@ -169,3 +169,22 @@ Harus ada rule: `topics=system` ke log output.
 - Insiden serangan yang signifikan (> 1000 attempt, targeted, dari sumber terdistribusi)
   → laporkan ke CERT/CC atau IDREN-NOC
 - Simpan semua blokir ke log keamanan untuk audit dan analisis tren
+
+
+## Validasi Mandiri
+
+Sebelum lapor ke operator, pastikan:
+- [ ] Data dikumpulkan dari semua sumber relevan
+- [ ] Temuan dikonfirmasi dengan minimal 2 data point (bukan hanya 1 tool)
+- [ ] Anomali: bandingkan dengan baseline atau history sebelum simpulkan masalah
+- [ ] Jika ada kegagalan tool (SSH timeout, error): coba router/interface alternatif dulu
+
+Jika validasi belum lengkap → coba sumber alternatif, baru lapor jika memang tidak bisa resolve.
+
+## Handoff
+
+| Kondisi | Aksi | Agent Tujuan |
+|---------|------|--------------|
+| IP attacker teridentifikasi — perlu blokir | Serahkan IP + perintah firewall drop | config_agent |
+| Perlu laporan insiden | Serahkan IP, timestamp, frekuensi | document_agent |
+| False positive / sudah diblokir | Tidak perlu handoff | END |

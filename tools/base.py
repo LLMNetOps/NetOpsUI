@@ -84,17 +84,24 @@ def _safe_call(fn, *a: Any, **kw: Any) -> tuple[bool, str, str]:
 
 def ssh_run_command(*a: Any, **kw: Any) -> tuple[bool, str, str]:
     """ssh_run_command dengan exception safety (EOFError, SSHException, dll)."""
+    host = kw.get("host") or (a[0] if a else "")
+    if not str(host).strip():
+        return False, "", "host kosong — jalankan resolve_router_host('<nama_router>') untuk auto-discover IP"
     return _safe_call(_ssh_run_command, *a, **kw)
 
 
 def ssh_get_dhcp_leases(*a: Any, **kw: Any) -> tuple[bool, str, str]:
     """ssh_get_dhcp_leases dengan exception safety."""
+    host = kw.get("host") or (a[0] if a else "")
+    if not str(host).strip():
+        return False, "", "host kosong — jalankan resolve_router_host('<nama_router>') untuk auto-discover IP"
     return _safe_call(_ssh_get_dhcp_leases, *a, **kw)
 
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
 _SSH_CONFIG: dict[str, Any] = {}
+_SSH_NETWORK_CREDS: dict[str, dict[str, str]] = {}   # network → {username, password}
 _ROUTERS: list[dict[str, Any]] = []
 VALID_ROUTER_NAMES: frozenset[str] = frozenset()
 _NAME_TO_ENTRIES: dict[str, list[dict[str, Any]]] = {}
@@ -102,15 +109,22 @@ _NAME_TO_ENTRIES: dict[str, list[dict[str, Any]]] = {}
 
 def load_config() -> None:
     """Muat config.yaml dan populate global router registry."""
-    global _SSH_CONFIG, _ROUTERS, VALID_ROUTER_NAMES, _NAME_TO_ENTRIES
+    global _SSH_CONFIG, _SSH_NETWORK_CREDS, _ROUTERS, VALID_ROUTER_NAMES, _NAME_TO_ENTRIES
     try:
         with open(CONFIG_FILE, encoding="utf-8") as f:
             cfg = yaml.safe_load(f)
+        ssh_cfg = cfg["ssh"]
         _SSH_CONFIG = {
-            "username": cfg["ssh"]["username"],
-            "password": cfg["ssh"]["password"],
-            "timeout": int(cfg["ssh"].get("timeout", 15)),
-            "port": int(cfg["ssh"].get("port", 22)),
+            "username": ssh_cfg["username"],
+            "password": ssh_cfg["password"],
+            "timeout": int(ssh_cfg.get("timeout", 15)),
+            "port": int(ssh_cfg.get("port", 22)),
+        }
+        # Per-network SSH credential overrides: ssh.networks.<network>: {username, password}
+        _SSH_NETWORK_CREDS = {
+            net: {"username": v["username"], "password": v["password"]}
+            for net, v in ssh_cfg.get("networks", {}).items()
+            if "username" in v and "password" in v
         }
         dhcp_flat: list[dict[str, Any]] = []
         name_to_entries: dict[str, list[dict[str, Any]]] = {}
@@ -162,13 +176,27 @@ def validate_router(name: str) -> str:
 
 
 def ssh_creds() -> dict[str, Any]:
-    """Return SSH credentials dari config."""
+    """Return global SSH credentials dari config (fallback/default)."""
     return {
         "username": _SSH_CONFIG.get("username", ""),
         "password": _SSH_CONFIG.get("password", ""),
         "port": _SSH_CONFIG.get("port", 22),
         "timeout": _SSH_CONFIG.get("timeout", 15),
     }
+
+
+def ssh_creds_for(entry: dict[str, Any]) -> dict[str, Any]:
+    """Return SSH credentials untuk satu router entry.
+    Override username+password dari ssh.networks jika network cocok,
+    port+timeout selalu dari global ssh config.
+    """
+    base = ssh_creds()
+    network = entry.get("network", "kampus")
+    override = _SSH_NETWORK_CREDS.get(network, {})
+    if override:
+        base["username"] = override["username"]
+        base["password"] = override["password"]
+    return base
 
 
 def get_router_entries(router_name: str) -> list[dict[str, Any]]:
@@ -194,6 +222,15 @@ def get_unique_router_entries() -> list[dict[str, Any]]:
 def get_router_names() -> list[str]:
     """Return sorted list nama router yang valid."""
     return sorted(VALID_ROUTER_NAMES)
+
+
+def update_router_host(router_name: str, host: str) -> None:
+    """Update host in-memory untuk semua entries router tertentu. Tidak ubah config.yaml."""
+    for entry in _NAME_TO_ENTRIES.get(router_name, []):
+        entry["host"] = host
+    for entry in _ROUTERS:
+        if entry["name"] == router_name:
+            entry["host"] = host
 
 
 def ssh_error_hint(err: str) -> str:

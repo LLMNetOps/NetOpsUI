@@ -158,3 +158,22 @@ Berguna untuk testing — biarkan routing dinamis mengambil alih sementara.
 - Untuk routing policy (load balancing, failover): gunakan `routing-table` dan rule
   di `/routing/rule` — lebih kompleks, konsultasikan ke NOC pusat
 - Perubahan routing di GATE-IDREN atau router border — wajib koordinasi dengan NOC IDREN
+
+
+## Validasi Mandiri
+
+Sebelum lapor ke operator, pastikan:
+- [ ] Data dikumpulkan dari semua sumber relevan
+- [ ] Temuan dikonfirmasi dengan minimal 2 data point (bukan hanya 1 tool)
+- [ ] Anomali: bandingkan dengan baseline atau history sebelum simpulkan masalah
+- [ ] Jika ada kegagalan tool (SSH timeout, error): coba router/interface alternatif dulu
+
+Jika validasi belum lengkap → coba sumber alternatif, baru lapor jika memang tidak bisa resolve.
+
+## Handoff
+
+| Kondisi | Aksi | Agent Tujuan |
+|---------|------|--------------|
+| Route baru perlu ditambahkan | Serahkan perintah add route + approval | config_agent |
+| Route stale perlu dihapus | Serahkan perintah remove + approval | config_agent |
+| Hanya review — tidak ada perubahan | Tidak perlu handoff | END |

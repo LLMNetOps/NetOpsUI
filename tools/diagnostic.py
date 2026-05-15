@@ -6,7 +6,7 @@ import re
 
 from langchain_core.tools import tool
 
-from tools.base import validate_router, get_router_entries, ssh_creds, ssh_run_command
+from tools.base import validate_router, get_router_entries, ssh_creds, ssh_creds_for, ssh_run_command
 
 
 @tool
@@ -39,7 +39,7 @@ def run_diagnostic(
         )
 
     entry = get_router_entries(router_name)[0]
-    creds = ssh_creds()
+    creds = ssh_creds_for(entry)
     ros = entry["ros_version"]
     count = max(1, min(int(count), 30))
 

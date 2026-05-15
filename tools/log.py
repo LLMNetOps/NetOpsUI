@@ -6,7 +6,7 @@ import re
 
 from langchain_core.tools import tool
 
-from tools.base import validate_router, get_router_entries, ssh_creds, ssh_run_command
+from tools.base import validate_router, get_router_entries, ssh_creds, ssh_creds_for, ssh_run_command
 
 
 @tool
@@ -22,7 +22,7 @@ def get_router_log(router_name: str, topic: str = "", lines: int = 30) -> str:
     """
     router_name = validate_router(router_name)
     entry = get_router_entries(router_name)[0]
-    creds = ssh_creds()
+    creds = ssh_creds_for(entry)
 
     n = max(1, min(int(lines), 100))
     base_cmd = "/log/print" if entry["ros_version"] == 7 else "log print"

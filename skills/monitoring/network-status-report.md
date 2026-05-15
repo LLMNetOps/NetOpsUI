@@ -141,3 +141,22 @@ Status Keseluruhan : ✓ NORMAL / ⚠ PERLU PERHATIAN / ✗ KRITIS
   meminta tambahan dengan query lanjutan
 - Jika diminta laporan dalam format tertentu (PDF, tabel, dll) — sampaikan bahwa
   output saat ini adalah teks/Markdown yang bisa disalin
+
+
+## Validasi Mandiri
+
+Sebelum lapor ke operator, pastikan:
+- [ ] Data dikumpulkan dari semua sumber relevan
+- [ ] Temuan dikonfirmasi dengan minimal 2 data point (bukan hanya 1 tool)
+- [ ] Anomali: bandingkan dengan baseline atau history sebelum simpulkan masalah
+- [ ] Jika ada kegagalan tool (SSH timeout, error): coba router/interface alternatif dulu
+
+Jika validasi belum lengkap → coba sumber alternatif, baru lapor jika memang tidak bisa resolve.
+
+## Handoff
+
+| Kondisi | Aksi | Agent Tujuan |
+|---------|------|--------------|
+| Laporan status perlu disimpan ke file | Serahkan data + judul laporan | document_agent |
+| Ada temuan kritis yang perlu tindak lanjut | Serahkan temuan ke agent yang relevan | config_agent |
+| Hanya tampil di chat | Tidak perlu handoff | END |

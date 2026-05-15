@@ -156,3 +156,21 @@ Lakukan satu router dulu, verifikasi login berhasil sebelum lanjut ke router lai
 - Perubahan yang mempengaruhi BGP/OSPF harus dikoordinasikan dengan NOC
 - Jika router tidak bisa diakses setelah perubahan → informasikan ke operator untuk
   akses fisik/konsol segera — jangan tunda
+
+
+## Validasi Mandiri
+
+Sebelum lapor ke operator, pastikan:
+- [ ] Data dikumpulkan dari semua sumber relevan
+- [ ] Temuan dikonfirmasi dengan minimal 2 data point (bukan hanya 1 tool)
+- [ ] Anomali: bandingkan dengan baseline atau history sebelum simpulkan masalah
+- [ ] Jika ada kegagalan tool (SSH timeout, error): coba router/interface alternatif dulu
+
+Jika validasi belum lengkap → coba sumber alternatif, baru lapor jika memang tidak bisa resolve.
+
+## Handoff
+
+| Kondisi | Aksi | Agent Tujuan |
+|---------|------|--------------|
+| Perubahan dieksekusi — perlu dokumentasi | Serahkan perintah + hasil ke document_agent | document_agent |
+| Perubahan berhasil — tidak perlu dokumen | Tidak perlu handoff | END |
