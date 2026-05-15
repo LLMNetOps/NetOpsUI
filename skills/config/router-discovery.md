@@ -80,24 +80,26 @@ Jika semua 3 IP dari NetBox gagal → lanjut ke Fase 3.
 
 ## Fase 3 — BGP Peer Discovery (Fallback)
 
-SSH ke router IDREN yang sudah terdaftar dan valid di config.yaml
-(gunakan `list_routers()` untuk daftar, cari yang `role=gate_idren`).
+Jalankan `list_routers()`, kumpulkan **semua** router dengan `role=gate_idren`.
+Ini biasanya GATE-IDREN-UB, GATE-IDREN-UI, GATE-IDREN-ITS, dsb.
 
-Jalankan:
+**Untuk setiap router gate_idren** (loop satu per satu — jangan berhenti di router pertama):
+
 ```
-run_command(router_name="GATE-IDREN-UB", command="/routing/bgp/session/print")
+run_command(router_name=<gate_idren_router>, command="/routing/bgp/session/print")
 ```
 
 Cari session BGP yang namanya mengandung kata kunci router target
-(contoh: session "EBGP-ITB-1" untuk target "ITB").
+(contoh: session "EBGP-ITB-1" atau "TO-ITB" untuk target "ITB").
 
-Ambil `remote_addr` dari session tersebut sebagai IP kandidat baru.
+- Jika session ditemukan → ambil `remote_addr` sebagai IP kandidat baru
+  → jalankan validation chain (Step 2a → 2b → 2c) untuk IP tersebut
+  → jika valid → lanjut ke Fase 4
+- Jika router gagal SSH (error/timeout) → skip ke router berikutnya
+- Jika sudah coba semua router gate_idren dan tidak ada session ITB → lanjut ke Fase 4 (gagal)
 
-Jalankan validation chain (Step 2a → 2b → 2c) untuk IP dari BGP peer.
-
-Jika valid → lanjut ke Fase 4.
-
-Jika tidak valid → lanjut ke Fase 4 (gagal — tanya operator).
+**Penting**: WAJIB coba semua router gate_idren yang ada, bukan hanya satu.
+Setiap router IDREN bisa punya BGP session yang berbeda-beda.
 
 ---
 
