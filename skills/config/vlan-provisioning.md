@@ -15,6 +15,7 @@ triggers:
 tools:
   - get_netbox_vlan_groups
   - get_next_available_vlan
+  - get_netbox_vlan_group_detail
   - create_netbox_vlan_interface
   - add_netbox_ip_address
   - get_netbox_devices
@@ -67,7 +68,10 @@ Dari input operator, tentukan ISP/tipe → VLAN group:
 get_netbox_vlan_groups()
 ```
 
-Mapping tipe ke group (gunakan nama group yang mengandung nama ISP):
+Output menampilkan breakdown per group: `active` (dipakai) + `reserved` (ada di NetBox
+tapi belum aktif) + `kosong` (belum ada di NetBox sama sekali).
+
+Mapping tipe ke group:
 - CBN → `vg-cbn` (701–750)
 - TELKOM → `vg-telkom` (2001–2050) atau `vg-telkom-2` (501–550)
 - BIZNET → cari group yang sesuai, atau laporkan ke operator jika tidak ada
@@ -76,6 +80,16 @@ Mapping tipe ke group (gunakan nama group yang mengandung nama ISP):
 
 ```
 get_next_available_vlan(group_slug="<slug>")
+```
+
+Tool ini memprioritaskan slot **kosong** (belum ada di NetBox).
+Jika tidak ada slot kosong tapi ada **reserved**: tool melaporkan ID reserved pertama
+sebagai alternatif — operator perlu ubah status reserved → active manual di NetBox UI
+sebelum ID tersebut bisa dipakai.
+
+Untuk lihat daftar lengkap VLAN beserta statusnya:
+```
+get_netbox_vlan_group_detail(group_slug="<slug>")
 ```
 
 Tampilkan VLAN ID yang akan digunakan ke operator sebelum lanjut.
@@ -176,17 +190,25 @@ Setelah config_agent selesai, verifikasi:
 
 ## Kasus Khusus
 
-### VLAN Group Penuh
+### VLAN Group Tidak Ada Slot Kosong tapi Ada Reserved
 
-Jika `get_next_available_vlan` mengembalikan "sudah penuh":
-1. Laporkan ke operator beserta group yang penuh dan range-nya
-2. Tanyakan apakah perlu extend range group tersebut atau buat group baru
-3. Operator update di NetBox UI (Settings → IPAM → VLAN Groups)
+Banyak group tidak punya slot kosong karena semua ID sudah di-pre-register sebagai
+`reserved` (direncanakan tapi belum aktif). Ini bukan berarti group penuh.
+
+Langkah jika `get_next_available_vlan` melaporkan "tidak ada slot kosong, ada reserved":
+1. Jalankan `get_netbox_vlan_group_detail(group_slug)` untuk lihat daftar reserved
+2. Laporkan ke operator: "Group [nama] tidak punya slot kosong. Ada [N] VLAN reserved.
+   ID reserved pertama: [ID] ([nama VLAN]). Apakah VLAN ini bisa dipakai untuk koneksi baru?"
+3. Operator ubah status di NetBox UI: IPAM → VLANs → cari ID → edit → status: Active
+4. Setelah operator konfirmasi sudah diubah, lanjutkan provisioning dengan ID tersebut
+
+### VLAN Group Benar-Benar Penuh (semua active)
+
+Jika semua slot active dan tidak ada reserved:
+1. Laporkan ke operator beserta range saat ini
+2. Tanyakan apakah perlu extend range atau buat group baru
+3. Operator update di NetBox UI (Settings → IPAM → VLAN Groups → edit max_vid)
 4. Setelah range diupdate, jalankan `get_next_available_vlan` ulang
-
-Group yang sudah penuh per data saat ini: CBN, ICON+, SDI, LINKNET, ARENAPAC,
-PGNCOM, XL AXIATA, HSP, iFORTE, IMS, Indosat, Lintasarta.
-Group yang masih tersedia: Telkom (sisa 24), GATE-IDREN (sisa 51), GATE-IDREN-01 (sisa 2277).
 
 ### VLAN Group Belum Ada untuk ISP Baru
 
