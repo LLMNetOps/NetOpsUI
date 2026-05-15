@@ -89,17 +89,28 @@ Ini biasanya GATE-IDREN-UB, GATE-IDREN-UI, GATE-IDREN-ITS, dsb.
 run_command(router_name=<gate_idren_router>, command="/routing/bgp/session/print")
 ```
 
-Cari session BGP yang namanya mengandung kata kunci router target
-(contoh: session "EBGP-ITB-1" atau "TO-ITB" untuk target "ITB").
+Dari output semua session BGP, lakukan dua tahap pencarian:
 
-- Jika session ditemukan → ambil `remote_addr` sebagai IP kandidat baru
-  → jalankan validation chain (Step 2a → 2b → 2c) untuk IP tersebut
-  → jika valid → lanjut ke Fase 4
+**Tahap 1 — Cocok nama session:**
+Cari session yang namanya mengandung kata kunci router target
+(contoh: "ITB", "TO-ITB", "EBGP-ITB", "PEER-ITB").
+
+**Tahap 2 — Jika nama tidak cocok, reasoning dari semua session:**
+Baca seluruh daftar session. Pertimbangkan:
+- `remote-as` — jika kamu tahu AS number target, cocokkan
+- `comment` / `description` field — bisa berisi nama institusi
+- `remote-address` — jika masuk subnet yang logis untuk institusi target
+  (contoh: ITB sering pakai prefix dari AS45005 atau range tertentu)
+- Nama session bisa berformat lain: "PEER-AS45005", "UPL-IDREN-1", dsb.
+
+Jika ada kandidat yang reasonable → catat sebagai `kandidat_bgp` + alasan kenapa dipilih.
+Ambil `remote-address` sebagai IP kandidat → jalankan validation chain (Step 2a → 2b → 2c).
+
+**Aturan loop:**
 - Jika router gagal SSH (error/timeout) → skip ke router berikutnya
-- Jika sudah coba semua router gate_idren dan tidak ada session ITB → lanjut ke Fase 4 (gagal)
-
-**Penting**: WAJIB coba semua router gate_idren yang ada, bukan hanya satu.
-Setiap router IDREN bisa punya BGP session yang berbeda-beda.
+- Jika session ditemukan dan valid → lanjut ke Fase 4
+- WAJIB coba semua router gate_idren sebelum menyerah
+- Jika sudah coba semua dan tidak ada kandidat → lanjut ke Fase 4 (gagal)
 
 ---
 
@@ -107,16 +118,24 @@ Setiap router IDREN bisa punya BGP session yang berbeda-beda.
 
 ### Jika IP valid ditemukan:
 
-Tampilkan ringkasan **setelah** semua validasi selesai:
+Tampilkan ringkasan **setelah** semua validasi selesai. Wajib cantumkan:
+- **Apa** yang ditemukan (device, IP, versi ROS)
+- **Di mana** ditemukan (sumber data: NetBox atau router mana)
+- **Bagaimana** ditemukan (metode: primary_ip, interface IP ke-N, atau BGP session nama X di router Y)
 
 ```
 Ditemukan dan tervalidasi:
+
   Device      : GATE-IDREN-ITB
-  IP          : 103.xx.xx.xx  ✓ reachable, SSH OK, RouterOS confirmed
-  Sumber      : NetBox primary_ip / BGP peer GATE-IDREN-UB session EBGP-ITB-1
-  Role        : gate_idren
-  Network     : idren
+  IP          : 103.xx.xx.xx
+  Validasi    : ✓ reachable (RTT: 2.1ms), ✓ SSH port 22 terbuka, ✓ RouterOS banner (SSH-2.0-ROSSSH)
   ROS version : 7
+
+  Cara ditemukan:
+    Fase 1  : NetBox [idren] — device GATE-IDREN-ITB ada (29 device total)
+    Fase 2  : 3 IP dari NetBox dicoba → semua unreachable (172.17.32.12, 172.21.0.1, 172.21.0.2)
+    Fase 3  : BGP session di GATE-IDREN-UI → session "EBGP-TO-ITB" remote-address 103.xx.xx.xx
+              Alasan dipilih: nama session mengandung "ITB", remote-as cocok dengan AS ITB
 
 Menambahkan ke config.yaml — menunggu approval operator...
 ```
@@ -128,15 +147,25 @@ Setelah approval dan penambahan berhasil, **langsung lanjutkan** task awal opera
 
 ### Jika semua IP gagal validasi:
 
-Laporan singkat ke operator dengan semua yang sudah dicoba:
+Laporan lengkap semua yang sudah dicoba — operator harus bisa lihat seluruh jejak pencarian:
 
 ```
 Tidak berhasil memvalidasi router 'GATE-IDREN-ITB' secara otomatis.
 
-Dicoba:
-  - NetBox primary_ip: 103.x.x.x → tidak reachable
-  - NetBox interface IP: 172.x.x.x → SSH refused
-  - BGP peer GATE-IDREN-UB (session EBGP-ITB-1): 103.x.x.x → timeout
+Jejak pencarian:
+  Fase 1 — NetBox [idren]:
+    → Device GATE-IDREN-ITB ditemukan (atau: tidak ditemukan)
+    → primary_ip: kosong (atau: 103.x.x.x → unreachable)
+
+  Fase 2 — IP dari NetBox interface:
+    → 172.17.32.12 : ✗ unreachable
+    → 172.21.0.1   : ✗ unreachable
+    → 172.21.0.2   : ✗ unreachable
+
+  Fase 3 — BGP session di semua router gate_idren:
+    → GATE-IDREN-UB : tidak ada session mengandung "ITB", tidak ada kandidat lain yang reasonable
+    → GATE-IDREN-UI : SSH timeout — skip
+    → GATE-IDREN-ITS: SSH error — skip
 
 Mohon berikan IP management router ini secara manual:
   host (IP)   : ?
