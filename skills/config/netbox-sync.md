@@ -93,23 +93,82 @@ get_netbox_drift_report(router_name="<nama-router>")
 
 Pastikan hasilnya "Tidak ada drift". Jika masih ada drift → investigasi penyebabnya.
 
+## Standar Penamaan VLAN (wajib untuk interface baru)
+
+Ketika membuat VLAN interface baru di router, **selalu** ikuti standar ini:
+
+### Format Nama Interface
+
+```
+vlan<ID>
+```
+
+Contoh: `vlan450`, `vlan702`, `vlan2005`
+
+- Lowercase, hanya `vlan` + nomor VLAN ID
+- Tanpa keterangan tambahan di nama interface
+- Jika NetBox punya nama lama (misal `vlan450-TO-NODE-IDREN-UB3-VIA-LOKAL`):
+  gunakan VLAN ID dari custom field untuk construct nama baru: `vlan450`
+
+### Format Description/Comment
+
+| Tipe | Format | Contoh |
+|------|--------|--------|
+| Link ke IDREN node lain | `TO GATE-IDREN-<DEST> VIA <ISP>` | `TO GATE-IDREN-PPNS VIA CBN` |
+| ISP uplink | `UPLINK VIA <ISP>` | `UPLINK VIA STARLINK` |
+| Server/internal | `SRV <fungsi>` | `SRV PUBLIC` |
+| Peering langsung | `TO <DEST> VIA FIBER` | `TO GATE-ARENAPAC VIA FIBER` |
+
+Nama ISP menggunakan label standar: `CBN`, `BIZNET`, `TELKOM`, `STARLINK`,
+`FIBER` (direct fiber), `ARENAPAC`.
+
+Destination menggunakan nama device di NetBox (misal `NODE-IDREN-PPNS`).
+
+**Aturan**: Standar ini hanya untuk interface BARU. Jangan rename interface yang
+sudah ada di router — update description di NetBox saja.
+
+### Validasi Input Sebelum Membuat VLAN Baru
+
+Jika operator meminta pembuatan VLAN baru tapi info belum lengkap, **tanya balik**
+sebelum lanjut. Info yang wajib ada: tipe + tujuan/fungsi + ISP/medium.
+
+```
+Untuk membuat VLAN baru, saya butuh informasi berikut:
+
+Tipe: link-idren | uplink | server | peering-langsung
+
+Lengkapi sesuai tipe:
+- link-idren    → tujuan: [nama node di NetBox] + ISP: [CBN/BIZNET/TELKOM/STARLINK]
+- uplink        → ISP: [CBN/BIZNET/TELKOM/STARLINK]
+- server        → fungsi: [PUBLIC/MGMT/CCTV/dst]
+- peering       → tujuan: [nama device] + medium: FIBER
+
+Contoh input yang valid:
+- "vlan500 link-idren ke NODE-IDREN-ITB via BIZNET"
+- "vlan800 uplink via STARLINK"
+- "vlan900 server CCTV"
+- "vlan906 peering ke GATE-ARENAPAC via FIBER"
+```
+
 ## Perintah MikroTik yang Dihasilkan dari Data NetBox
 
 ### Membuat VLAN Interface
 
 Data sumber dari `get_netbox_device_interfaces()`:
-- `name` → nama interface (juga dipakai sebagai nama VLAN di MikroTik)
-- `vlan_id` (custom field) → `vlan-id`
+- `vlan_id` (custom field) → nama interface: `vlan<vlan_id>`, dan `vlan-id`
 - `parent` → `interface` (parent fisik)
 - `description` → `comment` (diawali `;;;` di MikroTik)
 
 ```
 /interface/vlan/add \
-  name="<nama-dari-netbox>" \
+  name="vlan<vlan_id>" \
   vlan-id=<vlan_id-dari-custom-field> \
   interface=<parent-interface> \
   comment="<description>"
 ```
+
+**Perhatian:** Gunakan `vlan<vlan_id>` sebagai nama — BUKAN nama interface dari NetBox
+(yang mungkin masih menggunakan format lama).
 
 ### Menambah IP Address
 

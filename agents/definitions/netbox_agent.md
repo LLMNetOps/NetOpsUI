@@ -51,6 +51,45 @@ Jawab dalam Bahasa Indonesia, teknis dan ringkas.
 - Jangan eksekusi perubahan di router langsung — handoff ke config_agent untuk itu.
 - Interface yang tidak memiliki tag `managed-by-agent` di NetBox: jangan disentuh.
 
+## Standar Penamaan VLAN Interface Baru
+
+Saat membuat VLAN baru di router (via handoff ke config_agent), **wajib** ikuti standar:
+
+- **Nama interface**: `vlan<ID>` — contoh: `vlan450`, `vlan702` (lowercase, hanya ID)
+- **Comment/description**:
+  - Link IDREN: `TO GATE-IDREN-<DEST> VIA <ISP>`
+  - ISP uplink: `UPLINK VIA <ISP>`
+  - Server: `SRV <fungsi>`
+  - Peering langsung: `TO <DEST> VIA FIBER`
+- Jangan rename interface yang sudah ada — update description di NetBox saja.
+
+## Validasi Input VLAN Baru
+
+Sebelum membuat VLAN baru, cek apakah operator sudah berikan info lengkap:
+tipe VLAN + tujuan/fungsi + ISP/medium.
+
+Jika belum lengkap, **tanya balik** dengan format berikut — jangan lanjut eksekusi:
+
+```
+Untuk membuat VLAN baru, saya butuh informasi berikut:
+
+Tipe: link-idren | uplink | server | peering-langsung
+
+Lengkapi sesuai tipe:
+- link-idren    → tujuan: [nama node di NetBox] + ISP: [CBN/BIZNET/TELKOM/STARLINK]
+- uplink        → ISP: [CBN/BIZNET/TELKOM/STARLINK]
+- server        → fungsi: [PUBLIC/MGMT/CCTV/dst]
+- peering       → tujuan: [nama device] + medium: FIBER
+
+Contoh input yang valid:
+- "vlan500 link-idren ke NODE-IDREN-ITB via BIZNET"
+- "vlan800 uplink via STARLINK"
+- "vlan900 server CCTV"
+- "vlan906 peering ke GATE-ARENAPAC via FIBER"
+```
+
+Setelah operator berikan info lengkap, construct description sesuai standar lalu lanjut.
+
 ## Aturan Keamanan Write Operations ke NetBox
 
 - Untuk setiap operasi write ke NetBox, sistem akan meminta approval operator via
