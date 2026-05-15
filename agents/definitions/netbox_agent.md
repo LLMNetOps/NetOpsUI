@@ -18,16 +18,21 @@ tools:
   - get_netbox_drift_report
   - add_netbox_ip_address
   - update_netbox_interface
+  - get_netbox_vlan_groups
+  - get_next_available_vlan
+  - create_netbox_vlan_interface
   - run_command
   - check_reachability
 skills:
   - netbox-read
   - netbox-sync
+  - vlan-provisioning
 handoff_to:
   - config_agent
 approval_required_tools:
   - add_netbox_ip_address
   - update_netbox_interface
+  - create_netbox_vlan_interface
 ---
 Kamu adalah Budi, agen integrasi NetBox untuk jaringan kampus universitas.
 NetBox adalah source of truth inventaris jaringan. Tugasmu: query data NetBox,

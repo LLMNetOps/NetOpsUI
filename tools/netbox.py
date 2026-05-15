@@ -420,6 +420,147 @@ def get_netbox_drift_report(router_name: str, device_name: str = "") -> str:
         return f"Gagal menjalankan drift report: {e}"
 
 
+# ── VLAN provisioning tools ───────────────────────────────────────────────────
+
+@tool
+def get_netbox_vlan_groups() -> str:
+    """
+    Ambil daftar VLAN group di NetBox beserta range VLAN ID dan jumlah VLAN yang sudah terpakai.
+    Gunakan untuk memilih group yang tepat saat provisioning VLAN baru (per ISP atau tipe koneksi).
+    """
+    try:
+        nb = _nb()
+        groups = list(nb.ipam.vlan_groups.all())
+        if not groups:
+            return "Tidak ada VLAN group ditemukan di NetBox."
+
+        lines = [f"VLAN Groups di NetBox ({len(groups)} group)", "─" * 65]
+        for g in sorted(groups, key=lambda x: x.min_vid):
+            used = nb.ipam.vlans.filter(group=g.slug)
+            used_count = len(list(used))
+            total = g.max_vid - g.min_vid + 1
+            available = total - used_count
+            lines.append(
+                f"  {g.name:<30} slug={g.slug:<20} "
+                f"range={g.min_vid}-{g.max_vid}  "
+                f"terpakai={used_count}/{total}  sisa={available}"
+            )
+        return "\n".join(lines)
+    except Exception as e:
+        return f"Gagal mengambil VLAN groups dari NetBox: {e}"
+
+
+@tool
+def get_next_available_vlan(group_slug: str) -> str:
+    """
+    Cari VLAN ID berikutnya yang tersedia dalam VLAN group tertentu di NetBox.
+    Gunakan setelah get_netbox_vlan_groups() untuk menentukan group_slug yang tepat.
+    Args:
+        group_slug: Slug VLAN group (contoh: 'vg-cbn', 'vg-telkom'). Lihat get_netbox_vlan_groups().
+    """
+    try:
+        nb = _nb()
+        group = nb.ipam.vlan_groups.get(slug=group_slug)
+        if not group:
+            return (
+                f"VLAN group '{group_slug}' tidak ditemukan di NetBox.\n"
+                f"Jalankan get_netbox_vlan_groups() untuk daftar slug yang valid."
+            )
+
+        used_vids = {v.vid for v in nb.ipam.vlans.filter(group=group_slug)}
+        available = [
+            vid for vid in range(group.min_vid, group.max_vid + 1)
+            if vid not in used_vids
+        ]
+
+        if not available:
+            return (
+                f"VLAN group '{group.name}' (range {group.min_vid}-{group.max_vid}) "
+                f"sudah penuh — tidak ada VLAN ID tersisa."
+            )
+
+        next_vid = available[0]
+        return (
+            f"VLAN Group: {group.name} (slug={group_slug})\n"
+            f"Range     : {group.min_vid}–{group.max_vid}\n"
+            f"Terpakai  : {len(used_vids)} dari {group.max_vid - group.min_vid + 1}\n"
+            f"Next ID   : {next_vid}  (nama interface: vlan{next_vid})\n"
+            f"Sisa tersedia: {len(available)} VLAN ID"
+        )
+    except Exception as e:
+        return f"Gagal mencari VLAN tersedia: {e}"
+
+
+@tool
+def create_netbox_vlan_interface(
+    device_name: str,
+    vlan_id: int,
+    parent_interface: str,
+    description: str,
+) -> str:
+    """
+    Buat VLAN interface baru di NetBox untuk device tertentu. MEMERLUKAN APPROVAL OPERATOR.
+    Interface dibuat dengan nama standar vlan<ID> (contoh: vlan450, vlan702).
+    Gunakan setelah get_next_available_vlan() mengkonfirmasi VLAN ID tersedia.
+    Args:
+        device_name: Nama device di NetBox. Gunakan get_netbox_devices() untuk daftar valid.
+        vlan_id: VLAN ID (integer). Nama interface otomatis: vlan<vlan_id>.
+        parent_interface: Nama interface parent fisik di NetBox (contoh: ether1, sfp-sfpplus1).
+        description: Deskripsi interface. Format standar:
+            - Link IDREN  : 'TO GATE-IDREN-<DEST> VIA <ISP>'
+            - ISP uplink  : 'UPLINK VIA <ISP>'
+            - Server      : 'SRV <fungsi>'
+            - Peering     : 'TO <DEST> VIA FIBER'
+    """
+    try:
+        nb = _nb()
+
+        device = nb.dcim.devices.get(name=device_name)
+        if not device:
+            return f"Device '{device_name}' tidak ditemukan di NetBox."
+
+        interface_name = f"vlan{vlan_id}"
+
+        # Check if already exists
+        existing = list(nb.dcim.interfaces.filter(device=device_name, name=interface_name))
+        if existing:
+            return (
+                f"Interface '{interface_name}' sudah ada di NetBox untuk device '{device_name}'.\n"
+                f"Gunakan update_netbox_interface() untuk memperbarui, bukan membuat baru."
+            )
+
+        # Resolve parent interface
+        parent = list(nb.dcim.interfaces.filter(device=device_name, name=parent_interface))
+        if not parent:
+            return (
+                f"Parent interface '{parent_interface}' tidak ditemukan untuk device '{device_name}'.\n"
+                f"Jalankan get_netbox_device_interfaces('{device_name}') untuk daftar interface."
+            )
+        parent_id = parent[0].id
+
+        payload: dict[str, Any] = {
+            "device": device.id,
+            "name": interface_name,
+            "type": "virtual",
+            "parent": parent_id,
+            "description": description,
+            "enabled": True,
+        }
+
+        result = nb.dcim.interfaces.create(**payload)
+        return (
+            f"Interface berhasil dibuat di NetBox.\n"
+            f"  Device     : {device_name}\n"
+            f"  Interface  : {interface_name}  (ID={result.id})\n"
+            f"  Parent     : {parent_interface}\n"
+            f"  VLAN ID    : {vlan_id}\n"
+            f"  Description: {description}\n"
+            f"\nLangkah berikutnya: add_netbox_ip_address() untuk assign IP ke interface ini."
+        )
+    except Exception as e:
+        return f"Gagal membuat interface di NetBox: {e}"
+
+
 # ── Write tools (approval required via netbox_agent definition) ───────────────
 
 @tool

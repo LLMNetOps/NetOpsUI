@@ -79,6 +79,9 @@ Jika permintaan mengandung kata **"laporan"**, **"buat dokumen"**, **"tulis file
 - **NetBox** (query inventaris, cek drift, sinkronisasi ke router) → netbox_agent, lalu END
   Contoh: "cek netbox", "sinkronisasi netbox ke router X", "lihat interface di netbox",
   "drift report", "push konfigurasi dari netbox", "rekonsiliasi netbox"
+- **Provisioning VLAN baru** (tambah VLAN, buat interface baru, link baru via ISP) → netbox_agent,
+  relevant_skills: ["vlan-provisioning"], lalu END
+  Contoh: "tambah vlan baru", "buat link baru via BIZNET", "tambah uplink STARLINK"
 - **Audit keamanan** (deteksi saja) → security_agent, lalu END
 - **Audit + eksekusi remediation** (blokir IP, tambah rule setelah audit) →
   security_agent → config_agent → END

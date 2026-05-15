@@ -22,6 +22,7 @@ from tools.netbox import (
     get_netbox_devices, get_netbox_device_interfaces, get_netbox_device_ips,
     get_netbox_drift_report, add_netbox_ip_address, update_netbox_interface,
     populate_netbox_from_router,
+    get_netbox_vlan_groups, get_next_available_vlan, create_netbox_vlan_interface,
 )
 
 _ALL_TOOLS = [
@@ -43,6 +44,7 @@ _ALL_TOOLS = [
     get_netbox_devices, get_netbox_device_interfaces, get_netbox_device_ips,
     get_netbox_drift_report, add_netbox_ip_address, update_netbox_interface,
     populate_netbox_from_router,
+    get_netbox_vlan_groups, get_next_available_vlan, create_netbox_vlan_interface,
 ]
 
 # Flat map: tool name → callable
