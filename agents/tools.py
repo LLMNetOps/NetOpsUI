@@ -31,6 +31,10 @@ from tools.config_yaml import (
     patch_router_host, patch_router_field,
     add_router_to_config, remove_router_from_config,
 )
+from tools.agent_memory import (
+    remember_router_fact, recall_router_facts,
+    recall_all_router_facts, forget_router_facts,
+)
 
 _ALL_TOOLS = [
     list_routers, get_current_time,
@@ -57,6 +61,8 @@ _ALL_TOOLS = [
     resolve_router_host,
     patch_router_host, patch_router_field,
     add_router_to_config, remove_router_from_config,
+    remember_router_fact, recall_router_facts,
+    recall_all_router_facts, forget_router_facts,
 ]
 
 # Flat map: tool name → callable

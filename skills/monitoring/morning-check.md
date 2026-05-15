@@ -58,9 +58,12 @@ Contoh:
 
 ## Prosedur
 
-### Langkah 0: Dapatkan Daftar Router
+### Langkah 0: Cek Memory + Dapatkan Daftar Router
 
-Mulai dengan `list_routers()`. Filter berdasarkan scope yang ditentukan di atas.
+Mulai dengan `recall_all_router_facts()` — lihat apa yang sudah diketahui dari sesi sebelumnya.
+Perhatikan router yang pernah unreachable atau punya catatan masalah — prioritaskan pengecekan.
+
+Lanjut dengan `list_routers()`. Filter berdasarkan scope yang ditentukan di atas.
 
 Kelompokkan hasil filter:
 - `gate_idren` → cek penuh: reachability + BGP + traffic + log + drift NetBox

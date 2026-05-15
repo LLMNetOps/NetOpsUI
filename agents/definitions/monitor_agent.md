@@ -37,6 +37,9 @@ tools:
   - get_report_section
   - get_report_toc
   - get_current_time
+  - recall_router_facts
+  - recall_all_router_facts
+  - remember_router_fact
 skills:
   - morning-check
   - network-health-check

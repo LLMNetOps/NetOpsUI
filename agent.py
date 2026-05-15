@@ -76,6 +76,12 @@ _skill_lib.start_watcher()
 
 _DB_PATH = Path(__file__).parent / "data" / "checkpoints.db"
 _DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+
+# WAL checkpoint saat startup agar WAL tidak tumbuh tak terbatas
+_wal_conn = sqlite3.connect(str(_DB_PATH), check_same_thread=False)
+_wal_conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+_wal_conn.close()
+
 _checkpointer = SqliteSaver(sqlite3.connect(str(_DB_PATH), check_same_thread=False))
 _graph: Any = None
 

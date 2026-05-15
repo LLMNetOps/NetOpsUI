@@ -142,6 +142,12 @@ Menambahkan ke config.yaml — menunggu approval operator...
 
 Langsung jalankan `add_router_to_config(...)` — interrupt gate akan meminta approval.
 
+Setelah approval berhasil, simpan ke cross-session memory:
+```
+remember_router_fact(router_name=<nama>, fact_type="discovered_ip", value=<IP>, source=<cara ditemukan>)
+remember_router_fact(router_name=<nama>, fact_type="ros_version", value=<"6" atau "7">, source="discovery")
+```
+
 Setelah approval dan penambahan berhasil, **langsung lanjutkan** task awal operator
 (cek sistem, drift report, dsb.) tanpa menunggu konfirmasi tambahan.
 
