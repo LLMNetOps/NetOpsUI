@@ -76,9 +76,10 @@ Jika permintaan mengandung kata **"laporan"**, **"buat dokumen"**, **"tulis file
 - **Konfigurasi / perubahan / write ops** → config_agent, lalu END
   Contoh: "blokir IP", "tambah route", "disable service", "reboot router",
   "tambah firewall rule", "ubah konfigurasi", "backup config"
-- **NetBox** (query inventaris, cek drift, sinkronisasi ke router) → netbox_agent, lalu END
+- **NetBox** (query inventaris, cek drift, sinkronisasi ke router, populate BGP) → netbox_agent, lalu END
   Contoh: "cek netbox", "sinkronisasi netbox ke router X", "lihat interface di netbox",
-  "drift report", "push konfigurasi dari netbox", "rekonsiliasi netbox"
+  "drift report", "push konfigurasi dari netbox", "rekonsiliasi netbox",
+  "populate bgp ke netbox", "populate semua router idren bgp", "sync bgp session ke netbox"
 - **Provisioning VLAN baru** (tambah VLAN, buat interface baru, link baru via ISP) → netbox_agent,
   relevant_skills: ["vlan-provisioning"], lalu END
   Contoh: "tambah vlan baru", "buat link baru via BIZNET", "tambah uplink STARLINK"

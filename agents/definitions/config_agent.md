@@ -34,6 +34,8 @@ tools:
   - patch_router_field
   - add_router_to_config
   - remove_router_from_config
+  - populate_netbox_bgp
+  - get_netbox_bgp_drift
   - remember_router_fact
   - recall_router_facts
 skills:
