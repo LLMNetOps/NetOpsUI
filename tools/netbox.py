@@ -425,7 +425,8 @@ def get_netbox_drift_report(router_name: str, device_name: str = "") -> str:
 @tool
 def get_netbox_vlan_groups() -> str:
     """
-    Ambil daftar VLAN group di NetBox beserta range VLAN ID dan jumlah VLAN yang sudah terpakai.
+    Ambil daftar VLAN group di NetBox beserta range VLAN ID, breakdown status (active/reserved),
+    dan slot yang benar-benar kosong (belum ada di NetBox sama sekali).
     Gunakan untuk memilih group yang tepat saat provisioning VLAN baru (per ISP atau tipe koneksi).
     """
     try:
@@ -434,17 +435,21 @@ def get_netbox_vlan_groups() -> str:
         if not groups:
             return "Tidak ada VLAN group ditemukan di NetBox."
 
-        lines = [f"VLAN Groups di NetBox ({len(groups)} group)", "─" * 65]
+        lines = [f"VLAN Groups di NetBox ({len(groups)} group)", "─" * 75]
         for g in sorted(groups, key=lambda x: x.min_vid):
-            used = nb.ipam.vlans.filter(group=g.slug)
-            used_count = len(list(used))
-            total = g.max_vid - g.min_vid + 1
-            available = total - used_count
+            vlans = list(nb.ipam.vlans.filter(group=g.slug))
+            active = sum(1 for v in vlans if str(v.status.value) == "active")
+            reserved = sum(1 for v in vlans if str(v.status.value) == "reserved")
+            total_range = g.max_vid - g.min_vid + 1
+            empty = total_range - len(vlans)  # ID belum ada di NetBox sama sekali
             lines.append(
-                f"  {g.name:<30} slug={g.slug:<20} "
-                f"range={g.min_vid}-{g.max_vid}  "
-                f"terpakai={used_count}/{total}  sisa={available}"
+                f"  {g.name:<30} slug={g.slug:<20} range={g.min_vid}-{g.max_vid}  "
+                f"active={active}  reserved={reserved}  kosong={empty}"
             )
+        lines.append(
+            "\nKeterangan: 'kosong' = ID belum ada di NetBox (langsung bisa dipakai). "
+            "'reserved' = ada di NetBox tapi belum aktif — bisa diubah manual ke 'active'."
+        )
         return "\n".join(lines)
     except Exception as e:
         return f"Gagal mengambil VLAN groups dari NetBox: {e}"
@@ -454,7 +459,8 @@ def get_netbox_vlan_groups() -> str:
 def get_next_available_vlan(group_slug: str) -> str:
     """
     Cari VLAN ID berikutnya yang tersedia dalam VLAN group tertentu di NetBox.
-    Gunakan setelah get_netbox_vlan_groups() untuk menentukan group_slug yang tepat.
+    Prioritas: ID yang benar-benar kosong (belum ada di NetBox) — bukan yang berstatus reserved.
+    Jika tidak ada slot kosong tapi ada reserved, laporkan reserved sebagai alternatif.
     Args:
         group_slug: Slug VLAN group (contoh: 'vg-cbn', 'vg-telkom'). Lihat get_netbox_vlan_groups().
     """
@@ -467,28 +473,91 @@ def get_next_available_vlan(group_slug: str) -> str:
                 f"Jalankan get_netbox_vlan_groups() untuk daftar slug yang valid."
             )
 
-        used_vids = {v.vid for v in nb.ipam.vlans.filter(group=group_slug)}
-        available = [
+        vlans = list(nb.ipam.vlans.filter(group=group_slug))
+        all_vids = {v.vid: str(v.status.value) for v in vlans}
+        active_vids = {vid for vid, s in all_vids.items() if s == "active"}
+        reserved_vids = sorted(vid for vid, s in all_vids.items() if s == "reserved")
+
+        empty_vids = [
             vid for vid in range(group.min_vid, group.max_vid + 1)
-            if vid not in used_vids
+            if vid not in all_vids
         ]
 
-        if not available:
-            return (
-                f"VLAN group '{group.name}' (range {group.min_vid}-{group.max_vid}) "
-                f"sudah penuh — tidak ada VLAN ID tersisa."
+        lines = [
+            f"VLAN Group: {group.name} (slug={group_slug})",
+            f"Range     : {group.min_vid}–{group.max_vid}  "
+            f"(total {group.max_vid - group.min_vid + 1} slot)",
+            f"Active    : {len(active_vids)}",
+            f"Reserved  : {len(reserved_vids)}",
+            f"Kosong    : {len(empty_vids)}",
+        ]
+
+        if empty_vids:
+            next_vid = empty_vids[0]
+            lines.append(f"\nNext ID (kosong): {next_vid}  → nama interface: vlan{next_vid}")
+        elif reserved_vids:
+            lines.append(
+                f"\nTidak ada slot kosong. Tapi ada {len(reserved_vids)} VLAN berstatus 'reserved'."
+                f"\nID reserved pertama: {reserved_vids[0]}  → bisa diubah ke 'active' di NetBox UI,"
+                f"\n  lalu gunakan vlan{reserved_vids[0]} untuk interface baru."
+                f"\n\nUntuk lihat semua reserved: get_netbox_vlan_group_detail('{group_slug}')"
+            )
+        else:
+            lines.append(
+                f"\nGroup penuh — semua {group.max_vid - group.min_vid + 1} slot active."
+                f"\nPerluas range di NetBox UI atau gunakan group lain."
             )
 
-        next_vid = available[0]
-        return (
-            f"VLAN Group: {group.name} (slug={group_slug})\n"
-            f"Range     : {group.min_vid}–{group.max_vid}\n"
-            f"Terpakai  : {len(used_vids)} dari {group.max_vid - group.min_vid + 1}\n"
-            f"Next ID   : {next_vid}  (nama interface: vlan{next_vid})\n"
-            f"Sisa tersedia: {len(available)} VLAN ID"
-        )
+        return "\n".join(lines)
     except Exception as e:
         return f"Gagal mencari VLAN tersedia: {e}"
+
+
+@tool
+def get_netbox_vlan_group_detail(group_slug: str) -> str:
+    """
+    Tampilkan semua VLAN dalam satu group beserta status dan deskripsi masing-masing.
+    Berguna untuk melihat VLAN mana yang berstatus 'reserved' dan bisa diubah ke 'active'.
+    Args:
+        group_slug: Slug VLAN group. Lihat get_netbox_vlan_groups() untuk daftar slug.
+    """
+    try:
+        nb = _nb()
+        group = nb.ipam.vlan_groups.get(slug=group_slug)
+        if not group:
+            return (
+                f"VLAN group '{group_slug}' tidak ditemukan.\n"
+                f"Jalankan get_netbox_vlan_groups() untuk daftar slug yang valid."
+            )
+
+        vlans = sorted(nb.ipam.vlans.filter(group=group_slug), key=lambda v: v.vid)
+        total_range = group.max_vid - group.min_vid + 1
+        used_vids = {v.vid for v in vlans}
+        empty_count = total_range - len(vlans)
+
+        lines = [
+            f"Detail VLAN Group: {group.name} (slug={group_slug})",
+            f"Range: {group.min_vid}–{group.max_vid}  |  "
+            f"Total: {len(vlans)} VLAN  |  Kosong: {empty_count} slot",
+            "─" * 70,
+        ]
+
+        if not vlans:
+            lines.append("  (kosong — belum ada VLAN di group ini)")
+        else:
+            for v in vlans:
+                status = str(v.status.value)
+                status_icon = "✓" if status == "active" else "○" if status == "reserved" else "?"
+                desc = v.description or v.name or "—"
+                lines.append(f"  {status_icon} {v.vid:<6} [{status:<8}]  {desc}")
+
+        lines.append(
+            f"\nLegenda: ✓ active  ○ reserved  ? lainnya"
+            f"\nUntuk ubah status reserved → active: buka NetBox UI → IPAM → VLANs → edit."
+        )
+        return "\n".join(lines)
+    except Exception as e:
+        return f"Gagal mengambil detail VLAN group: {e}"
 
 
 @tool

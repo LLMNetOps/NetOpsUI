@@ -20,6 +20,7 @@ tools:
   - update_netbox_interface
   - get_netbox_vlan_groups
   - get_next_available_vlan
+  - get_netbox_vlan_group_detail
   - create_netbox_vlan_interface
   - run_command
   - check_reachability
