@@ -6,7 +6,7 @@ description: >
   dan eksekusi operasi write dengan persetujuan operator.
 model: qwen3.5:9b
 num_ctx: 32768
-num_predict: 16384
+num_predict: 4096
 context_window: 20
 timeout: 600
 reasoning: true

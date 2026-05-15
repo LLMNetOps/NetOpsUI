@@ -5,7 +5,7 @@ description: >
   Orchestrator utama. Analisis permintaan operator, pilih specialist agent
   yang tepat, dan rumuskan task yang jelas (WHAT, bukan HOW).
 model: qwen3.5:9b
-num_ctx: 32768
+num_ctx: 16384
 num_predict: 4096
 context_window: 10
 timeout: 120
