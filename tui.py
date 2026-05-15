@@ -1006,7 +1006,7 @@ class AIScreen(Screen):
         if _HAS_AGENT and _agent_mod is not None:
             try:
                 self._agent, self._agent_config = \
-                    _agent_mod.create_agent(thread_id=str(id(self)))
+                    _agent_mod.create_agent(thread_id="tui-main")
             except Exception as exc:
                 self.data["history"].append({
                     "role": "assistant",
@@ -1266,7 +1266,7 @@ class AIScreen(Screen):
                     self.data["input_buf"] = ""
                 if _HAS_AGENT and _agent_mod is not None:
                     try:
-                        new_tid = f"{id(self)}-{int(time.time())}"
+                        new_tid = f"tui-reset-{int(time.time())}"
                         self._agent, self._agent_config = \
                             _agent_mod.create_agent(thread_id=new_tid)
                     except Exception:

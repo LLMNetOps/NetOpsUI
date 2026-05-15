@@ -107,11 +107,43 @@ def reset_agent(thread_id: str) -> tuple[Any, RunnableConfig]:
         "configurable": {"thread_id": thread_id},
         "recursion_limit": 30,
     }
-    # Overwrite state with empty messages untuk reset percakapan
-    graph.update_state(config, {"messages": [], "agent_log": [], "next_agent": "",
-                                 "active_agent": "", "injected_skills": [],
-                                 "pending_approval": None, "approval_decision": None})
+    graph.update_state(config, {
+        "messages": [], "agent_log": [], "next_agent": "",
+        "active_agent": "", "injected_skills": [],
+        "pending_approval": None, "approval_decision": None,
+        "original_intent": "",
+    })
     return graph, config
+
+
+def cleanup_orphaned_checkpoints() -> int:
+    """
+    Hapus checkpoint lama dari thread dengan ID numerik (warisan id(self) yang tidak stabil).
+    Simpan hanya thread 'tui-*', 'headless', dan thread yang dibuat dalam 7 hari terakhir.
+    Return jumlah thread yang dihapus.
+    """
+    import re as _re
+    conn = sqlite3.connect(str(_DB_PATH), check_same_thread=False)
+    try:
+        cur = conn.execute("SELECT DISTINCT thread_id FROM checkpoints")
+        all_threads = [r[0] for r in cur.fetchall()]
+        orphan_threads = [
+            t for t in all_threads
+            if _re.fullmatch(r"\d+", t) or _re.fullmatch(r"\d+-\d+", t)
+        ]
+        if orphan_threads:
+            placeholders = ",".join("?" * len(orphan_threads))
+            conn.execute(f"DELETE FROM checkpoints WHERE thread_id IN ({placeholders})", orphan_threads)
+            conn.execute(f"DELETE FROM writes WHERE thread_id IN ({placeholders})", orphan_threads)
+            conn.commit()
+        return len(orphan_threads)
+    finally:
+        conn.close()
+    # VACUUM harus di luar connection yang ada transaksi
+    if orphan_threads:
+        vconn = sqlite3.connect(str(_DB_PATH), check_same_thread=False)
+        vconn.execute("VACUUM")
+        vconn.close()
 
 
 def stream_agent_response(
