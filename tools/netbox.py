@@ -13,28 +13,45 @@ from tools.base import CONFIG_FILE, validate_router, get_router_entries, ssh_cre
 
 # ── NetBox client ─────────────────────────────────────────────────────────────
 
-def _get_netbox_cfg() -> dict[str, Any]:
+def _get_netbox_cfg(instance: str = "kampus") -> dict[str, Any]:
+    """
+    Return config dict untuk NetBox instance tertentu.
+    Support format lama (single dict) dan format baru (named map).
+    """
     try:
         with open(CONFIG_FILE, encoding="utf-8") as f:
             cfg = yaml.safe_load(f)
-        nb = cfg.get("netbox", {})
-        if not nb.get("url") or not nb.get("token"):
+        nb_cfg = cfg.get("netbox", {})
+
+        # Format lama: netbox: {url: ..., token: ...}
+        if "url" in nb_cfg:
+            return nb_cfg
+
+        # Format baru: netbox: {idren: {...}, kampus: {...}}
+        inst_cfg = nb_cfg.get(instance)
+        if not inst_cfg:
+            available = list(nb_cfg.keys())
             raise ValueError(
-                "config.yaml harus memiliki:\n"
-                "netbox:\n  url: https://ipam.example.com\n  token: <api-token>"
+                f"NetBox instance '{instance}' tidak ada di config.yaml.\n"
+                f"Instance tersedia: {available}\n"
+                f"Gunakan parameter instance='idren' atau instance='kampus'."
             )
-        return nb
+        if not inst_cfg.get("url") or not inst_cfg.get("token"):
+            raise ValueError(
+                f"config.yaml[netbox.{instance}] harus memiliki url dan token."
+            )
+        return inst_cfg
     except FileNotFoundError:
         raise ValueError("config.yaml tidak ditemukan")
 
 
-def _nb():
-    """Return authenticated pynetbox API client."""
+def _nb(instance: str = "kampus"):
+    """Return authenticated pynetbox API client untuk instance tertentu."""
     try:
         import pynetbox
     except ImportError:
         raise ImportError("pynetbox belum terinstall. Jalankan: pip install pynetbox>=7.0")
-    cfg = _get_netbox_cfg()
+    cfg = _get_netbox_cfg(instance)
     nb = pynetbox.api(cfg["url"], token=cfg["token"])
     if not cfg.get("ssl_verify", True):
         import requests
@@ -42,6 +59,27 @@ def _nb():
         s.verify = False
         nb.http_session = s
     return nb
+
+
+def _resolve_instance(router_name: str | None, instance: str) -> str:
+    """
+    Resolve 'auto' ke nama instance NetBox yang tepat.
+    - Dengan router_name: baca field 'network' dari config.yaml
+    - Tanpa router_name atau tidak ditemukan: default 'kampus'
+    """
+    if instance != "auto":
+        return instance
+    if router_name:
+        try:
+            from tools.base import get_router_entries, VALID_ROUTER_NAMES
+            for name in VALID_ROUTER_NAMES:
+                if name.upper() == router_name.strip().upper():
+                    entries = get_router_entries(name)
+                    if entries:
+                        return entries[0].get("network", "kampus")
+        except Exception:
+            pass
+    return "kampus"
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -175,24 +213,28 @@ def _get_managed_interfaces(nb, device_name: str) -> list:
 # ── Read tools ────────────────────────────────────────────────────────────────
 
 @tool
-def get_netbox_devices() -> str:
+def get_netbox_devices(instance: str = "kampus") -> str:
     """
     Ambil daftar semua device jaringan di NetBox beserta primary IP dan status.
     Berguna untuk melihat inventaris dan mencari nama device yang sesuai dengan router.
+    Args:
+        instance: Instance NetBox — 'idren', 'kampus', atau 'auto' (default: 'kampus').
     """
     try:
-        nb = _nb()
+        instance = _resolve_instance(None, instance)
+        nb = _nb(instance)
         devices = list(nb.dcim.devices.all())
         if not devices:
             return "Tidak ada device ditemukan di NetBox."
 
-        lines = [f"Device di NetBox ({len(devices)} total)", "─" * 60]
-        for d in sorted(devices, key=lambda x: x.name):
+        lines = [f"Device di NetBox [{instance}] ({len(devices)} total)", "─" * 60]
+        for d in sorted(devices, key=lambda x: x.name or ""):
+            name = d.name or "—"
             primary_ip = str(d.primary_ip.address) if d.primary_ip else "—"
-            status = str(d.status)
+            status = str(d.status) if d.status else "—"
             site = str(d.site) if d.site else "—"
             lines.append(
-                f"  {d.name:<35} primary_ip={primary_ip:<22} status={status}  site={site}"
+                f"  {name:<35} primary_ip={primary_ip:<22} status={status}  site={site}"
             )
         return "\n".join(lines)
     except Exception as e:
@@ -200,16 +242,18 @@ def get_netbox_devices() -> str:
 
 
 @tool
-def get_netbox_device_interfaces(device_name: str) -> str:
+def get_netbox_device_interfaces(device_name: str, instance: str = "auto") -> str:
     """
     Ambil daftar virtual interface device di NetBox.
     Prioritaskan interface bertag 'managed-by-agent'; jika belum ada tag, tampilkan semua virtual.
     Loopback dan interface fisik dilewati.
     Args:
         device_name: Nama device di NetBox. Gunakan get_netbox_devices() untuk daftar valid.
+        instance: Instance NetBox — 'idren', 'kampus', atau 'auto' (default: auto dari nama device).
     """
     try:
-        nb = _nb()
+        instance = _resolve_instance(device_name, instance)
+        nb = _nb(instance)
         interfaces = _get_managed_interfaces(nb, device_name)
         if not interfaces:
             return (
@@ -245,14 +289,16 @@ def get_netbox_device_interfaces(device_name: str) -> str:
 
 
 @tool
-def get_netbox_device_ips(device_name: str) -> str:
+def get_netbox_device_ips(device_name: str, instance: str = "auto") -> str:
     """
     Ambil semua IP address yang di-assign ke device di NetBox.
     Args:
         device_name: Nama device di NetBox. Gunakan get_netbox_devices() untuk daftar valid.
+        instance: Instance NetBox — 'idren', 'kampus', atau 'auto' (default: auto).
     """
     try:
-        nb = _nb()
+        instance = _resolve_instance(device_name, instance)
+        nb = _nb(instance)
         ips = list(nb.ipam.ip_addresses.filter(device=device_name))
         if not ips:
             return f"Tidak ada IP address ditemukan untuk device '{device_name}' di NetBox."
@@ -271,7 +317,7 @@ def get_netbox_device_ips(device_name: str) -> str:
 
 
 @tool
-def get_netbox_drift_report(router_name: str, device_name: str = "") -> str:
+def get_netbox_drift_report(router_name: str, device_name: str = "", instance: str = "auto") -> str:
     """
     Bandingkan konfigurasi interface VLAN dan IP di NetBox vs kondisi aktual router MikroTik.
     Matching interface: berdasarkan VLAN ID (bukan nama — nama bisa berbeda antara NetBox dan router).
@@ -279,6 +325,7 @@ def get_netbox_drift_report(router_name: str, device_name: str = "") -> str:
     Args:
         router_name: Nama router di config.yaml. Gunakan list_routers() untuk daftar valid.
         device_name: (opsional) Nama device di NetBox jika auto-matching gagal.
+        instance: Instance NetBox — 'idren', 'kampus', atau 'auto' (default: auto dari network router).
     """
     try:
         router_name = validate_router(router_name)
@@ -286,8 +333,9 @@ def get_netbox_drift_report(router_name: str, device_name: str = "") -> str:
         creds = ssh_creds()
         router_host = entry["host"]
         ros = entry["ros_version"]
+        instance = _resolve_instance(router_name, instance)
 
-        nb = _nb()
+        nb = _nb(instance)
 
         # Find NetBox device
         if device_name:
@@ -423,19 +471,22 @@ def get_netbox_drift_report(router_name: str, device_name: str = "") -> str:
 # ── VLAN provisioning tools ───────────────────────────────────────────────────
 
 @tool
-def get_netbox_vlan_groups() -> str:
+def get_netbox_vlan_groups(instance: str = "idren") -> str:
     """
     Ambil daftar VLAN group di NetBox beserta range VLAN ID, breakdown status (active/reserved),
     dan slot yang benar-benar kosong (belum ada di NetBox sama sekali).
     Gunakan untuk memilih group yang tepat saat provisioning VLAN baru (per ISP atau tipe koneksi).
+    Args:
+        instance: Instance NetBox — 'idren' atau 'kampus' (default: 'idren' — VLAN groups ada di IDREN).
     """
     try:
-        nb = _nb()
+        instance = _resolve_instance(None, instance)
+        nb = _nb(instance)
         groups = list(nb.ipam.vlan_groups.all())
         if not groups:
             return "Tidak ada VLAN group ditemukan di NetBox."
 
-        lines = [f"VLAN Groups di NetBox ({len(groups)} group)", "─" * 75]
+        lines = [f"VLAN Groups di NetBox [{instance}] ({len(groups)} group)", "─" * 75]
         for g in sorted(groups, key=lambda x: x.min_vid):
             vlans = list(nb.ipam.vlans.filter(group=g.slug))
             active = sum(1 for v in vlans if str(v.status.value) == "active")
@@ -456,16 +507,18 @@ def get_netbox_vlan_groups() -> str:
 
 
 @tool
-def get_next_available_vlan(group_slug: str) -> str:
+def get_next_available_vlan(group_slug: str, instance: str = "idren") -> str:
     """
     Cari VLAN ID berikutnya yang tersedia dalam VLAN group tertentu di NetBox.
     Prioritas: ID yang benar-benar kosong (belum ada di NetBox) — bukan yang berstatus reserved.
     Jika tidak ada slot kosong tapi ada reserved, laporkan reserved sebagai alternatif.
     Args:
         group_slug: Slug VLAN group (contoh: 'vg-cbn', 'vg-telkom'). Lihat get_netbox_vlan_groups().
+        instance: Instance NetBox — 'idren' atau 'kampus' (default: 'idren').
     """
     try:
-        nb = _nb()
+        instance = _resolve_instance(None, instance)
+        nb = _nb(instance)
         group = nb.ipam.vlan_groups.get(slug=group_slug)
         if not group:
             return (
@@ -514,15 +567,17 @@ def get_next_available_vlan(group_slug: str) -> str:
 
 
 @tool
-def get_netbox_vlan_group_detail(group_slug: str) -> str:
+def get_netbox_vlan_group_detail(group_slug: str, instance: str = "idren") -> str:
     """
     Tampilkan semua VLAN dalam satu group beserta status dan deskripsi masing-masing.
     Berguna untuk melihat VLAN mana yang berstatus 'reserved' dan bisa diubah ke 'active'.
     Args:
         group_slug: Slug VLAN group. Lihat get_netbox_vlan_groups() untuk daftar slug.
+        instance: Instance NetBox — 'idren' atau 'kampus' (default: 'idren').
     """
     try:
-        nb = _nb()
+        instance = _resolve_instance(None, instance)
+        nb = _nb(instance)
         group = nb.ipam.vlan_groups.get(slug=group_slug)
         if not group:
             return (
@@ -566,6 +621,7 @@ def create_netbox_vlan_interface(
     vlan_id: int,
     parent_interface: str,
     description: str,
+    instance: str = "auto",
 ) -> str:
     """
     Buat VLAN interface baru di NetBox untuk device tertentu. MEMERLUKAN APPROVAL OPERATOR.
@@ -580,9 +636,11 @@ def create_netbox_vlan_interface(
             - ISP uplink  : 'UPLINK VIA <ISP>'
             - Server      : 'SRV <fungsi>'
             - Peering     : 'TO <DEST> VIA FIBER'
+        instance: Instance NetBox — 'idren', 'kampus', atau 'auto' (default: auto).
     """
     try:
-        nb = _nb()
+        instance = _resolve_instance(device_name, instance)
+        nb = _nb(instance)
 
         device = nb.dcim.devices.get(name=device_name)
         if not device:
@@ -638,6 +696,7 @@ def add_netbox_ip_address(
     interface_name: str,
     device_name: str,
     description: str = "",
+    instance: str = "auto",
 ) -> str:
     """
     Tambahkan IP address ke interface device di NetBox. MEMERLUKAN APPROVAL OPERATOR.
@@ -647,9 +706,11 @@ def add_netbox_ip_address(
         interface_name: Nama interface di NetBox. Gunakan get_netbox_device_interfaces().
         device_name: Nama device di NetBox. Gunakan get_netbox_devices().
         description: Deskripsi IP (opsional)
+        instance: Instance NetBox — 'idren', 'kampus', atau 'auto' (default: auto).
     """
     try:
-        nb = _nb()
+        instance = _resolve_instance(device_name, instance)
+        nb = _nb(instance)
         interfaces = list(nb.dcim.interfaces.filter(device=device_name, name=interface_name))
         if not interfaces:
             return f"Interface '{interface_name}' tidak ditemukan untuk device '{device_name}' di NetBox."
@@ -682,6 +743,7 @@ def update_netbox_interface(
     device_name: str,
     description: str | None = None,
     enabled: bool | None = None,
+    instance: str = "auto",
 ) -> str:
     """
     Update properties interface di NetBox. MEMERLUKAN APPROVAL OPERATOR.
@@ -691,9 +753,11 @@ def update_netbox_interface(
         device_name: Nama device di NetBox. Gunakan get_netbox_devices().
         description: Deskripsi baru interface (opsional)
         enabled: Status interface — True=enabled, False=disabled (opsional)
+        instance: Instance NetBox — 'idren', 'kampus', atau 'auto' (default: auto).
     """
     try:
-        nb = _nb()
+        instance = _resolve_instance(device_name, instance)
+        nb = _nb(instance)
         interfaces = list(nb.dcim.interfaces.filter(device=device_name, name=interface_name))
         if not interfaces:
             return f"Interface '{interface_name}' tidak ditemukan untuk device '{device_name}' di NetBox."
@@ -725,6 +789,7 @@ def populate_netbox_from_router(
     router_name: str,
     device_name: str = "",
     dry_run: bool = True,
+    instance: str = "auto",
 ) -> str:
     """
     Populate NetBox dengan data VLAN interface dan IP address dari router MikroTik.
@@ -743,6 +808,7 @@ def populate_netbox_from_router(
         router_name: Nama router di config.yaml. Gunakan list_routers() untuk daftar valid.
         device_name: Nama device di NetBox. Wajib jika auto-match gagal.
         dry_run: True=simulasi saja, False=eksekusi. Default True.
+        instance: Instance NetBox — 'idren', 'kampus', atau 'auto' (default: auto dari network router).
     """
     try:
         router_name = validate_router(router_name)
@@ -750,8 +816,9 @@ def populate_netbox_from_router(
         creds = ssh_creds()
         router_host = entry["host"]
         ros = entry["ros_version"]
+        instance = _resolve_instance(router_name, instance)
 
-        nb = _nb()
+        nb = _nb(instance)
 
         # Find NetBox device
         if device_name:

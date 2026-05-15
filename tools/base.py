@@ -120,6 +120,7 @@ def load_config() -> None:
                 "host": r["host"],
                 "ros_version": int(r.get("ros_version", 7)),
                 "role": str(r.get("role", "backbone")),
+                "network": str(r.get("network", "kampus")),
             }
             dhcp_servers = r.get("dhcp_servers", [])
             if dhcp_servers:

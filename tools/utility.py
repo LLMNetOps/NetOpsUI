@@ -22,10 +22,11 @@ def list_routers() -> str:
         host = entries[0]["host"]
         ros  = entries[0]["ros_version"]
         role = entries[0].get("role", "backbone")
+        network = entries[0].get("network", "kampus")
         servers = [e["dhcp_server"] for e in entries if e["dhcp_server"] is not None]
         servers_str = ", ".join(servers) if servers else "—"
         lines.append(
-            f"  {name:<14} {host:<16} ROS v{ros}  role={role}  servers: {servers_str}"
+            f"  {name:<14} {host:<16} ROS v{ros}  role={role:<12}  network={network:<8}  servers: {servers_str}"
         )
     return "\n".join(lines)
 
