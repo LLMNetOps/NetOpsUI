@@ -14,6 +14,7 @@ triggers:
 tools:
   - list_routers
   - check_reachability
+  - get_system_info
   - get_bgp_sessions
   - get_top_interfaces_all
   - get_router_log
@@ -27,104 +28,126 @@ enabled: true
 
 ## Konteks
 
-Pengecekan cepat kondisi jaringan IDREN di awal shift. Target selesai < 5 menit.
-Fokus pada GATE-IDREN-UB dan koneksi antar-node IDREN — bukan semua router kampus.
+Pengecekan cepat kondisi seluruh jaringan — kampus dan IDREN — di awal shift.
+Target selesai < 5 menit. Output: satu blok ringkasan yang bisa langsung dilaporkan.
 
-Output: satu blok ringkasan yang bisa langsung dilaporkan ke tim atau manajemen.
+Cakupan:
+- **Router kampus** (role: `access`, `backbone`) — reachability + resource
+- **Router IDREN** (role: `gate_idren`) — reachability + BGP + traffic + log + drift NetBox
 
 ## Prosedur
 
-### Langkah 1: Reachability Semua GATE-IDREN Node
+### Langkah 0: Dapatkan Daftar Router
 
-Gunakan `check_reachability` untuk semua router dengan `role=gate_idren`.
-Dari `list_routers`, filter by role atau nama yang mengandung `GATE-IDREN`.
+Mulai dengan `list_routers()`. Kelompokkan berdasarkan role:
+- `gate_idren` → router IDREN (BGP, drift NetBox, log mendalam)
+- `backbone`, `access` → router kampus (reachability + resource saja)
+
+Tidak ada hardcode nama router — semua dinamis dari daftar ini.
+
+### Langkah 1: Reachability Semua Router
+
+Jalankan `check_reachability` untuk setiap router dari daftar.
 
 Threshold:
 - Tidak merespons → ✗ KRITIS
 - Latency > 100ms → ⚠ LAMBAT
 
-### Langkah 2: Status BGP Session
+Catat: berapa total router up vs down, pisahkan antara router kampus dan router IDREN.
 
-Untuk GATE-IDREN-UB (router lokal), jalankan `get_bgp_sessions("GATE-IDREN-UB")`.
+### Langkah 2: Resource Router Kampus yang Aktif
 
-Cek:
-- Session `established` → ✓
-- Session `down` / `idle` → ✗ — catat peer name dan ISP yang terdampak
-- Prefix count turun > 50% dari biasanya → ⚠ — kemungkinan route leak atau filter masalah
-
-### Langkah 3: Anomali Traffic
-
-Jalankan `get_top_interfaces_all` untuk melihat utilisasi tertinggi di semua router.
+Untuk router role `backbone` dan `access` yang reachable, jalankan `get_system_info`.
 
 Flag:
-- Interface uplink > 80% utilisasi → ⚠ HAMPIR PENUH
-- Interface uplink > 95% utilisasi → ✗ CONGESTED
-- Interface yang seharusnya aktif tapi 0 traffic → ⚠ cek kondisi
+- CPU > 80% → ⚠
+- Memory > 90% → ⚠
+- Uptime < 10 menit → ✗ baru restart — cari penyebab
 
-### Langkah 4: Log Error 24 Jam Terakhir
+Jika semua normal, cukup tulis "resource normal". Jangan tampilkan detail tiap router
+jika tidak ada anomali — ringkasan saja.
 
-Jalankan `get_router_log("GATE-IDREN-UB", lines=100)` untuk melihat event sejak kemarin.
+### Langkah 3: BGP Session — Semua Router IDREN
+
+Untuk setiap router dengan role `gate_idren`, jalankan `get_bgp_sessions(router_name)`.
+
+Cek per router:
+- Session `established` → ✓
+- Session `down` / `idle` → ✗ — catat peer name dan ISP yang terdampak
+- Prefix count nol atau turun > 50% → ⚠ kemungkinan route leak / filter masalah
+
+### Langkah 4: Anomali Traffic
+
+Jalankan `get_top_interfaces_all` — hasilnya mencakup semua router sekaligus.
+
+Flag:
+- Interface uplink > 80% → ⚠ HAMPIR PENUH
+- Interface uplink > 95% → ✗ CONGESTED
+- Interface yang seharusnya aktif tapi 0 traffic → ⚠
+
+### Langkah 5: Log Error 24 Jam Terakhir
+
+Untuk setiap router IDREN (role `gate_idren`), jalankan `get_router_log(router_name, lines=100)`.
 
 Cari:
-- `critical` atau `error` → catat dan flag
+- `critical` atau `error` → flag
 - `interface changed state` berulang → link flapping
 - BGP `state changed` → instabilitas routing
-- `login failure` berulang → indikasi serangan brute force
+- `login failure` berulang → indikasi brute force
 
-Cukup log GATE-IDREN-UB untuk morning check — router kampus lain cek jika ada tanda masalah.
+Untuk router kampus: cek log hanya jika ada anomali di langkah 1 atau 2.
 
-### Langkah 5: Drift NetBox vs Router
+### Langkah 6: Drift NetBox vs Router
 
-Jalankan `get_netbox_drift_report("GATE-IDREN-UB")`.
+Untuk setiap router IDREN (role `gate_idren`), jalankan `get_netbox_drift_report(router_name)`.
 
 Interpretasi:
-- Tidak ada drift → ✓ NetBox sinkron
-- Ada drift → ⚠ catat item yang berbeda, tapi JANGAN eksekusi perubahan di sini
-  (drift fix adalah task terpisah, butuh approval operator)
+- Tidak ada drift → ✓
+- Ada drift → ⚠ catat item, tapi JANGAN eksekusi perubahan di sini
+
+Router kampus tidak perlu drift check — NetBox hanya tracking device IDREN untuk sekarang.
 
 ## Format Output
-
-Tampilkan hasil dalam format ini — satu blok, ringkas:
 
 ```
 MORNING CHECK — [tanggal] [jam WIB]
 ══════════════════════════════════════════════════════
-REACHABILITY : [X] node up / [Y] node down
-               ✗ DOWN: [nama node jika ada]
+REACHABILITY
+  Kampus  : [X]/[Y] router up  ✗ DOWN: [nama] jika ada
+  IDREN   : [X]/[Y] router up  ✗ DOWN: [nama] jika ada
 
-BGP SESSION  : [X] established / [Y] down
-               ✗ DOWN: [peer-name] via [ISP] — [router]
-               ⚠ PREFIX: [peer] prefix count turun [X → Y]
+RESOURCE (kampus)
+  Status  : normal | ⚠ [router]: CPU [X]%, Memory [Y]%
 
-TRAFFIC      : puncak tertinggi [X]% di [interface] ([router])
-               ⚠ CONGESTED: [interface] [X]% jika ada
+BGP SESSION (per router IDREN)
+  [router-1] : [X] established / [Y] down
+               ✗ DOWN: [peer] via [ISP]
+  [router-2] : [X] established / [Y] down
 
-LOG (24 jam) : [bersih / X event kritis]
-               ⚠ [ringkasan singkat event jika ada]
+TRAFFIC
+  Puncak  : [X]% di [interface] ([router])
+  ⚠ CONGESTED: [interface] [X]% jika ada
 
-NETBOX DRIFT : [sinkron / X item drift]
-               ⚠ [ringkasan singkat drift jika ada]
+LOG (24 jam)
+  Status  : bersih | ⚠ [router]: [ringkasan event]
+
+NETBOX DRIFT (per router IDREN)
+  [router-1] : sinkron | ⚠ [X] item drift
+  [router-2] : sinkron | ⚠ [X] item drift
 
 ──────────────────────────────────────────────────────
-STATUS: ✓ NORMAL | ⚠ PERLU PERHATIAN | ✗ ADA MASALAH AKTIF
-```
+STATUS OVERALL: ✓ NORMAL | ⚠ PERLU PERHATIAN | ✗ ADA MASALAH AKTIF
 
-## Action Items
-
-Setelah ringkasan, tambahkan action items jika ada:
-
-```
 ACTION ITEMS:
 1. [item kritis — selesaikan hari ini]
 2. [item perhatian — monitor]
+Jika tidak ada: "Tidak ada action item — jaringan normal."
 ```
-
-Jika tidak ada masalah, cukup tulis: "Tidak ada action item — jaringan normal."
 
 ## Catatan
 
-- Morning check TIDAK mengeksekusi perubahan apapun — hanya observasi dan laporan.
-- Untuk drill-down lebih dalam ke BGP → gunakan skill `bgp-diagnostics`.
-- Untuk drill-down traffic → skill `network-traffic-analysis`.
-- Untuk fix drift NetBox → route ke `netbox_agent` (budi).
-- Jika operator minta laporan disimpan ke file → handoff ke `document_agent`.
+- Morning check hanya observasi — tidak ada eksekusi perubahan.
+- Drill-down BGP → skill `bgp-diagnostics`.
+- Drill-down traffic → skill `network-traffic-analysis`.
+- Fix drift NetBox → route ke `netbox_agent` (budi).
+- Simpan laporan ke file → handoff ke `document_agent`.
