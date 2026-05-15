@@ -11,6 +11,10 @@ triggers:
   - laporan pagi
   - mulai kerja cek dulu
   - kondisi jaringan pagi ini
+  - morning check idren
+  - morning check kampus
+  - cek pagi idren
+  - cek pagi kampus
 tools:
   - list_routers
   - check_reachability
@@ -35,13 +39,32 @@ Cakupan:
 - **Router kampus** (role: `access`, `backbone`) — reachability + resource
 - **Router IDREN** (role: `gate_idren`) — reachability + BGP + traffic + log + drift NetBox
 
+## Scope Check
+
+Sebelum mulai, tentukan scope dari permintaan operator:
+
+| Kata kunci dalam permintaan | Scope |
+|-----------------------------|-------|
+| "idren" | Hanya role `gate_idren` |
+| "kampus" | Hanya role `backbone` + `access` |
+| "backbone" | Hanya role `backbone` |
+| "access" | Hanya role `access` |
+| Tidak ada kata kunci scope | Semua role (default) |
+
+Contoh:
+- "morning check" → semua router
+- "cek pagi IDREN" → hanya gate_idren
+- "morning check kampus" → backbone + access saja
+
 ## Prosedur
 
 ### Langkah 0: Dapatkan Daftar Router
 
-Mulai dengan `list_routers()`. Kelompokkan berdasarkan role:
-- `gate_idren` → router IDREN (BGP, drift NetBox, log mendalam)
-- `backbone`, `access` → router kampus (reachability + resource saja)
+Mulai dengan `list_routers()`. Filter berdasarkan scope yang ditentukan di atas.
+
+Kelompokkan hasil filter:
+- `gate_idren` → cek penuh: reachability + BGP + traffic + log + drift NetBox
+- `backbone`, `access` → cek dasar: reachability + resource
 
 Tidak ada hardcode nama router — semua dinamis dari daftar ini.
 
@@ -110,7 +133,7 @@ Router kampus tidak perlu drift check — NetBox hanya tracking device IDREN unt
 ## Format Output
 
 ```
-MORNING CHECK — [tanggal] [jam WIB]
+MORNING CHECK — [tanggal] [jam WIB] — SCOPE: [SEMUA | IDREN | KAMPUS | BACKBONE | ACCESS]
 ══════════════════════════════════════════════════════
 REACHABILITY
   Kampus  : [X]/[Y] router up  ✗ DOWN: [nama] jika ada
@@ -146,6 +169,9 @@ Jika tidak ada: "Tidak ada action item — jaringan normal."
 
 ## Catatan
 
+- Bagian output yang tidak relevan dengan scope di-skip sepenuhnya.
+  Contoh: scope IDREN → bagian "RESOURCE (kampus)" tidak ditampilkan.
+  Contoh: scope kampus → bagian "BGP SESSION" dan "NETBOX DRIFT" tidak ditampilkan.
 - Morning check hanya observasi — tidak ada eksekusi perubahan.
 - Drill-down BGP → skill `bgp-diagnostics`.
 - Drill-down traffic → skill `network-traffic-analysis`.
