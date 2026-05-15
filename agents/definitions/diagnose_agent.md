@@ -31,6 +31,7 @@ tools:
 skills:
   - dhcp-client-diagnostics
   - bgp-diagnostics
+  - bgp-prefix-leak
   - ospf-diagnostics
   - static-route-management
   - link-diagnostics

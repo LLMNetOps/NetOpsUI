@@ -11,6 +11,11 @@ triggers:
   - internet tidak bisa diakses
   - cek BGP
   - status BGP
+  - BGP jatuh
+  - session BGP putus
+  - peer BGP tidak konek
+  - koneksi IDREN putus
+  - link IDREN down
 tools:
   - get_bgp_sessions
   - get_routing_full
@@ -157,8 +162,96 @@ Laporan BGP yang mencakup:
 6. Temuan dari log (hold timer, authentication, script monitoring)
 7. Rekomendasi spesifik dengan perintah RouterOS jika ada
 
+## Incident Response: Session Drop
+
+Gunakan bagian ini saat ada laporan "BGP session drop" atau temuan dari morning check.
+
+### Langkah R1: Scope — Cek Semua Router IDREN
+
+Jangan asumsi hanya satu router yang terdampak. Jalankan `get_bgp_sessions` untuk
+**semua router** dengan role `gate_idren` dari `list_routers`.
+
+Kelompokkan temuan:
+- Router mana yang punya session DOWN
+- Apakah session DOWN yang sama muncul di beberapa router → indikasi masalah core
+
+### Langkah R2: Klasifikasi Session yang Drop
+
+Untuk setiap session DOWN, tentukan:
+
+| Klasifikasi | Indikator | Dampak |
+|-------------|-----------|--------|
+| **ISP Uplink putus** | peer adalah upstream ISP, prefix count besar (ribuan) | Internet ke institusi terdampak |
+| **Link antar-IDREN putus** | peer adalah GATE-IDREN-xxx, prefix count kecil (1-20) | Konektivitas bilateral ke node itu |
+| **Backup session (intended)** | nama session mengandung `(BACKUP)` dan primary-nya UP | Tidak ada dampak — wajar |
+| **Primary dan backup keduanya DOWN** | dua session ke peer yang sama, keduanya DOWN | Koneksi ke institusi itu 100% putus |
+
+**Primary/backup keduanya DOWN → eskalasi segera.**
+
+### Langkah R3: Cek Reachability ke Peer IP
+
+Untuk session DOWN, ambil `RemoteIP` dari output `get_bgp_sessions`.
+Jalankan `check_reachability` ke IP tersebut:
+
+- **Tidak reachable** → masalah di L1/L2/L3 — bukan BGP config issue
+  → cek apakah circuit di NetBox masih Active, laporkan ke ISP
+- **Reachable** → L3 OK, masalah di BGP layer (config, auth, timer)
+  → lanjut ke log analysis
+
+### Langkah R4: Log Analysis Terfokus
+
+```
+get_router_log(router_name, topic="bgp", lines=100)
+```
+
+Interpretasi kode error BGP (Notification):
+
+| Error | Artinya |
+|-------|---------|
+| `hold timer expired` | keepalive terlambat — link flapping atau CPU tinggi |
+| `authentication error` | password MD5 mismatch — cek konfigurasi kedua sisi |
+| `cease / administrative reset` | session di-reset manual oleh salah satu pihak |
+| `open message error` | mismatch AS number atau router-ID |
+| `update message error` | prefix/attribute tidak valid — kemungkinan route leak |
+
+### Langkah R5: Impact Assessment
+
+Setelah identifikasi session yang drop, sampaikan ke operator:
+
+```
+IMPACT ASSESSMENT — BGP Session Drop
+
+Session DOWN  : [nama session] di [router]
+Tipe          : [ISP uplink / link IDREN / backup]
+Peer          : AS[nomor] — [nama institusi/ISP]
+Last stopped  : [tanggal waktu dari output tool]
+Reachability  : [reachable / tidak reachable ke peer IP]
+Penyebab log  : [hold timer / auth error / admin reset / dll]
+
+Dampak        : [deskripsi — misal "koneksi ke NODE-IDREN-ITB via CBN terputus"]
+Backup        : [ada dan UP / ada tapi juga DOWN / tidak ada]
+Trafik reroute: [ya, via backup / tidak ada backup]
+```
+
+### Langkah R6: Eskalasi dan Handoff
+
+Berdasarkan hasil R5, rekomendasikan salah satu:
+
+**Kondisi 1 — Peer tidak reachable (masalah di ISP/link)**
+→ Informasikan ke operator untuk hubungi ISP terkait
+→ Jika ada backup yang belum aktif otomatis: handoff ke `config_agent` untuk
+  enable backup session atau adjust routing policy
+
+**Kondisi 2 — Peer reachable, masalah BGP config**
+→ Handoff ke `config_agent` dengan instruksi spesifik (misal: fix password, restart session)
+→ JANGAN restart BGP session tanpa konfirmasi operator — berdampak ke routing aktif
+
+**Kondisi 3 — Session backup DOWN, primary UP**
+→ Catat saja, tidak perlu tindakan — laporkan sebagai informasional
+
 ## Catatan
 - RouterOS v7: gunakan `get_bgp_sessions` (wrapper `/routing/bgp/session/print`)
 - RouterOS v6: `get_bgp_sessions` otomatis pakai `routing bgp peer print`
 - Hold timer default eBGP: 90s. Hold timer agresif (misal 15s): rentan flap di link WAN
 - Jangan restart BGP session tanpa konfirmasi NOC — ada dampak ke routing kampus
+- Cek semua router gate_idren — jangan asumsi hanya satu yang terdampak
