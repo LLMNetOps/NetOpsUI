@@ -18,6 +18,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone, timedelta
 from typing import Any
 
+from rich.markdown import Markdown
 from rich.text import Text
 from textual import on, work
 from textual.app import App, ComposeResult
@@ -550,14 +551,8 @@ class ChatPanel(Widget):
             self._plain_lines.append(f"AI  : {content or ''}")
             self._plain_lines.append("─" * 60)
             log.write(Text("─" * 60, style="#252932"))
-            lines = (content or "").split("\n")
-            for i, line in enumerate(lines):
-                if not line and i > 0:
-                    continue
-                t = Text()
-                t.append("AI  : " if i == 0 else "      ", style="#f0b85c bold" if i == 0 else "")
-                t.append(line, style="#e8eaee")
-                log.write(t)
+            log.write(Text("AI  :", style="#f0b85c bold"))
+            log.write(Markdown(content or ""))
             log.write(Text("─" * 60, style="#252932"))
 
         elif event_type == "approval_required":
