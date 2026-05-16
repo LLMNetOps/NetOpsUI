@@ -7,6 +7,7 @@ Run:
 """
 from __future__ import annotations
 
+import asyncio
 import os
 import subprocess
 import tempfile
@@ -723,24 +724,28 @@ class NetOpsApp(App):
                 continue
         return False
 
-    def action_copy_last_ai(self) -> None:
+    async def action_copy_last_ai(self) -> None:
         chat = self.query_one(ChatPanel)
         if not chat._last_ai:
             self.notify("Belum ada response AI", severity="warning")
             return
-        if not self._sys_copy(chat._last_ai):
-            self.copy_to_clipboard(chat._last_ai)
+        text = chat._last_ai
+        ok = await asyncio.to_thread(self._sys_copy, text)
+        if not ok:
+            self.copy_to_clipboard(text)
         self.notify("✓ AI response di-copy ke clipboard")
 
-    def action_copy_full_log(self) -> None:
+    async def action_copy_full_log(self) -> None:
         chat = self.query_one(ChatPanel)
         if not chat._plain_lines:
             self.notify("Log kosong", severity="warning")
             return
         text = "\n".join(chat._plain_lines)
-        if not self._sys_copy(text):
+        n = len(chat._plain_lines)
+        ok = await asyncio.to_thread(self._sys_copy, text)
+        if not ok:
             self.copy_to_clipboard(text)
-        self.notify(f"✓ {len(chat._plain_lines)} baris di-copy ke clipboard")
+        self.notify(f"✓ {n} baris di-copy ke clipboard")
 
     def action_open_log_modal(self) -> None:
         chat = self.query_one(ChatPanel)
