@@ -16,6 +16,8 @@ triggers:
 tools:
   - get_interface_stats
   - get_router_log
+  - get_bgp_sessions
+  - get_ospf_neighbors
   - run_command
   - check_reachability
 approval_required: false
@@ -66,13 +68,30 @@ get_router_log(router_name, topic="interface", lines=50)
 ```
 Cari pola:
 - `<interface> link up` / `link down` bergantian → flapping aktif
-- Berapa kali terjadi dan dalam rentang waktu berapa → hitung frekuensi flapping
 - `<interface> changed state to down` → kapan pertama kali down
+
+**Hitung frekuensi dari data aktual:**
+Hitung total event flapping, tentukan rentang waktu dari timestamp pertama ke terakhir dalam log.
+Frekuensi = total_event / jumlah_hari. JANGAN estimasi atau perkirakan — hitung dari data.
 
 **Interpretasi flapping:**
 - Flap > 5x/jam → masalah serius (kabel, SFP, port switch)
 - Flap saat jam sibuk → kemungkinan congestion menyebabkan reset
 - Flap terjadi bersamaan dengan BGP/OSPF state change → root cause link, bukan protocol
+
+### Langkah 3b: Cek BGP/OSPF jika interface adalah uplink routing
+
+**WAJIB** jika nama interface mengandung kata `BGP`, `OSPF`, `uplink`, `backbone`, atau `peer`:
+
+```
+get_bgp_sessions(router_name)      # jika BGP
+get_ospf_neighbors(router_name)    # jika OSPF
+```
+
+Verifikasi:
+- Apakah flapping interface menyebabkan session drop?
+- Peer siapa yang terdampak? (nama peer harus dari hasil tool — JANGAN tebak)
+- Berapa lama session down setiap kali flap?
 
 ### Langkah 4: Cek Konfigurasi Interface
 ```
@@ -132,6 +151,15 @@ Perhatikan:
 - Untuk interface yang flapping terus: pertimbangkan disable sementara untuk mencegah
   dampak ke routing protocol (BGP/OSPF) yang bergantung pada interface tersebut
 
+## LARANGAN KERAS
+
+- **JANGAN sebutkan nama peer, device, hostname, atau IP** yang tidak ada dalam hasil tool call.
+  Jika belum tahu nama peer BGP → jalankan `get_bgp_sessions` dulu. Jika tool gagal → tulis
+  "peer tidak dapat dikonfirmasi" bukan nama yang tidak ada datanya.
+- **JANGAN estimasi frekuensi** — hitung dari timestamp aktual dalam log.
+- **JANGAN tulis rekomendasi handoff dalam prose** — jika kondisi handoff terpenuhi, eksekusi
+  dengan return ke supervisor, bukan hanya tulis "serahkan ke X".
+
 
 ## Validasi Mandiri
 
@@ -145,8 +173,12 @@ Jika validasi belum lengkap → coba sumber alternatif, baru lapor jika memang t
 
 ## Handoff
 
-| Kondisi | Aksi | Agent Tujuan |
-|---------|------|--------------|
-| Link down atau error rate tinggi | Serahkan interface + perintah troubleshoot | config_agent |
-| Perlu diagnosa mendalam (layer 1/2) | Serahkan data ke diagnose | diagnose_agent |
-| Link normal | Tidak perlu handoff | END |
+Handoff harus **dieksekusi** — bukan ditulis dalam teks output. Jika kondisi terpenuhi,
+akhiri response dengan satu baris terakhir: `HANDOFF: <nama_agent>` agar supervisor
+membaca sinyal ini dan route ke agent yang tepat.
+
+| Kondisi | HANDOFF target |
+|---------|---------------|
+| Flapping aktif + butuh koordinasi fisik / ganti hardware | `diagnose_agent` |
+| Perlu disable interface atau konfigurasi perubahan | `config_agent` |
+| Link normal, tidak ada anomali | END (tidak perlu handoff) |

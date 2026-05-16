@@ -5,7 +5,7 @@ from __future__ import annotations
 from langgraph.graph import END, START, StateGraph
 
 from agents.nodes import (
-    config_node, diagnose_node, document_node, monitor_node,
+    config_node, diagnose_node, document_node, monitor_node, netbox_node,
     route_from_supervisor, security_node, supervisor_node,
 )
 
@@ -22,6 +22,7 @@ def build_graph(checkpointer) -> object:
     builder.add_node("config_agent",   config_node)
     builder.add_node("security_agent", security_node)
     builder.add_node("document_agent", document_node)
+    builder.add_node("netbox_agent",   netbox_node)
 
     builder.add_edge(START, "supervisor")
 
@@ -34,12 +35,13 @@ def build_graph(checkpointer) -> object:
             "config_agent":   "config_agent",
             "security_agent": "security_agent",
             "document_agent": "document_agent",
+            "netbox_agent":   "netbox_agent",
             "END":            END,
         },
     )
 
     # All specialists report back to supervisor
-    for agent in ("monitor_agent", "diagnose_agent", "config_agent", "security_agent", "document_agent"):
+    for agent in ("monitor_agent", "diagnose_agent", "config_agent", "security_agent", "document_agent", "netbox_agent"):
         builder.add_edge(agent, "supervisor")
 
     return builder.compile(checkpointer=checkpointer)
