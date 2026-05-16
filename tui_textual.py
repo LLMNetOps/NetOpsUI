@@ -747,7 +747,7 @@ class NetOpsApp(App):
             self.copy_to_clipboard(text)
         self.notify(f"✓ {len(chat._plain_lines)} baris di-copy ke clipboard")
 
-    async def action_open_log_modal(self) -> None:
+    def action_open_log_modal(self) -> None:
         chat = self.query_one(ChatPanel)
         content = "\n".join(chat._plain_lines) if chat._plain_lines else "(log kosong)"
         with tempfile.NamedTemporaryFile(
@@ -756,7 +756,7 @@ class NetOpsApp(App):
             f.write(content)
             tmpfile = f.name
         try:
-            async with self.suspend():
+            with self.suspend():
                 subprocess.run(["less", "-R", "--quit-if-one-screen", tmpfile])
         finally:
             try:
