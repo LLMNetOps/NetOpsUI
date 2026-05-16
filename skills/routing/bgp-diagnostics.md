@@ -153,14 +153,27 @@ Lihat versi RouterOS dari `get_system_info`:
 
 ## Output yang Diharapkan
 
-Laporan BGP yang mencakup:
-1. Jumlah total session dan breakdown established/down
-2. Tabel per kategori (upstream, nodes, iBGP RR) dengan uptime dan prefix count tepat
-3. Analisis tiap session yang DOWN atau baru reconnect (uptime < 24h **saja**)
-4. Pola primary/backup jika ada, beserta `last-stopped` session DOWN
-5. Total prefix dipisahkan IPv4 dan IPv6
-6. Temuan dari log (hold timer, authentication, script monitoring)
-7. Rekomendasi spesifik dengan perintah RouterOS jika ada
+**Status:** ✅ [X] established · 🚨 [X] down
+
+## BGP Session Summary
+
+| Router | Upstream | iBGP | Nodes | Total | Status |
+|--------|----------|------|-------|-------|--------|
+| GW-A | ✅ 2/2 | ✅ 1/1 | ✅ 3/3 | 6/6 | ✅ |
+| GW-B | 🚨 1/2 | ✅ 1/1 | ✅ 3/3 | 5/6 | 🚨 |
+
+## Session Down Detail
+
+| Router | Peer | Tipe | Last Stopped | Prefiks | Status |
+|--------|------|------|--------------|---------|--------|
+| GW-B | PEER-ISP-X | upstream | 2h ago | 0 | 🚨 Down |
+
+## Action Items
+
+1. 🚨 **SEGERA** — [tindakan untuk session down]
+2. ⚠️ **PERLU** — [monitoring rekomendasi]
+
+*Jika semua normal: "✅ Semua BGP session established."*
 
 ## Incident Response: Session Drop
 

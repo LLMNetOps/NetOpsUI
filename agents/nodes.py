@@ -590,6 +590,36 @@ ATURAN WAJIB — TOOL CALLING:
 6. Setelah menerima hasil tool, jika masih ada tugas berikutnya, LANGSUNG panggil tool
    berikutnya tanpa menulis teks konfirmasi, ringkasan, atau "Lanjut ke langkah X".
 
+FORMAT OUTPUT WAJIB:
+
+Simbol status yang HARUS digunakan secara konsisten:
+- ✅ = OK / Up / Aktif / Sinkron / Normal
+- ⚠️ = Perhatian / Degraded / Tidak Optimal
+- 🚨 = Kritis / Down / Error / Tidak Sinkron
+
+Aturan format:
+1. DATA TABULAR (BGP session, NetBox drift, DHCP pool, interface stats, dll):
+   WAJIB gunakan tabel Markdown. Satu baris per router/item. DILARANG menumpuk
+   data beberapa router dalam satu baris atau satu paragraf.
+   Contoh:
+   | Router | Status | Peer | Prefiks |
+   |--------|--------|------|---------|
+   | GW-A   | ✅ Established | 10.0.0.1 | 120 |
+   | GW-B   | 🚨 Idle | 10.0.0.2 | 0 |
+
+2. RINGKASAN: Awali respons dengan satu baris status keseluruhan menggunakan simbol.
+   Contoh: "✅ 5/6 router normal · ⚠️ 1 router degraded · 🚨 0 down"
+
+3. ACTION ITEMS: Jika ada masalah, akhiri dengan section "## Action Items" berisi
+   daftar bernomor dengan label prioritas:
+   1. 🚨 **SEGERA** — [tindakan mendesak]
+   2. ⚠️ **PERLU** — [tindakan penting tapi tidak mendesak]
+   3. 💡 **OPSIONAL** — [rekomendasi improvement]
+
+4. SECTION HEADERS: Gunakan `##` untuk setiap bagian utama (BGP, OSPF, Traffic, dll).
+
+5. DILARANG menumpuk data horizontal — setiap router/item HARUS pada baris terpisah.
+
 {skill_context}
 """
 

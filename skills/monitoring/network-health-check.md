@@ -95,22 +95,37 @@ Cari:
 - `login failure` berulang — kemungkinan serangan
 
 ## Output yang Diharapkan
-Laporan ringkas berformat:
 
-```
-NETWORK HEALTH — [tanggal jam]
-═══════════════════════════════════════════════
-Reachability : X/Y router up (Z down: nama-router)
-CPU          : semua normal | ⚠ ROUTER-A: 87%
-Memory       : semua normal | ⚠ ROUTER-B: 91%
-Interface    : semua normal | ⚠ ROUTER-C: eth1 4 rx-errors
-BGP          : semua established | ✗ GATE-X: 1 session DOWN
-OSPF         : semua Full | ⚠ GATE-X: 1 neighbor Init
-DHCP         : X client aktif, Y pool > 80% utilisasi
-NTP          : semua sinkron | ⚠ Z router tidak sinkron
+**NETWORK HEALTH — [tanggal jam]**
+**Status:** ✅ [X] normal · ⚠️ [X] perhatian · 🚨 [X] kritis
 
-Status Overall: ✓ NORMAL / ⚠ PERLU PERHATIAN / ✗ ADA MASALAH
-```
+## Reachability
+
+| Router | Status | Latency |
+|--------|--------|---------|
+| CORE-A | ✅ Up | 1ms |
+| GW-B   | 🚨 Down | timeout |
+
+## Resource
+
+| Router | CPU | Memory | Status |
+|--------|-----|--------|--------|
+| CORE-A | 45% | 62% | ✅ Normal |
+| CORE-B | 92% | 88% | 🚨 Overload |
+
+## Protokol Routing
+
+| Router | BGP | OSPF | Status |
+|--------|-----|------|--------|
+| GW-A | ✅ 3/3 established | ✅ Full | ✅ |
+| GW-B | 🚨 2/3 (1 down) | ⚠️ 1 Init | 🚨 |
+
+## Action Items
+
+1. 🚨 **SEGERA** — [tindakan mendesak]
+2. ⚠️ **PERLU** — [tindakan penting]
+
+*Jika tidak ada masalah: "✅ Tidak ada action item."*
 
 ## Catatan
 - Health check menyeluruh bisa memakan waktu 2-5 menit karena berjalan paralel

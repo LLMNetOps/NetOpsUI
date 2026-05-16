@@ -48,13 +48,22 @@ Dari data audit:
 - Jumlah router yang tidak responsif
 
 ## Output yang Diharapkan
-Tabel ringkasan yang mencakup:
-- Semua router dan pool dengan jumlah bound/waiting/disabled
-- Flag ⚠ untuk pool yang utilisasinya > 80%
-- Flag ✗ untuk router yang gagal dihubungi
-- Total agregat di seluruh jaringan
 
-Tambahkan rekomendasi jika ada pool yang mendekati kapasitas.
+**Status:** ✅ [X] pool normal · ⚠️ [X] pool > 80% · 🚨 [X] pool penuh/error
+
+## DHCP Pool Summary
+
+| Router | Pool | Bound | Total | Utilisasi | Status |
+|--------|------|-------|-------|-----------|--------|
+| CORE-A | pool-192 | 180 | 200 | 90% | 🚨 Hampir penuh |
+| CORE-B | pool-10 | 50 | 254 | 20% | ✅ Normal |
+
+## Action Items
+
+1. 🚨 **SEGERA** — [tindakan pool kritis]
+2. ⚠️ **PERLU** — [rekomendasi ekspansi pool]
+
+*Jika semua normal: "✅ Semua pool dalam batas aman."*
 
 ## Catatan
 - Jalankan audit saat periode tenang (bukan jam sibuk) untuk mendapat baseline

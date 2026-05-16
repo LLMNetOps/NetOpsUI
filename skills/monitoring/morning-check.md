@@ -175,40 +175,73 @@ Router kampus tidak perlu drift check — NetBox hanya tracking device IDREN unt
 
 ## Format Output
 
-```
-MORNING CHECK — [tanggal] [jam WIB] — SCOPE: [SEMUA | IDREN | KAMPUS | BACKBONE | ACCESS]
-══════════════════════════════════════════════════════
-REACHABILITY
-  Kampus  : [X]/[Y] router up  ✗ DOWN: [nama] jika ada
-  IDREN   : [X]/[Y] router up  ✗ DOWN: [nama] jika ada
+Gunakan format Markdown berikut. Simbol wajib: ✅ normal, ⚠️ perhatian, 🚨 kritis/down.
 
-RESOURCE (kampus)
-  Status  : normal | ⚠ [router]: CPU [X]%, Memory [Y]%
+---
 
-BGP SESSION (per router IDREN)
-  [router-1] : [X] established / [Y] down
-               ✗ DOWN: [peer] via [ISP]
-  [router-2] : [X] established / [Y] down
+**MORNING CHECK — [tanggal] [jam WIB]**
+**Scope:** [SEMUA | IDREN | KAMPUS | BACKBONE | ACCESS]
+**Status:** ✅ [X] normal · ⚠️ [X] perhatian · 🚨 [X] kritis
 
-TRAFFIC
-  Puncak  : [X]% di [interface] ([router])
-  ⚠ CONGESTED: [interface] [X]% jika ada
+---
 
-LOG (24 jam)
-  Status  : bersih | ⚠ [router]: [ringkasan event]
+## Reachability
 
-NETBOX DRIFT (per router IDREN)
-  [router-1] : sinkron | ⚠ [X] item drift
-  [router-2] : sinkron | ⚠ [X] item drift
+| Router | Role | Status | Latency |
+|--------|------|--------|---------|
+| GW-A | gate_idren | ✅ Up | 2ms |
+| GW-B | gate_idren | 🚨 Down | timeout |
 
-──────────────────────────────────────────────────────
-STATUS OVERALL: ✓ NORMAL | ⚠ PERLU PERHATIAN | ✗ ADA MASALAH AKTIF
+## Resource Kampus *(skip jika scope IDREN)*
 
-ACTION ITEMS:
-1. [item kritis — selesaikan hari ini]
-2. [item perhatian — monitor]
-Jika tidak ada: "Tidak ada action item — jaringan normal."
-```
+✅ Semua normal — atau:
+
+| Router | CPU | Memory | Uptime | Status |
+|--------|-----|--------|--------|--------|
+| CORE-A | 45% | 62% | 14d | ✅ Normal |
+| CORE-B | 92% | 88% | 2m | 🚨 Baru restart |
+
+## BGP Session
+
+| Router | Established | Down | Peer Down | Status |
+|--------|-------------|------|-----------|--------|
+| GW-A | 3 | 0 | — | ✅ |
+| GW-B | 2 | 1 | PEER-ISP-X | 🚨 |
+
+*Detail peer down: nama peer, prefiks terakhir, durasi down.*
+
+## Traffic Puncak
+
+| Interface | Router | Utilisasi | Status |
+|-----------|--------|-----------|--------|
+| ether1 | GW-A | 45% | ✅ Normal |
+| ether2 | GW-B | 87% | ⚠️ Hampir penuh |
+
+## Log 24 Jam
+
+| Router | Event | Jumlah | Status |
+|--------|-------|--------|--------|
+| GW-A | — | 0 | ✅ Bersih |
+| GW-B | link flapping ether3 | 8x | 🚨 |
+
+## NetBox Drift *(skip jika scope kampus)*
+
+| Router | Drift Item | Jumlah | Status |
+|--------|-----------|--------|--------|
+| GW-A | — | 0 | ✅ Sinkron |
+| GW-B | IP tidak terdaftar | 2 | ⚠️ |
+
+---
+
+## Action Items
+
+*Jika tidak ada masalah: "✅ Tidak ada action item — jaringan normal."*
+
+Jika ada masalah:
+
+1. 🚨 **SEGERA** — [tindakan mendesak, selesaikan sekarang]
+2. ⚠️ **PERLU** — [tindakan penting, selesaikan hari ini]
+3. 💡 **OPSIONAL** — [rekomendasi improvement jangka panjang]
 
 ## Catatan
 

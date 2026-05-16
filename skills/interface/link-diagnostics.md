@@ -137,10 +137,26 @@ Perhatikan:
 | SFP rx-power rendah | Fiber kotor atau bengkok | Bersihkan konektor, cek rute fiber |
 
 ## Output yang Diharapkan
-- Tabel counter interface dengan flagging error/drop yang tinggi
-- Timeline flapping dari log (kapan, berapa kali, pola)
-- Diagnosis root cause dengan evidence dari counter + log
-- Rekomendasi tindakan (cek fisik, ganti kabel, konfigurasi duplex)
+
+**Status:** ✅ normal · ⚠️ error counter · 🚨 interface down / flapping
+
+## Interface Status
+
+| Interface | Status | rx-error | tx-error | rx-fcs | Flapping | Status |
+|-----------|--------|----------|----------|--------|----------|--------|
+| ether1 | Up | 0 | 0 | 0 | Tidak | ✅ Normal |
+| ether2 | Down | 245 | 12 | 89 | 8x/jam | 🚨 Kritis |
+
+## Root Cause
+
+[Penjelasan berdasarkan data counter + log — BUKAN asumsi]
+
+## Action Items
+
+1. 🚨 **SEGERA** — [tindakan fisik/konfigurasi mendesak]
+2. ⚠️ **PERLU** — [monitoring lanjutan]
+
+*Jika normal: "✅ Tidak ada anomali interface."*
 
 ## Catatan
 - Error counter terus naik saat monitoring → masalah aktif, bukan historis
