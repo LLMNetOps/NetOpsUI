@@ -12,8 +12,27 @@ from typing import TYPE_CHECKING, Any
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_ollama import ChatOllama
 
+from pathlib import Path
+
 from agents.loader import AgentLoader
 from agents.tools import TOOL_MAP
+
+# ── Pedoman agent — global conduct rules loaded from editable Markdown ─────────
+
+def _load_pedoman() -> str:
+    """Load pedoman-agent.md, strip YAML frontmatter, return body only."""
+    path = Path(__file__).parent.parent / "skills" / "pedoman-agent.md"
+    try:
+        text = path.read_text(encoding="utf-8")
+        if text.startswith("---"):
+            end = text.find("---", 3)
+            return text[end + 3:].strip() if end != -1 else text
+        return text.strip()
+    except FileNotFoundError:
+        logger.warning("pedoman-agent.md tidak ditemukan — pedoman kosong")
+        return ""
+
+_PEDOMAN = _load_pedoman()
 
 if TYPE_CHECKING:
     from agent import NetworkOpsState
@@ -580,66 +599,7 @@ _SPECIALIST_SYS = """\
 
 Tool yang tersedia (HANYA ini yang boleh dipanggil): {tool_names}
 
-ATURAN WAJIB — TOOL CALLING:
-1. LANGSUNG panggil tool tanpa pengantar teks apapun.
-2. DILARANG menulis "Mohon tunggu", "Saya akan menjalankan", "Saya akan memanggil",
-   "Saya akan mensimulasikan", atau deskripsi rencana sebelum memanggil tool.
-3. DILARANG mensimulasikan atau mengarang data — gunakan tool untuk mendapatkan data nyata.
-4. Teks respons hanya boleh ditulis SETELAH semua tool selesai dipanggil.
-5. Jika butuh data dari beberapa router, panggil tool satu per satu secara langsung.
-6. Setelah menerima hasil tool, jika masih ada tugas berikutnya, LANGSUNG panggil tool
-   berikutnya tanpa menulis teks konfirmasi, ringkasan, atau "Lanjut ke langkah X".
-
-FORMAT OUTPUT WAJIB:
-
-Simbol status yang HARUS digunakan secara konsisten:
-- ✅ = OK / Up / Aktif / Sinkron / Normal
-- ⚠️ = Perhatian / Degraded / Tidak Optimal
-- 🚨 = Kritis / Down / Error / Tidak Sinkron
-
-Aturan format:
-1. DATA TABULAR (BGP session, NetBox drift, DHCP pool, interface stats, dll):
-   WAJIB gunakan tabel Markdown. Satu baris per router/item. DILARANG menumpuk
-   data beberapa router dalam satu baris atau satu paragraf.
-   Format kolom: | [nama router dari tool] | [nilai dari tool] | [simbol status] |
-
-2. RINGKASAN: Awali respons dengan satu baris status keseluruhan menggunakan simbol.
-   Format: "[simbol] [jumlah] normal · [simbol] [jumlah] perhatian · [simbol] [jumlah] kritis"
-
-3. ACTION ITEMS: Jika ada masalah, akhiri dengan section "## Action Items" berisi
-   daftar bernomor dengan label prioritas:
-   1. 🚨 **SEGERA** — [tindakan mendesak]
-   2. ⚠️ **PERLU** — [tindakan penting tapi tidak mendesak]
-   3. 💡 **OPSIONAL** — [rekomendasi improvement]
-
-   ATURAN ACTION ITEMS — WAJIB:
-   - Setiap item harus KONKRET: sebutkan router, IP, perintah, atau langkah spesifik
-   - DILARANG menulis: "Monitor...", "Verifikasi...", "Pertimbangkan...", "Pastikan..."
-     Kata-kata ini terlalu pasif dan tidak memberikan nilai operasional.
-   - Jika perlu cek sesuatu → CEK SEKARANG dengan tool call, jangan tulis sebagai rekomendasi
-   - Jika data sudah cukup → simpulkan dengan FAKTA, bukan saran
-   - Jika tidak ada masalah → tulis "✅ Tidak ada action item — kondisi normal."
-   - Contoh SALAH: "Monitor apakah IP X masih mencoba menyerang"
-   - Contoh BENAR: "🚨 Blokir IP 139.19.117.129 di firewall GATE-IDREN-UI:
-     `/ip/firewall/address-list/add list=blacklist address=139.19.117.129`"
-
-4. SECTION HEADERS: Gunakan `##` untuk setiap bagian utama (BGP, OSPF, Traffic, dll).
-
-5. DILARANG menumpuk data horizontal — setiap router/item HARUS pada baris terpisah.
-
-6. DILARANG menggunakan data contoh dari instruksi skill sebagai output. Format
-   dalam skill hanya menunjukkan STRUKTUR kolom — nilai HARUS dari hasil tool call
-   aktual. Jika tool belum dipanggil, PANGGIL DULU — JANGAN isi dengan placeholder
-   atau nilai karangan.
-
-7. NARASI EDUKASI — WAJIB setelah setiap tabel atau section data:
-   Tulis 2–4 kalimat penjelasan seperti senior network engineer yang menjelaskan
-   kepada junior operator. Jelaskan:
-   - Apa arti data/metrik di tabel ini dalam konteks operasional jaringan
-   - Apa kondisi normal vs tidak normal, dan dampaknya jika tidak normal
-   - Jika ada anomali: jelaskan kemungkinan penyebab dan langkah pertama yang perlu dicek
-   Gunakan bahasa Indonesia yang teknis tapi mudah dipahami. JANGAN ulangi data yang
-   sudah ada di tabel — fokus pada konteks dan interpretasi.
+{pedoman}
 
 {skill_context}
 """
@@ -680,6 +640,7 @@ def _make_specialist_node(agent_name: str):
         sys_content = _SPECIALIST_SYS.format(
             agent_body=agent_body,
             tool_names=tool_names_str,
+            pedoman=_PEDOMAN,
             skill_context=skill_ctx,
         ).strip()
         sys_msg = SystemMessage(content=sys_content)
@@ -778,6 +739,7 @@ def config_node(state: dict) -> dict:
     sys_msg = SystemMessage(content=_SPECIALIST_SYS.format(
         agent_body=_agent_loader.system_prompt("config_agent"),
         tool_names=_config_tool_names,
+        pedoman=_PEDOMAN,
         skill_context=skill_ctx,
     ).strip())
 
