@@ -612,6 +612,17 @@ Aturan format:
    2. ⚠️ **PERLU** — [tindakan penting tapi tidak mendesak]
    3. 💡 **OPSIONAL** — [rekomendasi improvement]
 
+   ATURAN ACTION ITEMS — WAJIB:
+   - Setiap item harus KONKRET: sebutkan router, IP, perintah, atau langkah spesifik
+   - DILARANG menulis: "Monitor...", "Verifikasi...", "Pertimbangkan...", "Pastikan..."
+     Kata-kata ini terlalu pasif dan tidak memberikan nilai operasional.
+   - Jika perlu cek sesuatu → CEK SEKARANG dengan tool call, jangan tulis sebagai rekomendasi
+   - Jika data sudah cukup → simpulkan dengan FAKTA, bukan saran
+   - Jika tidak ada masalah → tulis "✅ Tidak ada action item — kondisi normal."
+   - Contoh SALAH: "Monitor apakah IP X masih mencoba menyerang"
+   - Contoh BENAR: "🚨 Blokir IP 139.19.117.129 di firewall GATE-IDREN-UI:
+     `/ip/firewall/address-list/add list=blacklist address=139.19.117.129`"
+
 4. SECTION HEADERS: Gunakan `##` untuk setiap bagian utama (BGP, OSPF, Traffic, dll).
 
 5. DILARANG menumpuk data horizontal — setiap router/item HARUS pada baris terpisah.
