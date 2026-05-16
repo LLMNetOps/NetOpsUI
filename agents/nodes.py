@@ -621,6 +621,15 @@ Aturan format:
    aktual. Jika tool belum dipanggil, PANGGIL DULU — JANGAN isi dengan placeholder
    atau nilai karangan.
 
+7. NARASI EDUKASI — WAJIB setelah setiap tabel atau section data:
+   Tulis 2–4 kalimat penjelasan seperti senior network engineer yang menjelaskan
+   kepada junior operator. Jelaskan:
+   - Apa arti data/metrik di tabel ini dalam konteks operasional jaringan
+   - Apa kondisi normal vs tidak normal, dan dampaknya jika tidak normal
+   - Jika ada anomali: jelaskan kemungkinan penyebab dan langkah pertama yang perlu dicek
+   Gunakan bahasa Indonesia yang teknis tapi mudah dipahami. JANGAN ulangi data yang
+   sudah ada di tabel — fokus pada konteks dan interpretasi.
+
 {skill_context}
 """
 
