@@ -108,13 +108,24 @@ TopBar {
 #tb-model   { color: #e8eaee; width: auto; max-width: 24; overflow: hidden; }
 #tb-time    { color: #6c7280; width: auto; margin-left: 2; }
 
-/* ── Main area: takes all remaining height ── */
-#main-area  { height: 1fr; }
+/* ── Root: full screen horizontal split ── */
+#app-root {
+    width: 100%;
+    height: 100%;
+    layout: horizontal;
+}
+
+/* ── Left column: TopBar + ChatPanel + StatusBar, bounded to ChatPanel width ── */
+#left-col {
+    width: 1fr;
+    height: 100%;
+    layout: vertical;
+}
 
 /* ── ChatPanel ── */
 ChatPanel {
-    width: 1fr;
-    height: 100%;
+    width: 100%;
+    height: 1fr;
     background: #08090b;
     layout: vertical;
 }
@@ -691,11 +702,12 @@ class NetOpsApp(App):
         self._stream_start = 0.0
 
     def compose(self) -> ComposeResult:
-        yield TopBar()
-        with Horizontal(id="main-area"):
-            yield ChatPanel()
+        with Horizontal(id="app-root"):
+            with Vertical(id="left-col"):
+                yield TopBar()
+                yield ChatPanel()
+                yield StatusBar()
             yield AgentRail()
-        yield StatusBar()
 
     def on_mount(self) -> None:
         self.set_interval(1, self._tick)
