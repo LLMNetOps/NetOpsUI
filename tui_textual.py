@@ -98,14 +98,14 @@ TopBar {
     border-bottom: tall #252932;
     layout: horizontal;
     align: left middle;
-    padding: 0 1;
+    padding: 0 2;
 }
 #tb-logo    { color: #e8eaee; width: auto; }
-#tb-dot     { color: #7ee787; width: 2; }
+#tb-dot     { color: #7ee787; width: 3; }
 #tb-thread  { color: #6c7280; width: auto; }
-#tb-spacer  { width: 1fr; }
+#tb-spacer  { width: 1fr; min-width: 1; }
 #tb-sep     { color: #454a55; width: auto; margin: 0 1; }
-#tb-model   { color: #e8eaee; width: auto; }
+#tb-model   { color: #e8eaee; width: auto; max-width: 24; overflow: hidden; }
 #tb-time    { color: #6c7280; width: auto; margin-left: 2; }
 
 /* ── Main area: takes all remaining height ── */
@@ -233,10 +233,10 @@ StatusBar {
     border-top: tall #252932;
     layout: horizontal;
     align: left middle;
-    padding: 0 1;
+    padding: 0 2;
 }
-#sb-state { color: #a8aeba; width: 1fr; }
-#sb-hint  { color: #454a55; width: auto; }
+#sb-state { color: #a8aeba; width: 1fr; min-width: 8; overflow: hidden; }
+#sb-hint  { color: #454a55; width: auto; overflow: hidden; }
 
 /* ── ApprovalModal ── */
 ApprovalModal { align: center middle; }
@@ -604,7 +604,7 @@ class ChatPanel(Widget):
 class StatusBar(Widget):
     def compose(self) -> ComposeResult:
         yield Static("● ready", id="sb-state")
-        yield Static("↵ send  ctrl+y copy-ai  ctrl+b copy-log  ctrl+e less-view  ctrl+c quit", id="sb-hint")
+        yield Static("↵ send · ^y copy · ^b log · ^e view · ^c quit", id="sb-hint")
 
     def update_state(self, text: str, style: str = "#a8aeba") -> None:
         try:
