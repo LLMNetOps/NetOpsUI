@@ -143,6 +143,76 @@ python tests/eval.py --lab        # pakai router nyata (containerlab)
 
 ---
 
+## 2026-05-16 — Agent hallucination: format template dicetak verbatim
+
+**Apa yang gagal:** Output morning-check berisi teks LARANGAN KERAS FORMAT verbatim dan tabel
+dengan nilai placeholder seperti `GW-A | 3 | 0 | — | ✅`. Agent juga berhenti setelah
+`list_routers()` tanpa memanggil tool berikutnya.
+
+**Root cause (dua masalah):**
+1. **Example contamination** — Format Output section di skill Markdown berisi nilai konkret
+   (`GW-A | 3 | 0`). Model memperlakukan ini sebagai data aktual dan mencetaknya verbatim.
+2. **Premature loop break** — `_react_loop` break ketika LLM menghasilkan non-tool-call response.
+   Setelah `list_routers()`, model membaca format template dan menghasilkan teks output →
+   loop berhenti sebelum tool berikutnya dipanggil.
+
+**Perubahan (3 lapis perlindungan):**
+1. Ganti semua nilai konkret di format template dengan `[placeholder]` syntax
+2. Hapus blok LARANGAN dari dalam `---` separator (pindah ke Aturan Kritis)
+3. Tambah gate transisi eksplisit setelah setiap langkah:
+   `"→ LANGKAH X SELESAI. JANGAN TULIS APAPUN. LANGSUNG PANGGIL [tool]"`
+4. Rule 6 di `_SPECIALIST_SYS`: DILARANG pakai data contoh dari skill sebagai output
+
+**Hasil:** Agent memanggil semua tool yang dibutuhkan sebelum menulis output. Format template
+tidak lagi bocor ke output.
+
+**Lesson learned:** Format template dengan nilai konkret = jebakan. Selalu gunakan
+`[placeholder]` atau `{NAMA_KOLOM}` untuk nilai yang harus diisi dari tool result.
+
+---
+
+## 2026-05-16 — backup-before-write tidak ter-enforce
+
+**Apa yang gagal:** config_agent memanggil `run_command_write` sebelum `backup_router_config`.
+Meskipun instruksi di skill menyebutkan urutan yang benar, LLM tidak selalu mengikutinya.
+
+**Root cause:** Urutan tool call diserahkan ke LLM decision — tidak ada enforcement di code.
+LLM kadang "mengoptimalkan" dengan langsung ke write tanpa backup.
+
+**Perubahan:** Code-level enforcement di `config_node`:
+- `_backed_up_routers: set[str]` per invocation
+- `_auto_backup()` inner function yang trigger approval sebelum write pertama ke setiap router
+- Jika LLM call backup duluan → ditandai backed up, `_auto_backup` skip
+- Jika operator tolak backup → write dibatalkan, ToolMessage berisi "Write dibatalkan"
+
+**Hasil:** Backup selalu terjadi sebelum write pertama, regardless of LLM tool ordering.
+
+**Lesson learned:** Safety invariants yang kritis tidak boleh bergantung pada LLM mengikuti
+instruksi. Selalu enforce di code level. LLM untuk reasoning, code untuk safety.
+
+---
+
+## 2026-05-16 — Global conduct rules di file Python kritis
+
+**Apa yang gagal:** Rules format output (simbol status, tabel Markdown, action items) hardcoded
+di `_SPECIALIST_SYS` string di `agents/nodes.py`. Untuk update satu rule, harus edit file
+Python kritis dan restart.
+
+**Root cause:** Desain awal tidak memisahkan "conduct rules" dari "node logic".
+
+**Perubahan:** Extract ke `skills/pedoman-agent.md`:
+- `_load_pedoman()` baca + strip YAML frontmatter di startup
+- `_SPECIALIST_SYS` pakai `{pedoman}` placeholder
+- Kedua `.format()` call (specialist + config_node) pass `pedoman=_PEDOMAN`
+
+**Hasil:** Ubah perilaku semua agent dengan edit satu Markdown file, restart. `agents/nodes.py`
+tidak perlu disentuh untuk perubahan conduct/format.
+
+**Lesson learned:** Pisahkan "apa yang agent lakukan" (logic di nodes.py) dari "bagaimana agent
+berperilaku" (conduct di Markdown). Keduanya berubah dengan frekuensi berbeda.
+
+---
+
 ## Catatan Umum — Pola yang Sering Muncul
 
 ### Model kecil vs instruksi ambigu

@@ -159,14 +159,13 @@ Lihat versi RouterOS dari `get_system_info`:
 
 | Router | Upstream | iBGP | Nodes | Total | Status |
 |--------|----------|------|-------|-------|--------|
-| GW-A | ✅ 2/2 | ✅ 1/1 | ✅ 3/3 | 6/6 | ✅ |
-| GW-B | 🚨 1/2 | ✅ 1/1 | ✅ 3/3 | 5/6 | 🚨 |
+| [nama dari get_bgp_sessions] | [X/Y ✅/🚨] | [X/Y ✅/🚨] | [X/Y ✅/🚨] | [total] | [✅/🚨] |
 
 ## Session Down Detail
 
 | Router | Peer | Tipe | Last Stopped | Prefiks | Status |
 |--------|------|------|--------------|---------|--------|
-| GW-B | PEER-ISP-X | upstream | 2h ago | 0 | 🚨 Down |
+| [nama router] | [nama peer dari get_bgp_sessions] | [upstream/ibgp/nodes] | [waktu] | [jumlah] | 🚨 Down |
 
 ## Action Items
 

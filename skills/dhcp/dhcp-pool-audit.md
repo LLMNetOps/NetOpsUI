@@ -55,8 +55,7 @@ Dari data audit:
 
 | Router | Pool | Bound | Total | Utilisasi | Status |
 |--------|------|-------|-------|-----------|--------|
-| CORE-A | pool-192 | 180 | 200 | 90% | 🚨 Hampir penuh |
-| CORE-B | pool-10 | 50 | 254 | 20% | ✅ Normal |
+| [nama dari audit_dhcp] | [nama pool] | [bound] | [total] | [bound/total%] | [✅/⚠️/🚨] |
 
 ## Action Items
 

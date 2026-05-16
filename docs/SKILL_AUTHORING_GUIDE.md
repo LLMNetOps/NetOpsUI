@@ -1,7 +1,7 @@
 # Skill Authoring Guide — NetOps AI
 
-**Versi:** 1.1  
-**Tanggal:** 2026-05-08  
+**Versi:** 1.2  
+**Tanggal:** 2026-05-16  
 **Audience:** Operator Jaringan
 
 ---
@@ -20,27 +20,53 @@ Setiap skill adalah satu file `.md` di dalam direktori `skills/`.
 
 ```
 skills/
-├── dhcp/
+├── pedoman-agent.md    ← KHUSUS: global conduct rules, bukan skill biasa (lihat catatan)
+├── dhcp/               ← domain: dhcp
 │   ├── dhcp-client-diagnostics.md
 │   ├── dhcp-pool-audit.md
+│   ├── static-lease-management.md
 │   └── utbk-session-monitoring.md
-├── routing/
+├── routing/            ← domain: routing
+│   ├── bgp-diagnostics.md
+│   ├── bgp-prefix-leak.md
 │   ├── ospf-diagnostics.md
-│   └── bgp-diagnostics.md
-├── monitoring/
+│   └── static-route-management.md
+├── monitoring/         ← domain: monitoring
+│   ├── capacity-planning.md
+│   ├── morning-check.md
+│   ├── mtu-mismatch-diagnostics.md
+│   ├── netbox-read.md
 │   ├── network-health-check.md
 │   ├── network-reachability.md
-│   ├── network-traffic-analysis.md
-│   └── network-status-report.md
-├── security/
+│   ├── network-status-report.md
+│   └── network-traffic-analysis.md
+├── security/           ← domain: security
+│   ├── brute-force-response.md
+│   ├── firewall-management.md
 │   └── security-audit.md
-├── config/
-│   └── config-backup.md
-└── documents/
-    └── document-writing.md
+├── config/             ← domain: config
+│   ├── commissioning.md
+│   ├── config-backup.md
+│   ├── config-change.md
+│   ├── netbox-sync.md
+│   ├── router-discovery.md
+│   └── vlan-provisioning.md
+├── interface/          ← domain: interface
+│   └── link-diagnostics.md
+├── maintenance/        ← domain: maintenance
+│   └── router-maintenance.md
+└── documents/          ← domain: documents
+    ├── document-writing.md
+    ├── skill-authoring.md
+    └── templates/      ← template file, bukan skill (tidak di-load SkillLibrary)
+        ├── network-status.md
+        ├── routing-bgp-ospf.md
+        └── security-assessment.md
 ```
 
 Subdirektori berfungsi sebagai **domain kategori** dan digunakan sebagai nilai `domain:` default.
+
+> **Catatan `pedoman-agent.md`:** File ini bukan skill biasa. Tidak muncul dalam pencarian skill dan tidak perlu dicantumkan di frontmatter agent manapun. Isinya di-inject otomatis ke semua agent system prompt oleh `_load_pedoman()` di `agents/nodes.py` saat startup. Edit file ini untuk mengubah perilaku global semua agent (format output, simbol status, aturan action items, narasi edukasi).
 
 ---
 
@@ -114,6 +140,8 @@ Jelaskan format dan isi output yang diinginkan.
 | `tools` | list | semua | Tools yang diizinkan untuk skill ini |
 | `approval_required` | boolean | `false` | Apakah perlu persetujuan operator sebelum dieksekusi |
 | `enabled` | boolean | `true` | Set `false` untuk menonaktifkan skill tanpa menghapus file |
+
+Domain yang valid: `dhcp`, `routing`, `monitoring`, `security`, `config`, `interface`, `maintenance`, `documents`.
 
 ### Contoh Frontmatter
 
@@ -268,6 +296,7 @@ Daftar tool yang dapat didefinisikan di frontmatter `tools:`.
 ### Config & Backup
 | Tool | Deskripsi |
 |---|---|
+| `run_command_write` | Perintah write ke router (butuh approval, hanya config_agent) |
 | `backup_router_config` | Backup config router (butuh approval) |
 | `list_backups` | Daftar backup tersimpan |
 | `diff_config` | Perbedaan dua versi config |

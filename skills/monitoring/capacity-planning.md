@@ -145,24 +145,19 @@ Berdasarkan data yang dikumpulkan, buat proyeksi:
 Laporan kapasitas yang mencakup:
 
 ```
-CAPACITY REPORT — [tanggal]
+CAPACITY REPORT — [hasil get_current_time()]
 ═══════════════════════════════════════
 BANDWIDTH UTILIZATION
-  GATE-IDREN (uplink 1G):   ██████░░░░ 60% — normal
-  GATE-ARENA (uplink 1G):   ████████░░ 80% — ⚠ perlu perhatian
-  FIBER-FILKOM (100M):       █░░░░░░░░░ 10% — under-utilized
+  [nama router dari tool] ([kapasitas uplink]):   [bar] [%] — [normal/perhatian/kritis]
 
 DHCP POOL
-  FILKOM-STAFF   : 45/50 (90%)  — ✗ KRITIS, ekspansi segera
-  FILKOM-STUDENT : 120/200 (60%) — normal
-  PERPUSTAKAAN   : 30/100 (30%) — normal
+  [nama pool dari audit_dhcp] : [bound]/[total] ([%])  — [status]
 
 ROUTER RESOURCE
-  GATE-IDREN: CPU 45%, RAM 62% — normal
-  DIST-FILKOM: CPU 72%, RAM 80% — ⚠ overloaded
+  [nama router dari get_system_info]: CPU [cpu-load%], RAM [memory%] — [status]
 
 Rekomendasi Prioritas:
-  1. [KRITIS] Ekspansi DHCP pool FILKOM-STAFF (habis dalam < 2 minggu)
+  1. [KRITIS/PERLU/OPSIONAL] [tindakan konkret berdasarkan data aktual]
   2. [PERLU PERHATIAN] Monitor GATE-ARENA — 80% utilisasi WAN
   3. [RENDAH] Review proses di DIST-FILKOM — CPU 72% konsisten
 ```

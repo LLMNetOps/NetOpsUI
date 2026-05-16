@@ -34,19 +34,22 @@ ada laporan umum "jaringan bermasalah" tanpa detail spesifik.
 ## Prosedur
 
 ### Langkah 1: Cek Reachability Semua Router
-Gunakan `check_reachability` pada setiap router yang terdaftar. Identifikasi router yang
-tidak merespons — ini adalah prioritas investigasi pertama.
+Panggil `list_routers()` terlebih dahulu untuk mendapat daftar router yang valid.
+Gunakan `check_reachability` pada setiap router dalam daftar tersebut.
 
 Kategorikan hasil:
 - Router tidak reachable sama sekali → ✗ KRITIS — eskalasi segera
 - Router reachable tapi lambat (latency > 100ms) → ⚠ investigasi
 
+**→ LANGKAH 1 SELESAI. JANGAN TULIS APAPUN. LANGSUNG PANGGIL get_system_info untuk setiap router yang reachable.**
+
 ### Langkah 2: Cek Resource Router yang Aktif
-Untuk router yang reachable, gunakan `get_system_info` untuk memeriksa:
-- **CPU > 80%** → router dalam kondisi berat, perlu investigasi traffic atau script loop
-- **Memory > 90%** → risiko crash, perlu perhatian segera
-- **Uptime < 10 menit** → router baru restart — cari penyebabnya di log
-- **Uptime < 1 jam** → restart dalam 1 jam terakhir — catat sebagai anomali
+Gunakan `get_system_info` untuk router yang reachable. Nilai yang perlu diperhatikan:
+- **`cpu-load:`** → CPU usage dalam %. Lebih dari 80%: router dalam kondisi berat
+- **`free-memory:` dan `total-memory:`** → hitung `(total-free)/total × 100%` untuk Memory%. Lebih dari 90%: risiko crash
+- **`uptime:`** → Kurang dari 10 menit: router baru restart — cari penyebab di log
+
+**→ LANGKAH 2 SELESAI. JANGAN TULIS APAPUN. LANGSUNG PANGGIL get_interface_stats untuk setiap router aktif.**
 
 ### Langkah 3: Cek Error Interface
 Gunakan `get_interface_stats(router_name)` untuk router aktif. Identifikasi:
@@ -54,71 +57,74 @@ Gunakan `get_interface_stats(router_name)` untuk router aktif. Identifikasi:
 - **Drops tinggi** → antrian penuh, indikasi congestion atau overload
 - **Interface yang harusnya up tapi down** → koneksi fisik putus atau port mati
 
-Interface yang perlu diperhatikan: uplink WAN, inter-router link, link ke distribution switch.
+**→ LANGKAH 3 SELESAI. JANGAN TULIS APAPUN. LANGSUNG PANGGIL get_bgp_sessions untuk router gateway (GATE-*, BORDER-*).**
 
 ### Langkah 4: Cek Status Routing (Gateway/Border Router)
 Untuk router yang berperan sebagai gateway atau edge (GATE-*, BORDER-*):
 
-**BGP:**
-```
-get_bgp_sessions(router_name)
-```
+**BGP:** `get_bgp_sessions(router_name)`
 - Session DOWN → koneksi ke provider/peer terputus — dampak ke reachability Internet
-- Prefix count turun signifikan dibanding biasanya → routing tidak lengkap
+- Prefix count turun signifikan → routing tidak lengkap
 
-**OSPF:**
-```
-get_ospf_neighbors(router_name)
-```
+**OSPF:** `get_ospf_neighbors(router_name)`
 - Neighbor tidak Full (Init/2-Way/Exstart) → koneksi internal bermasalah
-- State-changes tinggi (SC > 20) → riwayat instabilitas — monitor lebih lanjut
+- State-changes tinggi (SC > 20) → riwayat instabilitas
+
+**→ LANGKAH 4 SELESAI. JANGAN TULIS APAPUN. LANGSUNG PANGGIL audit_dhcp.**
 
 ### Langkah 5: Audit DHCP
-Jalankan `audit_dhcp` untuk mendapatkan status DHCP di seluruh jaringan. Identifikasi:
-- Pool dengan utilisasi > 85% → segera tambah range atau investigasi exhaustion
+Jalankan `audit_dhcp`. Identifikasi:
+- Pool utilisasi > 85% → segera tambah range atau investigasi exhaustion
 - Router dengan DHCP yang gagal dihubungi
-- Perubahan signifikan jumlah client dibanding baseline normal
+
+**→ LANGKAH 5 SELESAI. JANGAN TULIS APAPUN. LANGSUNG PANGGIL run_command_all untuk cek NTP.**
 
 ### Langkah 6: Cek Sinkronisasi Waktu
-Jalankan `run_command_all` dengan perintah `/system/clock/print` untuk memastikan semua
-router memiliki waktu yang sinkron. Jam yang tidak sinkron bisa menyebabkan masalah
-autentikasi dan logging.
+Jalankan `run_command_all` dengan perintah `/system/clock/print`.
 
-### Langkah 7: Cek Log Anomali Singkat
-Untuk router yang menunjukkan tanda masalah (CPU tinggi, interface error, restart),
-jalankan `get_router_log(router_name, lines=20)` untuk melihat event terbaru.
+**→ LANGKAH 6 SELESAI. JANGAN TULIS APAPUN. Jika ada router bermasalah, PANGGIL get_router_log untuk router tersebut. Jika tidak ada, LANGSUNG tulis laporan.**
 
-Cari:
-- `critical` atau `error` — masalah aktif
-- `interface changed state` — link flapping
-- `BGP` atau `OSPF` state change — routing instability
-- `login failure` berulang — kemungkinan serangan
+### Langkah 7: Cek Log Anomali (Hanya Router Bermasalah)
+Untuk router yang menunjukkan masalah (CPU tinggi, interface error, restart baru):
+`get_router_log(router_name, lines=20)`
+
+**→ LANGKAH 7 SELESAI. SEMUA DATA TERKUMPUL. SEKARANG TULIS LAPORAN.**
+
+---
+
+## ATURAN KRITIS — WAJIB DIPATUHI
+
+1. **DILARANG mencetak teks dari bagian "Output yang Diharapkan"** sebelum semua tool selesai dipanggil.
+2. **HANYA tulis baris untuk router yang namanya muncul dalam hasil `list_routers()`** — jumlah baris = jumlah router aktual. DILARANG menambahkan nama router yang tidak ada di daftar tersebut.
+3. **SEMUA nilai wajib dari tool result aktual:** CPU dari `cpu-load:`, Memory dari `(total-memory - free-memory) / total-memory × 100`, Latency dari check_reachability. Jika tool GAGAL (SSH error, timeout): tulis "Error" — bukan N/A atau asumsi.
+4. DILARANG mengulangi, mengarang, atau mengisi placeholder dengan data dari pengetahuan training.
+
+---
+
+## INSTRUKSI: Tulis output di bawah ini HANYA setelah Langkah 1–7 selesai semua.
 
 ## Output yang Diharapkan
 
-**NETWORK HEALTH — [tanggal jam]**
-**Status:** ✅ [X] normal · ⚠️ [X] perhatian · 🚨 [X] kritis
+**NETWORK HEALTH — [hasil get_current_time()]**
+**Status:** ✅ [jumlah] normal · ⚠️ [jumlah] perhatian · 🚨 [jumlah] kritis
 
 ## Reachability
 
 | Router | Status | Latency |
 |--------|--------|---------|
-| CORE-A | ✅ Up | 1ms |
-| GW-B   | 🚨 Down | timeout |
+| [nama dari list_routers()] | [✅/🚨 dari check_reachability] | [RTT ms atau timeout] |
 
 ## Resource
 
-| Router | CPU | Memory | Status |
-|--------|-----|--------|--------|
-| CORE-A | 45% | 62% | ✅ Normal |
-| CORE-B | 92% | 88% | 🚨 Overload |
+| Router | CPU | Memory | Uptime | Status |
+|--------|-----|--------|--------|--------|
+| [nama dari list_routers()] | [cpu-load% dari get_system_info] | [memory% dari get_system_info] | [uptime dari get_system_info] | [✅/⚠️/🚨] |
 
 ## Protokol Routing
 
 | Router | BGP | OSPF | Status |
 |--------|-----|------|--------|
-| GW-A | ✅ 3/3 established | ✅ Full | ✅ |
-| GW-B | 🚨 2/3 (1 down) | ⚠️ 1 Init | 🚨 |
+| [hanya router GATE-* atau BORDER-*] | [X/Y established dari get_bgp_sessions] | [Full/Down dari get_ospf_neighbors] | [✅/⚠️/🚨] |
 
 ## Action Items
 

@@ -1,8 +1,8 @@
 # Implementation Plan — NetOps AI
 
-**Versi:** 1.0  
-**Tanggal:** 2026-04-27  
-**Branch Target:** `netops`  
+**Versi:** 1.1  
+**Tanggal:** 2026-05-16  
+**Branch Target:** `feature/web-server`  
 **Base Branch:** `main`
 
 ---
@@ -19,6 +19,8 @@
 | 5 | New Tools | traffic.py + config_backup.py | ✅ Selesai | 2f2d897 |
 | 6 | TUI Refactor | Pisahkan LLM logic + Agent Activity screen | ✅ Selesai | 463e419 |
 | 7 | Human-in-the-Loop | Approval mechanism via interrupt() | ✅ Selesai | b031262 |
+| 8 | TUI Replacement | Ganti ncurses dengan Textual framework | ✅ Selesai | 34d6435 |
+| 9 | Platform Maturity | Hallucination fix + commissioning + pedoman + backup enforcement | 🔄 In Progress | e17f2da |
 
 **Legend:** ⬜ Belum · 🔄 In Progress · ✅ Selesai · 🔁 Review
 
@@ -274,6 +276,43 @@
 
 ---
 
+## Phase 9: Platform Maturity
+
+**Goal:** Hardening output quality, safety enforcement code-level, workflow commissioning, dan arsitektur conduct yang maintainable.
+
+### Tasks
+
+| ID | Task | File Target | Status |
+|---|---|---|---|
+| P9-01 | Fix hallucination morning-check (example contamination + premature output) | `skills/monitoring/morning-check.md` | ✅ |
+| P9-02 | Approval modal buttons tidak terlihat (border: tall + height issue) | `tui_textual.py` | ✅ |
+| P9-03 | Tambah narasi edukasi WAJIB setelah setiap tabel | `skills/pedoman-agent.md` | ✅ |
+| P9-04 | Larangan action items pasif (Monitor/Verifikasi/Pertimbangkan) | `skills/pedoman-agent.md` | ✅ |
+| P9-05 | Backup-before-write enforcement code-level di config_node | `agents/nodes.py` | ✅ |
+| P9-06 | Fix /add blocklist false positive (regex path terminal segment) | `tools/config_read.py` | ✅ |
+| P9-07 | Containerlab commissioning workflow (RouterOS CHR, 2 router) | `skills/config/commissioning.md`, `laporan/commissioning-spec-lab.md` | ✅ |
+| P9-08 | Refactor global agent rules ke pedoman-agent.md (hot-reload tanpa restart) | `agents/nodes.py`, `skills/pedoman-agent.md` | ✅ |
+| P9-09 | Local language morning check (triggers lokal + header bahasa Indonesia) | `skills/monitoring/morning-check.md` | ⬜ |
+| P9-10 | Regression test eval.py setelah semua perubahan | `tests/eval.py` | ⬜ |
+
+### Catatan P9
+
+- **pedoman-agent.md** — file conduct global dimuat via `_load_pedoman()` di startup; ubah perilaku semua agent tanpa restart Python
+- **Auto-backup** — `_backed_up_routers: set[str]` per invocation; skip jika LLM sudah call backup duluan; jika operator tolak → write dibatalkan
+- **Commissioning skill** — config_agent baca `laporan/commissioning-spec-lab.md` via `get_report()` saat runtime; ubah parameter (NTP, SNMP, user) di Markdown tanpa ubah kode
+- **Hallucination fix** — 3 lapis: (1) Aturan Kritis larangan print template, (2) INSTRUKSI gate sebelum format section, (3) gate transisi eksplisit setelah setiap langkah
+
+### Definition of Done Phase 9
+
+- Morning check tidak pernah print template verbatim ✅ (P9-01)
+- Agent tidak pernah write ke router tanpa backup didahulukan ✅ (P9-05)
+- `/ip/firewall/address-list/print` tidak diblokir blocklist ✅ (P9-06)
+- `skills/pedoman-agent.md` sebagai single source of truth conduct semua agent ✅ (P9-08)
+- Local language morning check triggers berfungsi ⬜ (P9-09)
+- `python tests/eval.py` pass semua kasus ⬜ (P9-10)
+
+---
+
 ## Tracking Status
 
 ### Progress Overview
@@ -286,19 +325,20 @@ Phase 4: Multi-Agent Graph   [██████████] 100% ✅
 Phase 5: New Tools           [██████████] 100% ✅
 Phase 6: TUI Refactor        [██████████] 100% ✅
 Phase 7: Human-in-the-Loop   [██████████] 100% ✅
-Phase 8: TUI Replacement     [░░░░░░░░░░]   0% ⬜
+Phase 8: TUI Replacement     [██████████] 100% ✅
+Phase 9: Platform Maturity   [████████░░]  80% 🔄
 ```
 
 ### Hasil Akhir
 
 | Metrik | Target | Aktual |
 |---|---|---|
-| Tool atomic | ≥ 20 | 31 |
-| Skill | ≥ 8 | 21 |
-| Lines agent.py | < 300 | 178 |
+| Tool atomic | ≥ 20 | 61 |
+| Skill | ≥ 8 | 32 |
+| Lines agent.py | < 300 | 278 |
 | LLM logic di tui.py | 0 | 0 |
-| Specialist agents | 4 | 5 |
-| Total commit di branch | — | 10+ |
+| Specialist agents | 4 | 6 |
+| Total commit di branch | — | 81 |
 
 ---
 
@@ -315,4 +355,4 @@ P1 (Foundation)
                     └── P8 (TUI Replacement)
 ```
 
-P5, P6, P7 dikerjakan paralel setelah P4 selesai. P8 dikerjakan setelah P7 verified.
+P5, P6, P7 dikerjakan paralel setelah P4 selesai. P8 dikerjakan setelah P7 verified. P9 dikerjakan paralel dengan P8 (hardening tidak blokir TUI launch).

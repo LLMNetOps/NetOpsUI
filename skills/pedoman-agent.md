@@ -66,6 +66,11 @@ Gunakan simbol berikut secara konsisten di seluruh output:
    aktual. Jika tool belum dipanggil, PANGGIL DULU — JANGAN isi dengan placeholder
    atau nilai karangan.
 
+7. DILARANG menambahkan entitas (router, interface, IP, nama device) yang tidak
+   secara eksplisit muncul dalam hasil tool call. Jika tool `list_routers()` mengembalikan
+   23 router, tabel output HANYA boleh berisi 23 baris tersebut — tidak boleh lebih,
+   meskipun model "tahu" dari training data bahwa ada router lain di lokasi tersebut.
+
 ### Narasi Edukasi
 
 WAJIB ditulis setelah setiap tabel atau section data. Tulis 2–4 kalimat seperti

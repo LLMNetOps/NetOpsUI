@@ -1,7 +1,7 @@
 # PRD — NetOps AI: AI-Powered Campus Network Operations Platform
 
-**Versi:** 1.1  
-**Tanggal:** 2026-05-04  
+**Versi:** 1.2  
+**Tanggal:** 2026-05-16  
 **Status:** Selesai  
 **Author:** Alan
 
@@ -42,17 +42,18 @@ Branch baru ini (`netops`) mengembangkan tool tersebut menjadi platform operasio
 
 ## 4. Scope
 
-### 4.1 In Scope (Branch `netops`)
-- Multi-agent LangGraph: Supervisor + 5 specialist agents (monitor, diagnose, config, security, document)
-- Skill system berbasis Markdown dengan hot reload; template sistem untuk panduan format laporan
-- Tools: reachability, system resource, routing, interface, traffic stats, DHCP, log, config read, config backup, security, diagnostic, report, document
-- TUI: Agent Activity panel untuk monitoring komunikasi agent
-- Human-in-the-loop approval untuk operasi berisiko (config backup)
+### 4.1 In Scope (Branch `feature/web-server`)
+- Multi-agent LangGraph: Supervisor + 6 specialist agents (monitor, diagnose, config, security, document, netbox)
+- Skill system berbasis Markdown dengan hot reload; 32 skill aktif; `pedoman-agent.md` sebagai global conduct file
+- Tools: reachability, system resource, routing, interface, traffic stats, DHCP, log, config read/write, config backup, security, diagnostic, NetBox IPAM, report, document — **61 tools**
+- TUI Textual (`tui_textual.py`): chat + approval modal + token metrics di footer
+- Human-in-the-loop approval untuk backup dan write operations (enforced code-level)
+- Write operations ke router via `run_command_write` dengan mandatory backup-before-write
+- Commissioning workflow: router baru dari fresh via skill + design doc
 - Pengembangan scope dari DHCP-only → network operations menyeluruh
-- Document agent: tulis laporan terstruktur ke file, kelola template, kurasi output agent lain
+- NetBox agent: IPAM drift detection, sync konfigurasi
 
-### 4.2 Out of Scope (v1.0)
-- Write operations ke router (set, add, remove) — hanya read + backup
+### 4.2 Out of Scope (masih)
 - Web interface / REST API
 - Wireless/CAPsMAN monitoring
 - IPv6 support

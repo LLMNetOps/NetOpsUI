@@ -1,7 +1,7 @@
 # Architecture Document — NetOps AI
 
-**Versi:** 2.1  
-**Tanggal:** 2026-05-09  
+**Versi:** 2.2  
+**Tanggal:** 2026-05-16  
 **Status:** Selesai
 
 ---
@@ -12,8 +12,9 @@ NetOps AI adalah platform operasional jaringan kampus berbasis multi-agent LangG
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                         TUI (tui.py)                        │
-│   Input ──► agent.py public API ◄── Agent Activity Panel   │
+│              TUI (tui_textual.py — aktif)                   │
+│              TUI (tui.py — legacy ncurses)                  │
+│   Input ──► agent.py public API ◄── Approval Modal         │
 └─────────────────────────┬───────────────────────────────────┘
                            │ stream_agent_response()
 ┌─────────────────────────▼───────────────────────────────────┐
@@ -39,10 +40,11 @@ NetOps AI adalah platform operasional jaringan kampus berbasis multi-agent LangG
 ```
 llmnetops/
 ├── agent.py                    ← Public API + NetworkOpsState + SkillLibrary singleton
-├── tui.py                      ← UI only (zero LLM logic)
+├── tui_textual.py              ← UI aktif (Textual framework)
+├── tui.py                      ← UI legacy (ncurses, zero LLM logic)
 ├── generate_reports.py         ← Standalone DHCP report generator
 │
-├── tools/                      ← 34 atomic SSH operations
+├── tools/                      ← 61 atomic SSH operations
 │   ├── base.py                 ← SSH helper, config loader, _validate_router
 │   ├── reachability.py         ← ICMP ping, SSH access check
 │   ├── system.py               ← CPU, RAM, uptime
@@ -52,40 +54,34 @@ llmnetops/
 │   ├── dhcp.py                 ← DHCP lease queries, search device, audit_dhcp
 │   ├── log.py                  ← Router log pull
 │   ├── config_read.py          ← Run command (read-only), run_command_all
+│   ├── config_write.py         ← run_command_write (butuh approval)
 │   ├── config_backup.py        ← Export + save, diff, list backups
+│   ├── config_yaml.py          ← Update config.yaml via agent
 │   ├── security.py             ← User audit, firewall, NTP check
 │   ├── diagnostic.py           ← Ping/traceroute dari router
+│   ├── netbox.py               ← NetBox IPAM: drift check, sync
 │   ├── report.py               ← List/read/section/toc laporan Markdown
 │   ├── document.py             ← list/read/write template, write_document, write_skill
 │   └── utility.py              ← list_routers, get_current_time
 │
-├── skills/                     ← Operator-defined Markdown knowledge files
+├── skills/                     ← Operator-defined Markdown knowledge files (32 skill)
 │   ├── __init__.py             ← from skills.library import Skill, SkillLibrary
 │   ├── library.py              ← SkillLibrary class + Skill dataclass + hot reload
-│   ├── dhcp/
-│   │   ├── dhcp-client-diagnostics.md   ← diagnosa client gagal dapat IP
-│   │   ├── dhcp-pool-audit.md           ← audit utilisasi pool DHCP
-│   │   └── utbk-session-monitoring.md   ← monitoring peserta UTBK
-│   ├── routing/
-│   │   ├── ospf-diagnostics.md          ← diagnosa OSPF neighbor/state
-│   │   └── bgp-diagnostics.md           ← diagnosa BGP session/prefix
-│   ├── monitoring/
-│   │   ├── network-health-check.md      ← health check menyeluruh
-│   │   ├── network-reachability.md      ← investigasi router unreachable
-│   │   ├── network-traffic-analysis.md  ← analisis bandwidth & top talkers
-│   │   └── network-status-report.md     ← ringkasan status jaringan
-│   ├── security/
-│   │   └── security-audit.md            ← audit postur keamanan router
-│   ├── config/
-│   │   └── config-backup.md             ← prosedur backup konfigurasi
-│   └── documents/
-│       └── document-writing.md          ← penulisan laporan ke file
+│   ├── pedoman-agent.md        ← GLOBAL: conduct rules semua agent (dimuat otomatis)
+│   ├── dhcp/                   ← 3 skill
+│   ├── routing/                ← 4 skill
+│   ├── monitoring/             ← 6 skill (termasuk morning-check)
+│   ├── security/               ← 3 skill
+│   ├── config/                 ← 6 skill (termasuk commissioning)
+│   ├── interface/              ← 1 skill
+│   ├── maintenance/            ← 1 skill
+│   └── documents/              ← 5 file (skill + template)
 │
 ├── agents/                     ← Multi-agent LangGraph
 │   ├── __init__.py             ← from agents.graph import build_graph
 │   ├── graph.py                ← StateGraph builder (START→supervisor→specialists→END)
-│   ├── nodes.py                ← supervisor_node + 5 specialist nodes (loader-driven)
-│   ├── tools.py                ← TOOL_MAP (flat, semua 34 tools)
+│   ├── nodes.py                ← supervisor_node + 6 specialist nodes (loader-driven)
+│   ├── tools.py                ← TOOL_MAP (flat, semua 61 tools)
 │   ├── loader.py               ← AgentLoader + AgentDefinition dataclass
 │   └── definitions/            ← Agent definition files (single source of truth)
 │       ├── supervisor.md
@@ -93,7 +89,8 @@ llmnetops/
 │       ├── diagnose_agent.md
 │       ├── config_agent.md
 │       ├── security_agent.md
-│       └── document_agent.md
+│       ├── document_agent.md
+│       └── netbox_agent.md
 │
 ├── docs/                       ← Project documentation
 ├── backups/                    ← Config backups (gitignored)
@@ -128,17 +125,22 @@ START
   │         └─────────────────────────────────────────►┤
   │                                                     │
   ├──► [config_agent]    → tools: config_read,         │
-  │                        config_backup (10 tools)     │
-  │         │           ← interrupt() jika backup      │
+  │                        config_write, config_backup  │
+  │         │           ← interrupt() backup + write   │
   │         └─────────────────────────────────────────►┤
   │                                                     │
   ├──► [security_agent]  → tools: security, log,       │
-  │                        config_read (6 tools)        │
+  │                        config_read                  │
+  │         │                                           │
+  │         └─────────────────────────────────────────►┤
+  │                                                     │
+  ├──► [netbox_agent]    → tools: netbox, list_routers │
+  │                        check_reachability           │
   │         │                                           │
   │         └─────────────────────────────────────────►┤
   │                                                     │
   └──► [document_agent]  → tools: document, report,    │
-                           template (20 tools)          │
+                           template                     │
             │                                           │
             └───────────────────────────────────────── ┘
                                                         │
@@ -155,7 +157,7 @@ Supervisor menggunakan LLM untuk menentukan:
 ```python
 # Supervisor routing decision (JSON-mode LLM output)
 {
-    "next_agent": "monitor_agent | diagnose_agent | config_agent | security_agent | END",
+    "next_agent": "monitor_agent | diagnose_agent | config_agent | security_agent | netbox_agent | document_agent | END",
     "relevant_skills": ["skill-name-1", "skill-name-2"],
     "reasoning": "<1 kalimat alasan>"
 }
@@ -189,7 +191,8 @@ class NetworkOpsState(TypedDict):
     next_agent:         str                                     # supervisor routing decision
     active_agent:       str                                     # currently executing agent
     injected_skills:    list[str]                               # skill names yang sedang aktif
-    agent_log:          Annotated[list[AgentLogEntry], _append] # visible di TUI Agent Activity
+    agent_log:          Annotated[list[AgentLogEntry], _append] # visible di TUI
+    reasoning:          str                                     # debug reasoning supervisor
     pending_approval:   ApprovalRequest | None                  # blocked waiting for operator
     approval_decision:  str | None                              # "approved" | "rejected"
 ```
@@ -249,22 +252,42 @@ enabled: true
 **Frontmatter YAML** → dibaca runtime untuk routing dan tool-loading.  
 **Body Markdown** → di-inject sebagai system context ke specialist agent.
 
-### 5.3 Daftar Skill (12 skill aktif)
+### 5.3 Daftar Skill (32 skill aktif)
 
-| Skill | Domain | Agent | Keterangan |
-|-------|--------|-------|------------|
-| `network-health-check` | monitoring | monitor | Health check menyeluruh semua router |
-| `network-reachability` | monitoring | monitor | Investigasi router unreachable |
-| `network-traffic-analysis` | monitoring | monitor | Analisis bandwidth & top talkers |
-| `network-status-report` | monitoring | monitor | Ringkasan status jaringan |
-| `dhcp-pool-audit` | dhcp | monitor | Audit utilisasi DHCP pool |
-| `dhcp-client-diagnostics` | dhcp | diagnose | Diagnosa client gagal dapat IP |
-| `utbk-session-monitoring` | dhcp | monitor | Monitoring peserta UTBK |
-| `bgp-diagnostics` | routing | diagnose | Diagnosa BGP session/prefix |
-| `ospf-diagnostics` | routing | diagnose | Diagnosa OSPF neighbor/state |
-| `security-audit` | security | security | Audit postur keamanan router |
-| `config-backup` | config | config | Prosedur backup konfigurasi |
-| `document-writing` | documents | document | Penulisan laporan ke file |
+| Domain | Skill | Agent | Keterangan |
+|--------|-------|-------|------------|
+| monitoring | `network-health-check` | monitor | Health check menyeluruh semua router |
+| monitoring | `network-reachability` | monitor | Investigasi router unreachable |
+| monitoring | `network-traffic-analysis` | monitor | Analisis bandwidth & top talkers |
+| monitoring | `network-status-report` | monitor | Ringkasan status jaringan |
+| monitoring | `morning-check` | monitor | Morning check harian — reachability + BGP + traffic |
+| monitoring | `capacity-planning` | monitor | Analisis utilisasi dan proyeksi kapasitas |
+| monitoring | `mtu-mismatch-diagnostics` | diagnose | Diagnosa MTU mismatch antar segmen |
+| monitoring | `netbox-read` | monitor/netbox | Query NetBox via agent |
+| dhcp | `dhcp-pool-audit` | monitor | Audit utilisasi DHCP pool |
+| dhcp | `dhcp-client-diagnostics` | diagnose | Diagnosa client gagal dapat IP |
+| dhcp | `utbk-session-monitoring` | monitor | Monitoring peserta UTBK |
+| dhcp | `static-lease-management` | config | Kelola static lease DHCP |
+| routing | `bgp-diagnostics` | diagnose | Diagnosa BGP session/prefix |
+| routing | `ospf-diagnostics` | diagnose | Diagnosa OSPF neighbor/state |
+| routing | `bgp-prefix-leak` | diagnose | Deteksi dan respons BGP prefix leak |
+| routing | `static-route-management` | config | Kelola static route |
+| security | `security-audit` | security | Audit postur keamanan router |
+| security | `brute-force-response` | security | Deteksi dan blokir brute force |
+| security | `firewall-management` | security/config | Kelola aturan firewall |
+| config | `config-backup` | config | Prosedur backup konfigurasi |
+| config | `config-change` | config | Workflow perubahan konfigurasi dengan approval |
+| config | `commissioning` | config | Komisioning router baru dari fresh |
+| config | `vlan-provisioning` | config | Provisioning VLAN baru |
+| config | `router-discovery` | config | Deteksi dan registrasi router baru |
+| config | `netbox-sync` | config/netbox | Sync konfigurasi ke NetBox |
+| interface | `link-diagnostics` | diagnose | Diagnosa masalah interface/link |
+| maintenance | `router-maintenance` | config | Prosedur maintenance router |
+| documents | `document-writing` | document | Penulisan laporan ke file |
+| documents | `skill-authoring` | document | Membuat skill baru |
+
+**File khusus (bukan skill biasa):**
+- `skills/pedoman-agent.md` — Conduct rules global, dimuat otomatis ke semua agent system prompt. Tidak perlu dicantumkan di definisi agent manapun. Edit file ini untuk mengubah perilaku semua agent sekaligus.
 
 ### 5.4 SkillLibrary
 
@@ -368,10 +391,11 @@ Model aktif: **qwen3.5:9b** (lihat Section 6.8 untuk alasan pemilihan model).
 | Agent | num_ctx | num_predict | context_window | timeout | Alasan |
 |-------|---------|-------------|----------------|---------|--------|
 | supervisor | 8192 | 2048 | 6 | 60s | Output JSON routing; qwen tokenizer 2.2× lebih verbose |
-| monitor_agent | 16384 | 2048 | 10 | 300s | Tool results 17+ router menumpuk di context |
+| monitor_agent | 32768 | 16384 | 20 | 600s | Tool results 17+ router + morning check multi-step |
 | diagnose_agent | 16384 | 2048 | 10 | 300s | Logs + routing table + analisis RCA |
-| config_agent | 16384 | 2048 | 10 | 180s | Config export per router |
+| config_agent | 16384 | 2048 | 10 | 180s | Config export per router + commissioning |
 | security_agent | 16384 | 2048 | 10 | 300s | Audit results + log parsing |
+| netbox_agent | 16384 | 2048 | 10 | 300s | NetBox API results bisa verbose |
 | document_agent | 24576 | 4096 | 20 | 600s | Seluruh history percakapan + template |
 
 > **Catatan tokenizer:** qwen3.5:9b menghasilkan ~2.2× lebih banyak token dibanding gemma4:e4b
@@ -736,12 +760,14 @@ config_agent memutuskan perlu backup
 | Level | Contoh Aksi | Default |
 |---|---|---|
 | `medium` | Config backup, export config | Require approval |
-| `high` | (future) write operations | Require approval |
+| `high` | Write operations (`run_command_write`) | Require approval |
 | `low` | Read-only queries | Auto-proceed |
+
+**Auto-backup enforcement:** `config_node` menjamin backup selalu dilakukan sebelum `run_command_write` pertama ke setiap router, terlepas dari urutan tool yang dipilih LLM. Ini enforced di code level (`_backed_up_routers` set per invocation), bukan di instruksi LLM.
 
 ---
 
-## 8. Public API (agent.py → tui.py)
+## 8. Public API (agent.py → tui.py / tui_textual.py)
 
 ```python
 # Inisialisasi
@@ -757,52 +783,67 @@ def stream_agent_response(
 # Yields: (event_type, content)
 # event_type: "routing" | "tool_call" | "tool_result" | "ai" | "approval_required" | "error"
 
-# Approval
+# Approval — dua varian:
 def submit_approval(
     graph: CompiledStateGraph,
     config: RunnableConfig,
     decision: str           # "approved" | "rejected"
 ) -> None
+# Headless/non-streaming. Pakai ini untuk testing atau CLI satu-shot.
+
+def resume_after_approval(
+    graph: CompiledStateGraph,
+    config: RunnableConfig,
+    decision: str
+) -> Iterator[tuple[str, str]]
+# Streaming variant — WAJIB dipakai TUI agar interrupt berikutnya
+# (multi-step write chain) tetap sampai ke UI.
 
 # Info
 def get_available_skills() -> list[dict]    # untuk TUI display
 def get_agent_status() -> dict
+def get_token_metrics(n: int = 100) -> list[dict]  # ctx/pred usage per message
 ```
 
 ---
 
-## 9. TUI Interface Changes
+## 9. TUI Interface
 
-### 9.1 Perubahan AIScreen
+### 9.1 tui_textual.py (aktif — Phase 8)
 
-**Sebelum:**
-- `AIScreen` berisi `_call_agent()`, `_call_ollama()`, LangGraph imports
-- Import `agent` module langsung
-
-**Sesudah:**
-- `AIScreen` hanya memanggil `agent.stream_agent_response()`
-- Handle event types yang di-yield
-- Zero LLM logic di `tui.py`
-
-### 9.2 Screen Baru: AgentActivityScreen (Menu item 7)
+Textual framework. Layout: single-panel chat mendominasi layar penuh.
 
 ```
-┌─ Agent Activity ──────────────────────────────────────────┐
-│ [14:32:01] supervisor   → routing ke monitor_agent        │
-│ [14:32:01] monitor      ⚙ tool_call: check_reachability   │
-│                           └─ DTI (10.39.0.1): ✓ 1.2ms    │
-│ [14:32:02] monitor      ⚙ tool_call: get_system_info      │
-│                           └─ CPU 12%, RAM 45%, up 14d     │
-│ [14:32:03] monitor      ← kembali ke supervisor           │
-│ [14:32:04] supervisor   ✓ synthesis selesai               │
-├───────────────────────────────────────────────────────────┤
-│  ⚠ APPROVAL REQUIRED                                      │
-│  Agent  : config_agent                                    │
-│  Aksi   : Backup config FILKOM-CORE                       │
-│  Risk   : MEDIUM                                          │
-│  [Y] Approve    [N] Reject                                │
-└───────────────────────────────────────────────────────────┘
+┌─ [eko — idle] ───────────────────────────────────────────────┐
+│ [14:32:01] → routing ke monitor_agent (skill: morning-check)  │
+│ [14:32:01] ⚙ check_reachability(DTI) ✓ 1.2ms                 │
+│ [14:32:02] ⚙ get_system_info(DTI) ✓ CPU 12%, up 14d          │
+│ ...                                                           │
+│ ┌ AI ──────────────────────────────────────────────────────┐  │
+│ │ ✅ 15 normal · ⚠️ 1 perhatian · 🚨 0 kritis             │  │
+│ │ ...                                                      │  │
+│ └──────────────────────────────────────────────────────────┘  │
+├───────────────────────────────────────────────────────────────┤
+│ ctx ████░░ 19% · pred ████░░ 26% · 8 tools · 00:02:14        │
+└───────────────────────────────────────────────────────────────┘
 ```
+
+**Approval modal** — Textual `ModalScreen`, muncul saat `approval_required`:
+```
+╔══════════════════════════════════════╗
+║  ⚠  KONFIRMASI TINDAKAN             ║
+║  Agent  : joko (config_agent)       ║
+║  Aksi   : Backup FILKOM-CORE        ║
+║  Risk   : MEDIUM                    ║
+║  [Setuju, jalankan]  [Tolak]        ║
+╚══════════════════════════════════════╝
+```
+
+**Keyboard shortcuts:** `ctrl+y` copy, `ctrl+b` copy raw, `ctrl+e` suspend + view log di `less`
+
+### 9.2 tui.py (legacy ncurses)
+
+Tetap berfungsi. Dipertahankan sampai `tui_textual.py` verified stable di produksi.
 
 ---
 
@@ -845,9 +886,11 @@ def get_agent_status() -> dict
 | `write_skill` | | | | | ✓ |
 | `get_current_time` | ✓ | ✓ | ✓ | ✓ | ✓ |
 
-⚠ `backup_router_config` memerlukan persetujuan operator (interrupt gate).
+⚠ `backup_router_config` dan `run_command_write` memerlukan persetujuan operator (interrupt gate).
 
-**Total: 34 tool atomic** | Source of truth: `agents/definitions/*.md` + `AgentLoader.validate()`
+**Total: 61 tool atomic** | Source of truth: `agents/definitions/*.md` + `AgentLoader.validate()`
+
+> Tabel di atas merepresentasikan tool utama. Tool tambahan (netbox, config_write, config_yaml, dll) terdaftar di `agents/tools.py:TOOL_MAP`. Kolom `netbox_agent` belum ditampilkan — lihat `agents/definitions/netbox_agent.md`.
 
 ---
 
