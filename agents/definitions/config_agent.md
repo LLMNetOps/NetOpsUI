@@ -47,7 +47,9 @@ skills:
   - firewall-management
   - brute-force-response
   - static-route-management
-handoff_to: []
+  - commissioning
+handoff_to:
+  - document_agent
 approval_required_tools:
   - backup_router_config
   - run_command_write

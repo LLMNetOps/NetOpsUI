@@ -177,8 +177,8 @@ def add_router_to_config(
         network: Network router — 'kampus' atau 'idren'.
         ros_version: Versi RouterOS — 6 atau 7.
     """
-    VALID_ROLES = {"access", "backbone", "gate_idren"}
-    VALID_NETWORKS = {"kampus", "idren"}
+    VALID_ROLES = {"access", "backbone", "gate_idren", "lab"}
+    VALID_NETWORKS = {"kampus", "idren", "lab"}
     if role not in VALID_ROLES:
         return f"Role '{role}' tidak valid. Pilihan: {', '.join(sorted(VALID_ROLES))}."
     if network not in VALID_NETWORKS:
