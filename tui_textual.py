@@ -144,7 +144,7 @@ ChatPanel {
 .btn-stop {
     background: #4a1f1f;
     color: #ff7b72;
-    border: tall #ff7b72;
+    border: none;
     height: 1;
     min-width: 8;
     margin-left: 1;
@@ -152,7 +152,7 @@ ChatPanel {
 .btn-clear {
     background: #0e1014;
     color: #a8aeba;
-    border: tall #363b46;
+    border: none;
     height: 1;
     min-width: 7;
     margin-left: 1;
@@ -615,7 +615,7 @@ class ChatPanel(Widget):
 class StatusBar(Widget):
     def compose(self) -> ComposeResult:
         yield Static("● ready", id="sb-state")
-        yield Static("↵ send · ^y copy · ^b log · ^e view · ^c quit", id="sb-hint")
+        yield Static("↵ send  ^y copy  ^b log  ^e view  ^c quit", id="sb-hint")
 
     def update_state(self, text: str, style: str = "#a8aeba") -> None:
         try:
