@@ -177,59 +177,69 @@ Router kampus tidak perlu drift check — NetBox hanya tracking device IDREN unt
 
 Gunakan format Markdown berikut. Simbol wajib: ✅ normal, ⚠️ perhatian, 🚨 kritis/down.
 
+🚨 **LARANGAN KERAS FORMAT:**
+- Semua nilai dalam tabel (nama router, angka, status) HARUS berasal dari hasil tool call.
+- DILARANG mengisi tabel dengan tebakan, estimasi, atau nilai yang tidak ada dalam tool result.
+- Kolom yang tidak punya data dari tool → tulis `—`, BUKAN angka atau status apapun.
+- Satu baris per router. DILARANG menggabungkan beberapa router dalam satu baris.
+
 ---
 
-**MORNING CHECK — [tanggal] [jam WIB]**
+**MORNING CHECK — [tanggal dari get_current_time()] [jam WIB]**
 **Scope:** [SEMUA | IDREN | KAMPUS | BACKBONE | ACCESS]
-**Status:** ✅ [X] normal · ⚠️ [X] perhatian · 🚨 [X] kritis
+**Status:** ✅ [jumlah] normal · ⚠️ [jumlah] perhatian · 🚨 [jumlah] kritis
 
 ---
 
 ## Reachability
 
+*(Isi satu baris per router dari hasil check_reachability — nama dan latency dari tool result)*
+
 | Router | Role | Status | Latency |
 |--------|------|--------|---------|
-| GW-A | gate_idren | ✅ Up | 2ms |
-| GW-B | gate_idren | 🚨 Down | timeout |
+| [nama dari list_routers] | [role] | ✅ Up / 🚨 Down | [ms dari tool] |
 
 ## Resource Kampus *(skip jika scope IDREN)*
 
-✅ Semua normal — atau:
+*(Isi dari hasil get_system_info — skip jika semua normal)*
 
 | Router | CPU | Memory | Uptime | Status |
 |--------|-----|--------|--------|--------|
-| CORE-A | 45% | 62% | 14d | ✅ Normal |
-| CORE-B | 92% | 88% | 2m | 🚨 Baru restart |
+| [nama router] | [CPU%] | [Mem%] | [uptime] | ✅/⚠️/🚨 |
 
 ## BGP Session
 
+*(Isi dari hasil get_bgp_sessions — satu baris per router, angka dari tool result)*
+
 | Router | Established | Down | Peer Down | Status |
 |--------|-------------|------|-----------|--------|
-| GW-A | 3 | 0 | — | ✅ |
-| GW-B | 2 | 1 | PEER-ISP-X | 🚨 |
+| [nama router] | [jumlah established] | [jumlah down] | [nama peer atau —] | ✅/🚨 |
 
-*Detail peer down: nama peer, prefiks terakhir, durasi down.*
+*Jika ada session down: sebutkan nama peer, jumlah prefiks, dan durasi down dari tool result.*
 
 ## Traffic Puncak
 
+*(Isi dari hasil get_top_interfaces_all — jika tidak ada data: tulis "Tidak ada data traffic")*
+
 | Interface | Router | Utilisasi | Status |
 |-----------|--------|-----------|--------|
-| ether1 | GW-A | 45% | ✅ Normal |
-| ether2 | GW-B | 87% | ⚠️ Hampir penuh |
+| [nama interface] | [nama router] | [%] | ✅/⚠️/🚨 |
 
 ## Log 24 Jam
 
+*(Isi dari hasil get_router_log — satu baris per router)*
+
 | Router | Event | Jumlah | Status |
 |--------|-------|--------|--------|
-| GW-A | — | 0 | ✅ Bersih |
-| GW-B | link flapping ether3 | 8x | 🚨 |
+| [nama router] | [jenis event atau —] | [jumlah atau 0] | ✅ Bersih / 🚨 |
 
 ## NetBox Drift *(skip jika scope kampus)*
 
+*(Isi dari hasil get_netbox_drift_report — satu baris per router)*
+
 | Router | Drift Item | Jumlah | Status |
 |--------|-----------|--------|--------|
-| GW-A | — | 0 | ✅ Sinkron |
-| GW-B | IP tidak terdaftar | 2 | ⚠️ |
+| [nama router] | [item drift atau —] | [jumlah atau 0] | ✅ Sinkron / ⚠️ |
 
 ---
 
@@ -237,11 +247,11 @@ Gunakan format Markdown berikut. Simbol wajib: ✅ normal, ⚠️ perhatian, �
 
 *Jika tidak ada masalah: "✅ Tidak ada action item — jaringan normal."*
 
-Jika ada masalah:
+Jika ada masalah (hanya berdasarkan temuan dari tool result, BUKAN asumsi):
 
-1. 🚨 **SEGERA** — [tindakan mendesak, selesaikan sekarang]
-2. ⚠️ **PERLU** — [tindakan penting, selesaikan hari ini]
-3. 💡 **OPSIONAL** — [rekomendasi improvement jangka panjang]
+1. 🚨 **SEGERA** — [tindakan spesifik berdasarkan temuan konkret]
+2. ⚠️ **PERLU** — [tindakan penting berdasarkan temuan konkret]
+3. 💡 **OPSIONAL** — [rekomendasi improvement berdasarkan data]
 
 ## Catatan
 

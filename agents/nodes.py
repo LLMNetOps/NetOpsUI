@@ -601,14 +601,10 @@ Aturan format:
 1. DATA TABULAR (BGP session, NetBox drift, DHCP pool, interface stats, dll):
    WAJIB gunakan tabel Markdown. Satu baris per router/item. DILARANG menumpuk
    data beberapa router dalam satu baris atau satu paragraf.
-   Contoh:
-   | Router | Status | Peer | Prefiks |
-   |--------|--------|------|---------|
-   | GW-A   | ✅ Established | 10.0.0.1 | 120 |
-   | GW-B   | 🚨 Idle | 10.0.0.2 | 0 |
+   Format kolom: | [nama router dari tool] | [nilai dari tool] | [simbol status] |
 
 2. RINGKASAN: Awali respons dengan satu baris status keseluruhan menggunakan simbol.
-   Contoh: "✅ 5/6 router normal · ⚠️ 1 router degraded · 🚨 0 down"
+   Format: "[simbol] [jumlah] normal · [simbol] [jumlah] perhatian · [simbol] [jumlah] kritis"
 
 3. ACTION ITEMS: Jika ada masalah, akhiri dengan section "## Action Items" berisi
    daftar bernomor dengan label prioritas:
@@ -619,6 +615,11 @@ Aturan format:
 4. SECTION HEADERS: Gunakan `##` untuk setiap bagian utama (BGP, OSPF, Traffic, dll).
 
 5. DILARANG menumpuk data horizontal — setiap router/item HARUS pada baris terpisah.
+
+6. DILARANG menggunakan data contoh dari instruksi skill sebagai output. Format
+   dalam skill hanya menunjukkan STRUKTUR kolom — nilai HARUS dari hasil tool call
+   aktual. Jika tool belum dipanggil, PANGGIL DULU — JANGAN isi dengan placeholder
+   atau nilai karangan.
 
 {skill_context}
 """
