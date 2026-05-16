@@ -74,6 +74,8 @@ Contoh:
 - JANGAN tulis "N/A (belum cek...)" — jika belum dikerjakan, kerjakan dulu
 - JANGAN tulis action items untuk langkah yang belum dilakukan — lakukan langkah itu sekarang
 - JANGAN berhenti di tengah prosedur dan menulis ringkasan parsial
+- JANGAN cetak teks dari bagian "Format Output" sebelum semua tool selesai — format itu HANYA template struktur, bukan output yang harus dicetak
+- SEMUA nilai dalam tabel output HARUS berasal dari hasil tool call aktual. DILARANG mengisi tabel dengan tebakan, estimasi, atau nilai karangan. Kolom tanpa data dari tool → tulis `—`.
 
 Jika scope IDREN saja: skip Langkah 2 (resource kampus), tapi Langkah 0,1,3,4,5,6 WAJIB semua.
 
@@ -175,13 +177,8 @@ Router kampus tidak perlu drift check — NetBox hanya tracking device IDREN unt
 
 ## Format Output
 
-Gunakan format Markdown berikut. Simbol wajib: ✅ normal, ⚠️ perhatian, 🚨 kritis/down.
-
-🚨 **LARANGAN KERAS FORMAT:**
-- Semua nilai dalam tabel (nama router, angka, status) HARUS berasal dari hasil tool call.
-- DILARANG mengisi tabel dengan tebakan, estimasi, atau nilai yang tidak ada dalam tool result.
-- Kolom yang tidak punya data dari tool → tulis `—`, BUKAN angka atau status apapun.
-- Satu baris per router. DILARANG menggabungkan beberapa router dalam satu baris.
+INSTRUKSI: Tulis output ini HANYA setelah semua langkah tool call di atas selesai (0–6).
+Setiap nilai dalam tabel harus dari tool result. Satu baris per router.
 
 ---
 
