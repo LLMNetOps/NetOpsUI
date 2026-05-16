@@ -274,15 +274,15 @@ ApprovalModal { align: center middle; }
 #dlg-acts {
     layout: horizontal;
     align: right middle;
-    height: 1;
+    height: 3;
     padding: 0 1;
     margin-top: 1;
-    border-top: tall #252932;
+    border-top: solid #252932;
 }
 .btn-reject {
     background: #0e1014;
     color: #a8aeba;
-    border: tall #363b46;
+    border: none;
     height: 1;
     min-width: 8;
     margin-right: 1;
@@ -290,7 +290,7 @@ ApprovalModal { align: center middle; }
 .btn-approve {
     background: #f0b85c;
     color: #08090b;
-    border: tall #f0b85c;
+    border: none;
     height: 1;
     min-width: 18;
     text-style: bold;
