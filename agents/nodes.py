@@ -772,6 +772,32 @@ def config_node(state: dict) -> dict:
 
     messages = [sys_msg] + list(state["messages"])[-10:]
     logs: list[dict] = []
+    _backed_up_routers: set[str] = set()
+
+    def _auto_backup(router: str) -> bool:
+        """Trigger backup approval + execution. Return True if approved and done."""
+        approval_req = {
+            "agent": "config_agent",
+            "action": f"Backup otomatis sebelum write — router '{router}'",
+            "risk_level": "medium",
+            "details": {"router_name": router},
+        }
+        logs.append(_log("config_agent", "approval_required",
+                         f"Backup sebelum write: {router}"))
+        decision = interrupt(approval_req)
+        if decision != "approved":
+            logs.append(_log("config_agent", "tool_result",
+                             f"Backup ditolak — write ke '{router}' dibatalkan."))
+            return False
+        backup_fn = _CONFIG_TOOLS_MAP.get("backup_router_config")
+        if backup_fn:
+            try:
+                res = backup_fn.invoke({"router_name": router})
+                logs.append(_log("config_agent", "tool_result", str(res)[:120]))
+            except Exception as exc:
+                logs.append(_log("config_agent", "tool_result", f"Backup error: {exc}"))
+        _backed_up_routers.add(router)
+        return True
 
     for _ in range(12):
         response = _CONFIG_LLM.invoke(messages)
@@ -786,8 +812,20 @@ def config_node(state: dict) -> dict:
             args_str = ", ".join(f"{k}={json.dumps(v)}" for k, v in args.items())
             logs.append(_log("config_agent", "tool_call", f"{name}({args_str})"))
 
+            router = args.get("router_name", "router")
+
+            # Track LLM-initiated backups so auto-backup can skip them
+            if name == "backup_router_config" and router:
+                _backed_up_routers.add(router)
+
+            # Enforce backup before first write to each router
+            if name == "run_command_write" and router and router not in _backed_up_routers:
+                if not _auto_backup(router):
+                    result = "Write dibatalkan: operator menolak backup."
+                    messages.append(ToolMessage(content=result, tool_call_id=tc["id"]))
+                    continue
+
             if name in _APPROVAL_REQUIRED_TOOLS:
-                router = args.get("router_name", "router")
                 if name == "backup_router_config":
                     action_desc = f"Backup config router '{router}'"
                     risk = "medium"

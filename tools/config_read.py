@@ -15,11 +15,14 @@ from tools.base import (
 
 _BLOCKED_KEYWORDS = [
     "remove", "delete", " set ", "=set", "/set",
-    " add ", "=add", "/add",
+    " add ", "=add",
     "move", "enable", "disable",
     "reset", "reboot", "shutdown", "format",
     "export sensitive", "password",
 ]
+
+# /add harus dicocokkan sebagai segmen path, bukan substring dari /address-list dll.
+_BLOCKED_PATH_ADD = re.compile(r'/add(?=[= ]|$)')
 
 
 def _is_safe_command(command: str) -> tuple[bool, str]:
@@ -28,6 +31,8 @@ def _is_safe_command(command: str) -> tuple[bool, str]:
     for blocked in _BLOCKED_KEYWORDS:
         if blocked in cmd_lower:
             return False, blocked.strip()
+    if _BLOCKED_PATH_ADD.search(cmd_lower):
+        return False, "/add"
     return True, ""
 
 
