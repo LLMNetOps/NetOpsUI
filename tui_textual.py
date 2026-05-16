@@ -24,7 +24,7 @@ from textual.message import Message
 from textual.reactive import reactive
 from textual.screen import ModalScreen
 from textual.widget import Widget
-from textual.widgets import Button, Input, RichLog, Static
+from textual.widgets import Button, Input, RichLog, Static, TextArea
 
 import agent as _agent
 from agents.loader import AgentLoader
@@ -232,6 +232,37 @@ StatusBar {
 }
 #sb-state { color: #a8aeba; width: 1fr; }
 #sb-hint  { color: #454a55; width: auto; }
+
+/* ── LogViewModal ── */
+LogViewModal { align: center middle; }
+#log-modal {
+    width: 80%;
+    height: 80%;
+    background: #0e1014;
+    border: tall #252932;
+    layout: vertical;
+}
+#log-modal-head {
+    height: 1;
+    background: #15181e;
+    border-bottom: tall #252932;
+    padding: 0 1;
+    color: #a8aeba;
+}
+#log-ta {
+    height: 1fr;
+    background: #08090b;
+    color: #e8eaee;
+    border: none;
+}
+#log-modal-foot {
+    height: 1;
+    background: #0e1014;
+    border-top: tall #252932;
+    padding: 0 1;
+    color: #454a55;
+    content-align: right middle;
+}
 
 /* ── ApprovalModal ── */
 ApprovalModal { align: center middle; }
@@ -475,6 +506,11 @@ class Composer(Widget):
 # ── ChatPanel ────────────────────────────────────────────────────────────────
 
 class ChatPanel(Widget):
+    def __init__(self) -> None:
+        super().__init__()
+        self._plain_lines: list[str] = []
+        self._last_ai: str = ""
+
     def compose(self) -> ComposeResult:
         with Horizontal(id="chat-head"):
             yield Static("AI Chat", id="chat-head-title")
@@ -487,15 +523,16 @@ class ChatPanel(Widget):
 
     def on_mount(self) -> None:
         self.query_one("#btn-stop", Button).display = False
-        self.query_one("#chat-log", RichLog).write(
-            Text("NetOps AI siap. Ketik pertanyaan di bawah.", style="#6c7280")
-        )
+        msg = "NetOps AI siap. Ketik pertanyaan di bawah."
+        self._plain_lines.append(msg)
+        self.query_one("#chat-log", RichLog).write(Text(msg, style="#6c7280"))
 
     @on(Button.Pressed, "#btn-stop")
     def _stop(self, _: Button.Pressed) -> None:
         self.post_message(StopStream())
 
     def write_user(self, text: str) -> None:
+        self._plain_lines.append(f"Anda: {text}")
         t = Text()
         t.append("Anda: ", style="#7ee787 bold")
         t.append(text, style="#e8eaee")
@@ -508,6 +545,7 @@ class ChatPanel(Widget):
             m = re.search(r"[→>]\s*(\w+)", content)
             raw = m.group(1) if m else content
             target = ALIAS_MAP.get(raw, raw)
+            self._plain_lines.append(f"  ↳ [bambang] → {target}")
             t = Text()
             t.append("  ↳ ", style="#454a55")
             t.append(f"[bambang] → ", style="#6c7280")
@@ -517,6 +555,7 @@ class ChatPanel(Widget):
         elif event_type == "tool_call":
             agent_name = _alias(content)
             tool = re.sub(r"^\[[^\]]+\]\s*", "", content)
+            self._plain_lines.append(f"  ↳ [{agent_name}] {tool}")
             t = Text()
             t.append("  ↳ ", style="#454a55")
             t.append(f"[{agent_name}] ", style="#7ee787")
@@ -526,6 +565,7 @@ class ChatPanel(Widget):
         elif event_type == "tool_result":
             agent_name = _alias(content)
             preview = re.sub(r"^\[[^\]]+\]\s*", "", content)[:80]
+            self._plain_lines.append(f"  ↳ [{agent_name}] {preview}")
             t = Text()
             t.append("  ↳ ", style="#454a55")
             t.append(f"[{agent_name}]", style="#7ee787")
@@ -533,6 +573,10 @@ class ChatPanel(Widget):
             log.write(t)
 
         elif event_type == "ai":
+            self._last_ai = content or ""
+            self._plain_lines.append("─" * 60)
+            self._plain_lines.append(f"AI  : {content or ''}")
+            self._plain_lines.append("─" * 60)
             log.write(Text("─" * 60, style="#252932"))
             lines = (content or "").split("\n")
             for i, line in enumerate(lines):
@@ -551,6 +595,7 @@ class ChatPanel(Widget):
                 d = {}
             agent_name = _alias(d.get("agent", "config_agent"))
             action = d.get("action", "?")
+            self._plain_lines.append(f"  ⚠ {agent_name} meminta approval · {action}")
             t = Text()
             t.append("  ⚠ ", style="#f0b85c bold")
             t.append(f"{agent_name} meminta approval", style="#f0b85c")
@@ -558,12 +603,14 @@ class ChatPanel(Widget):
             log.write(t)
 
         elif event_type == "error":
+            self._plain_lines.append(f"  ✗ error: {content}")
             t = Text()
             t.append("  ✗ error: ", style="#ff7b72")
             t.append(content, style="#ff7b72")
             log.write(t)
 
         elif event_type == "elapsed":
+            self._plain_lines.append(f"  ↳ ⏱ {content}")
             log.write(Text(f"  ↳ ⏱ {content}", style="#454a55"))
 
     def set_streaming(self, streaming: bool, elapsed: float = 0) -> None:
@@ -589,7 +636,7 @@ class ChatPanel(Widget):
 class StatusBar(Widget):
     def compose(self) -> ComposeResult:
         yield Static("● ready", id="sb-state")
-        yield Static("↵ send  ctrl+c quit", id="sb-hint")
+        yield Static("↵ send  ctrl+y copy-ai  ctrl+b copy-log  ctrl+e view  ctrl+c quit", id="sb-hint")
 
     def update_state(self, text: str, style: str = "#a8aeba") -> None:
         try:
@@ -650,6 +697,25 @@ class ApprovalModal(ModalScreen[str]):
         self.dismiss("rejected")
 
 
+# ── LogViewModal ─────────────────────────────────────────────────────────────
+
+class LogViewModal(ModalScreen):
+    BINDINGS = [Binding("escape", "dismiss_modal", "Tutup")]
+
+    def __init__(self, content: str) -> None:
+        super().__init__()
+        self._content = content
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="log-modal"):
+            yield Static("Chat Log  —  mouse select + ctrl+c copy  |  Esc tutup", id="log-modal-head")
+            yield TextArea(self._content, read_only=True, id="log-ta")
+            yield Static("Esc  tutup", id="log-modal-foot")
+
+    def action_dismiss_modal(self) -> None:
+        self.dismiss()
+
+
 # ── StopStream message ────────────────────────────────────────────────────────
 
 class StopStream(Message):
@@ -661,7 +727,12 @@ class StopStream(Message):
 class NetOpsApp(App):
     CSS = APP_CSS
     TITLE = "NetOps AI"
-    BINDINGS = [Binding("ctrl+c", "quit", "Quit", priority=True)]
+    BINDINGS = [
+        Binding("ctrl+c", "quit", "Quit", priority=True),
+        Binding("ctrl+y", "copy_last_ai", "Copy AI", show=False),
+        Binding("ctrl+b", "copy_full_log", "Copy Log", show=False),
+        Binding("ctrl+e", "open_log_modal", "View Log", show=False),
+    ]
 
     def __init__(self) -> None:
         super().__init__()
@@ -690,6 +761,29 @@ class NetOpsApp(App):
     def _fetch_model(self) -> None:
         model = _AGENT_MODELS.get("bambang", "?")
         self.query_one(TopBar).model_name = model
+
+    # ── Copy / View actions ───────────────────────────────────────────────
+
+    def action_copy_last_ai(self) -> None:
+        chat = self.query_one(ChatPanel)
+        if not chat._last_ai:
+            self.notify("Belum ada response AI", severity="warning")
+            return
+        self.copy_to_clipboard(chat._last_ai)
+        self.notify("✓ AI response di-copy ke clipboard")
+
+    def action_copy_full_log(self) -> None:
+        chat = self.query_one(ChatPanel)
+        if not chat._plain_lines:
+            self.notify("Log kosong", severity="warning")
+            return
+        self.copy_to_clipboard("\n".join(chat._plain_lines))
+        self.notify(f"✓ {len(chat._plain_lines)} baris di-copy ke clipboard")
+
+    def action_open_log_modal(self) -> None:
+        chat = self.query_one(ChatPanel)
+        content = "\n".join(chat._plain_lines) if chat._plain_lines else "(log kosong)"
+        self.push_screen(LogViewModal(content))
 
     # ── Send / Stream ─────────────────────────────────────────────────────
 
@@ -728,6 +822,9 @@ class NetOpsApp(App):
     def _on_clear_btn(self, _: Button.Pressed) -> None:
         if self._stream_active:
             return
+        chat = self.query_one(ChatPanel)
+        chat._plain_lines.clear()
+        chat._last_ai = ""
         self.query_one("#chat-log", RichLog).clear()
         self.query_one(AgentRail).reset_all()
         self._graph, self._config = _agent.create_agent(thread_id=str(uuid.uuid4()))
