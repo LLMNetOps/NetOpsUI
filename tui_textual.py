@@ -700,7 +700,10 @@ class ApprovalModal(ModalScreen[str]):
 # ── LogViewModal ─────────────────────────────────────────────────────────────
 
 class LogViewModal(ModalScreen):
-    BINDINGS = [Binding("escape", "dismiss_modal", "Tutup")]
+    BINDINGS = [
+        Binding("escape", "dismiss_modal", "Tutup"),
+        Binding("ctrl+y", "copy_selection", "Copy"),
+    ]
 
     def __init__(self, content: str) -> None:
         super().__init__()
@@ -708,9 +711,18 @@ class LogViewModal(ModalScreen):
 
     def compose(self) -> ComposeResult:
         with Vertical(id="log-modal"):
-            yield Static("Chat Log  —  mouse select + ctrl+c copy  |  Esc tutup", id="log-modal-head")
+            yield Static("Chat Log  —  mouse select → ctrl+y copy  |  Esc tutup", id="log-modal-head")
             yield TextArea(self._content, read_only=True, id="log-ta")
-            yield Static("Esc  tutup", id="log-modal-foot")
+            yield Static("ctrl+y  copy selection  ·  Esc  tutup", id="log-modal-foot")
+
+    def action_copy_selection(self) -> None:
+        ta = self.query_one("#log-ta", TextArea)
+        text = ta.selected_text
+        if text:
+            self.app.copy_to_clipboard(text)
+            self.app.notify("✓ teks di-copy ke clipboard")
+        else:
+            self.app.notify("Pilih teks dulu", severity="warning")
 
     def action_dismiss_modal(self) -> None:
         self.dismiss()
