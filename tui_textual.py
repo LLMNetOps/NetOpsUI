@@ -7,6 +7,9 @@ Run:
 """
 from __future__ import annotations
 
+import os
+import subprocess
+import tempfile
 import time
 import uuid
 import re
@@ -24,7 +27,7 @@ from textual.message import Message
 from textual.reactive import reactive
 from textual.screen import ModalScreen
 from textual.widget import Widget
-from textual.widgets import Button, Input, RichLog, Static, TextArea
+from textual.widgets import Button, Input, RichLog, Static
 
 import agent as _agent
 from agents.loader import AgentLoader
@@ -232,37 +235,6 @@ StatusBar {
 }
 #sb-state { color: #a8aeba; width: 1fr; }
 #sb-hint  { color: #454a55; width: auto; }
-
-/* ── LogViewModal ── */
-LogViewModal { align: center middle; }
-#log-modal {
-    width: 80%;
-    height: 80%;
-    background: #0e1014;
-    border: tall #252932;
-    layout: vertical;
-}
-#log-modal-head {
-    height: 1;
-    background: #15181e;
-    border-bottom: tall #252932;
-    padding: 0 1;
-    color: #a8aeba;
-}
-#log-ta {
-    height: 1fr;
-    background: #08090b;
-    color: #e8eaee;
-    border: none;
-}
-#log-modal-foot {
-    height: 1;
-    background: #0e1014;
-    border-top: tall #252932;
-    padding: 0 1;
-    color: #454a55;
-    content-align: right middle;
-}
 
 /* ── ApprovalModal ── */
 ApprovalModal { align: center middle; }
@@ -636,7 +608,7 @@ class ChatPanel(Widget):
 class StatusBar(Widget):
     def compose(self) -> ComposeResult:
         yield Static("● ready", id="sb-state")
-        yield Static("↵ send  ctrl+y copy-ai  ctrl+b copy-log  ctrl+e view  ctrl+c quit", id="sb-hint")
+        yield Static("↵ send  ctrl+y copy-ai  ctrl+b copy-log  ctrl+e less-view  ctrl+c quit", id="sb-hint")
 
     def update_state(self, text: str, style: str = "#a8aeba") -> None:
         try:
@@ -697,37 +669,6 @@ class ApprovalModal(ModalScreen[str]):
         self.dismiss("rejected")
 
 
-# ── LogViewModal ─────────────────────────────────────────────────────────────
-
-class LogViewModal(ModalScreen):
-    BINDINGS = [
-        Binding("escape", "dismiss_modal", "Tutup"),
-        Binding("ctrl+y", "copy_selection", "Copy"),
-    ]
-
-    def __init__(self, content: str) -> None:
-        super().__init__()
-        self._content = content
-
-    def compose(self) -> ComposeResult:
-        with Vertical(id="log-modal"):
-            yield Static("Chat Log  —  mouse select → ctrl+y copy  |  Esc tutup", id="log-modal-head")
-            yield TextArea(self._content, read_only=True, id="log-ta")
-            yield Static("ctrl+y  copy selection  ·  Esc  tutup", id="log-modal-foot")
-
-    def action_copy_selection(self) -> None:
-        ta = self.query_one("#log-ta", TextArea)
-        text = ta.selected_text
-        if text:
-            self.app.copy_to_clipboard(text)
-            self.app.notify("✓ teks di-copy ke clipboard")
-        else:
-            self.app.notify("Pilih teks dulu", severity="warning")
-
-    def action_dismiss_modal(self) -> None:
-        self.dismiss()
-
-
 # ── StopStream message ────────────────────────────────────────────────────────
 
 class StopStream(Message):
@@ -776,12 +717,24 @@ class NetOpsApp(App):
 
     # ── Copy / View actions ───────────────────────────────────────────────
 
+    def _sys_copy(self, text: str) -> bool:
+        """Copy via xsel/wl-copy; return True on success."""
+        for cmd in (["xsel", "--clipboard", "--input"], ["wl-copy"], ["xclip", "-selection", "clipboard"]):
+            try:
+                r = subprocess.run(cmd, input=text.encode(), timeout=3, capture_output=True)
+                if r.returncode == 0:
+                    return True
+            except (FileNotFoundError, subprocess.TimeoutExpired):
+                continue
+        return False
+
     def action_copy_last_ai(self) -> None:
         chat = self.query_one(ChatPanel)
         if not chat._last_ai:
             self.notify("Belum ada response AI", severity="warning")
             return
-        self.copy_to_clipboard(chat._last_ai)
+        if not self._sys_copy(chat._last_ai):
+            self.copy_to_clipboard(chat._last_ai)
         self.notify("✓ AI response di-copy ke clipboard")
 
     def action_copy_full_log(self) -> None:
@@ -789,13 +742,27 @@ class NetOpsApp(App):
         if not chat._plain_lines:
             self.notify("Log kosong", severity="warning")
             return
-        self.copy_to_clipboard("\n".join(chat._plain_lines))
+        text = "\n".join(chat._plain_lines)
+        if not self._sys_copy(text):
+            self.copy_to_clipboard(text)
         self.notify(f"✓ {len(chat._plain_lines)} baris di-copy ke clipboard")
 
-    def action_open_log_modal(self) -> None:
+    async def action_open_log_modal(self) -> None:
         chat = self.query_one(ChatPanel)
         content = "\n".join(chat._plain_lines) if chat._plain_lines else "(log kosong)"
-        self.push_screen(LogViewModal(content))
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".log", prefix="netops_", delete=False
+        ) as f:
+            f.write(content)
+            tmpfile = f.name
+        try:
+            async with self.suspend():
+                subprocess.run(["less", "-R", "--quit-if-one-screen", tmpfile])
+        finally:
+            try:
+                os.unlink(tmpfile)
+            except OSError:
+                pass
 
     # ── Send / Stream ─────────────────────────────────────────────────────
 
