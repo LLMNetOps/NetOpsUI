@@ -94,6 +94,8 @@ Kelompokkan hasil filter:
 
 Tidak ada hardcode nama router — semua dinamis dari daftar ini.
 
+**→ LANGKAH 0 SELESAI. JANGAN TULIS APAPUN. LANGSUNG PANGGIL check_reachability untuk setiap router dalam scope.**
+
 ### Langkah 1: Reachability Semua Router
 
 Jalankan `check_reachability` untuk setiap router dari daftar.
@@ -103,6 +105,8 @@ Threshold:
 - Latency > 100ms → ⚠ LAMBAT
 
 Catat: berapa total router up vs down, pisahkan antara router kampus dan router IDREN.
+
+**→ LANGKAH 1 SELESAI. JANGAN TULIS APAPUN. Jika scope termasuk kampus: LANGSUNG PANGGIL get_system_info. Jika scope IDREN saja: LANGSUNG PANGGIL get_bgp_sessions untuk setiap router gate_idren.**
 
 ### Langkah 2: Resource Router Kampus yang Aktif
 
@@ -116,6 +120,8 @@ Flag:
 Jika semua normal, cukup tulis "resource normal". Jangan tampilkan detail tiap router
 jika tidak ada anomali — ringkasan saja.
 
+**→ LANGKAH 2 SELESAI. JANGAN TULIS APAPUN. LANGSUNG PANGGIL get_bgp_sessions untuk setiap router gate_idren.**
+
 ### Langkah 3: BGP Session — Semua Router IDREN
 
 Untuk setiap router dengan role `gate_idren`, jalankan `get_bgp_sessions(router_name)`.
@@ -128,6 +134,8 @@ Cek per router:
 **LARANGAN**: Setelah Langkah 3 selesai, JANGAN panggil `get_bgp_sessions` lagi di langkah manapun.
 Data BGP sudah lengkap di sini. Jika log (Langkah 5) menunjukkan event BGP,
 gunakan data yang sudah ada di context — bukan fetch ulang.
+
+**→ LANGKAH 3 SELESAI. JANGAN TULIS APAPUN. LANGSUNG PANGGIL get_top_interfaces_all dengan filter roles sesuai scope.**
 
 ### Langkah 4: Anomali Traffic
 
@@ -144,6 +152,8 @@ Flag:
 - Interface uplink > 95% → ✗ CONGESTED
 - Interface yang seharusnya aktif tapi 0 traffic → ⚠
 
+**→ LANGKAH 4 SELESAI. JANGAN TULIS APAPUN. LANGSUNG PANGGIL get_router_log untuk setiap router gate_idren.**
+
 ### Langkah 5: Log Error 24 Jam Terakhir
 
 Untuk setiap router IDREN (role `gate_idren`), jalankan `get_router_log(router_name, lines=50)`.
@@ -155,6 +165,8 @@ Cari:
 - `login failure` berulang → indikasi brute force
 
 Untuk router kampus: cek log hanya jika ada anomali di langkah 1 atau 2.
+
+**→ LANGKAH 5 SELESAI. JANGAN TULIS APAPUN. LANGSUNG PANGGIL get_netbox_drift_report untuk setiap router gate_idren.**
 
 ### Langkah 6: Drift NetBox vs Router
 
@@ -175,9 +187,11 @@ Interpretasi:
 
 Router kampus tidak perlu drift check — NetBox hanya tracking device IDREN untuk sekarang.
 
+**→ LANGKAH 6 SELESAI. SEMUA DATA TERKUMPUL. SEKARANG TULIS LAPORAN MORNING CHECK.**
+
 ## Format Output
 
-INSTRUKSI: Tulis output ini HANYA setelah semua langkah tool call di atas selesai (0–6).
+INSTRUKSI: Tulis output ini HANYA setelah Langkah 0–6 selesai semua.
 Setiap nilai dalam tabel harus dari tool result. Satu baris per router.
 
 ---
