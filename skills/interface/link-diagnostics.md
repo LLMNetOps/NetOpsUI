@@ -147,6 +147,8 @@ Perhatikan:
 | ether1 | Up | 0 | 0 | 0 | Tidak | ✅ Normal |
 | ether2 | Down | 245 | 12 | 89 | 8x/jam | 🚨 Kritis |
 
+*(Narasi wajib: jelaskan kondisi interface yang bermasalah — rx-fcs error mengindikasikan masalah fisik pada kabel atau konektor, flapping berarti link tidak stabil dan dapat mengganggu routing protocol BGP/OSPF yang bergantung pada interface tersebut, sebutkan dampak konkret ke layanan jaringan. 2–3 kalimat.)*
+
 ## Root Cause
 
 [Penjelasan berdasarkan data counter + log — BUKAN asumsi]

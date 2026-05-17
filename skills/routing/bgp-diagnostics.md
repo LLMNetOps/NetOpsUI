@@ -161,11 +161,15 @@ Lihat versi RouterOS dari `get_system_info`:
 |--------|----------|------|-------|-------|--------|
 | [nama dari get_bgp_sessions] | [X/Y ✅/🚨] | [X/Y ✅/🚨] | [X/Y ✅/🚨] | [total] | [✅/🚨] |
 
+*(Narasi wajib: jelaskan kondisi BGP secara keseluruhan — berapa session established vs down, apakah session yang down berdampak ke konektivitas internet atau hanya backup, sebutkan router mana yang paling perlu perhatian. 2–3 kalimat.)*
+
 ## Session Down Detail
 
 | Router | Peer | Tipe | Last Stopped | Prefiks | Status |
 |--------|------|------|--------------|---------|--------|
 | [nama router] | [nama peer dari get_bgp_sessions] | [upstream/ibgp/nodes] | [waktu] | [jumlah] | 🚨 Down |
+
+*(Narasi wajib: jelaskan kondisi session yang down — session down artinya koneksi ke peer terputus, sebutkan dampak konkret ke konektivitas (apakah internet ke institusi terdampak atau hanya backup), dan kapan terakhir jatuh berdasarkan last-stopped. 2–4 kalimat.)*
 
 ## Action Items
 

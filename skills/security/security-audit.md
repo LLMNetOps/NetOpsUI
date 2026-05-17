@@ -124,6 +124,20 @@ Format temuan per router:
   ⚠ Tidak ada firewall rule membatasi akses SSH — semua IP bisa akses
 ```
 
+*(Narasi wajib: ringkasan kondisi keamanan keseluruhan — router mana yang paling berisiko, pola ancaman yang ditemukan, rekomendasi prioritas utama. 2–3 kalimat.)*
+
+## Action Items
+
+*Jika tidak ada temuan kritis: "✅ Tidak ada action item — kondisi keamanan normal."*
+
+Jika ada temuan (berdasarkan data aktual, bukan asumsi):
+
+1. 🚨 **SEGERA** — [tindakan mendesak: blokir IP / disable service / tambah firewall rule — router + perintah RouterOS spesifik]
+2. ⚠️ **PERLU** — [hardening penting tapi tidak darurat]
+3. 💡 **OPSIONAL** — [rekomendasi peningkatan]
+
+⚠ **WAJIB**: Label `🚨 **SEGERA**` harus ditulis PERSIS seperti itu — sistem routing otomatis bergantung pada string ini. JANGAN gunakan `🚨 **Kritis**`, `🚨 **DARURAT**`, atau variasi lain.
+
 ## Catatan
 - Perubahan konfigurasi memerlukan akses write — gunakan skill `firewall-management`
   atau `config-change` untuk eksekusi

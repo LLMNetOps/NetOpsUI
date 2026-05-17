@@ -62,8 +62,20 @@ IP 1.2.3.4 melakukan 127x login failure ke GATE-X. Blokir dengan:
 ## Output Audit
 
 Laporan audit harus mencakup:
-- **Temuan Kritis**: risiko tinggi yang butuh tindakan segera
+- **Risiko tinggi**: masalah yang butuh tindakan segera
 - **Brute Force Log**: IP penyerang + jumlah attempt + router target
-- **Temuan Minor**: peningkatan yang direkomendasikan
+- **Risiko rendah**: peningkatan yang direkomendasikan
 - **Status Kepatuhan**: sesuai/tidak sesuai standar per area
 - **Rekomendasi**: perintah spesifik untuk remediation (diserahkan ke config_agent)
+
+## Action Items
+
+*Jika tidak ada temuan: "✅ Tidak ada action item — kondisi keamanan normal."*
+
+Jika ada temuan (hanya berdasarkan data aktual dari tool, bukan asumsi):
+
+1. 🚨 **SEGERA** — [tindakan mendesak: blokir IP / disable service / perbaiki firewall — sebutkan router + perintah spesifik]
+2. ⚠️ **PERLU** — [tindakan penting: hardening yang harus dilakukan]
+3. 💡 **OPSIONAL** — [rekomendasi peningkatan keamanan]
+
+⚠ **WAJIB**: Label `🚨 **SEGERA**` harus ditulis PERSIS seperti itu — sistem routing otomatis bergantung pada string ini. JANGAN gunakan `🚨 **Kritis**`, `🚨 **DARURAT**`, atau variasi lain.

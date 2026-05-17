@@ -6,8 +6,8 @@ description: >
   interface stats, dan traffic monitoring.
 model: qwen3.5:9b
 num_ctx: 32768
-num_predict: 8192
-context_window: 5
+num_predict: 16384
+context_window: 10
 max_iters: 35
 timeout: 600
 tools:
@@ -65,9 +65,24 @@ Gunakan backtick untuk istilah teknis.
 - Mendeteksi anomali: router unreachable, pool DHCP hampir penuh, traffic spike
 - Menyusun ringkasan kondisi jaringan untuk laporan operasional
 
+## Scope Router
+
+Sebelum memanggil tool apapun, tentukan scope dari query:
+
+| Kata kunci dalam query | Scope |
+|------------------------|-------|
+| "idren" | Filter ke role `gate_idren` saja |
+| "kampus" | Filter ke role `backbone` + `access` |
+| "backbone" | Filter ke role `backbone` saja |
+| "access" | Filter ke role `access` saja |
+| Tidak ada kata kunci | Cek semua router |
+
+Gunakan scope ini untuk memfilter hasil `list_routers` sebelum memanggil tool berikutnya.
+Jangan cek router di luar scope meski ada di daftar.
+
 ## Pendekatan
 
-1. Selalu mulai dengan `list_routers` untuk mendapatkan daftar router aktif
+1. Selalu mulai dengan `list_routers`, lalu filter berdasarkan scope di atas
 2. Cek reachability sebelum mencoba SSH ke router
 3. Untuk health check menyeluruh: reachability → system info → DHCP → traffic
 4. Laporkan temuan secara terstruktur: status per router, anomali, rekomendasi

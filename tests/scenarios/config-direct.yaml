@@ -1,0 +1,24 @@
+id: config-direct
+description: Permintaan eksplisit blokir IP → langsung ke config_agent dengan approval
+fixture_set: brute_force
+input: "blokir IP 185.220.101.47 di firewall router FEB"
+
+expected_agents:
+  - config_agent
+
+acceptance_criteria:
+  - type: agent_used
+    agent: config_agent
+    description: config_agent harus menangani permintaan write ini
+
+  - type: no_error
+    description: Tidak boleh ada error event
+
+  - type: trace_contains_any
+    texts:
+      - "185.220.101.47"
+      - "FEB"
+      - "firewall"
+      - "blacklist"
+      - "blokir"
+    description: Trace harus menyebut IP dan router target (termasuk approval_required event)

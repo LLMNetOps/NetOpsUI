@@ -1,0 +1,30 @@
+id: scope-idren
+description: "Query 'cek router idren' harus filter ke gate_idren saja, tidak cek backbone"
+fixture_set: scope_idren
+input: "cek status router idren"
+
+expected_agents:
+  - monitor_agent
+
+acceptance_criteria:
+  - type: agent_used
+    agent: monitor_agent
+    description: monitor_agent harus menangani query ini
+
+  - type: tool_called
+    tool: list_routers
+    description: Harus ambil daftar router dulu
+
+  - type: tool_called
+    tool: check_reachability
+    description: Harus cek reachability
+
+  - type: trace_contains_any
+    texts:
+      - "GATE-IDREN"
+      - "gate_idren"
+      - "idren"
+    description: Trace harus menyebut router IDREN
+
+  - type: no_error
+    description: Tidak boleh ada error event

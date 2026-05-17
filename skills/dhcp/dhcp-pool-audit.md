@@ -57,6 +57,8 @@ Dari data audit:
 |--------|------|-------|-------|-----------|--------|
 | [nama dari audit_dhcp] | [nama pool] | [bound] | [total] | [bound/total%] | [✅/⚠️/🚨] |
 
+*(Narasi wajib: jelaskan kondisi pool — utilisasi > 80% berarti risiko kehabisan alamat saat peak load, sebutkan pool mana yang perlu perhatian segera dan apa dampaknya jika pool penuh (client baru tidak dapat IP). 2–3 kalimat.)*
+
 ## Action Items
 
 1. 🚨 **SEGERA** — [tindakan pool kritis]

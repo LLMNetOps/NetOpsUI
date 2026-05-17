@@ -69,9 +69,19 @@ Jalankan `get_router_log` pada router utama (backbone/core) dengan filter topic
 - Pesan `critical` atau `error`
 - Login/logout yang tidak biasa
 
+## ATURAN KRITIS — WAJIB DIPATUHI
+
+1. **SEMUA nilai wajib dari tool result aktual** — DILARANG mengarang nama router, angka CPU/RAM, atau nama event log.
+2. **HANYA tulis router yang ada di hasil `list_routers()`** — tidak boleh menambah router dari pengetahuan training.
+3. **Setelah setiap section data**, tulis 2–3 kalimat narasi: apa artinya data ini secara operasional, kondisi normal vs anomali.
+
+---
+
 ## Format Output
 
 Susun laporan dalam format berikut. Gunakan simbol ✓ (normal), ⚠ (perhatian), ✗ (kritis).
+
+INSTRUKSI: Tulis output ini HANYA setelah semua tool selesai dipanggil.
 
 ```
 ═══════════════════════════════════════════════════════
@@ -92,10 +102,9 @@ Router DOWN : Z (nama router — tandai ✗)
 ---
 
 ## 2. RESOURCE UTILIZATION
-[Tabel atau list per router:]
-  ROUTER-A  CPU:  8%  RAM: 45%  Uptime: 14d  ✓
-  ROUTER-B  CPU: 87%  RAM: 72%  Uptime:  3d  ⚠ CPU tinggi
-  ROUTER-C  (tidak dapat diakses)              ✗
+[Isi dari get_system_info — satu baris per router:]
+  [nama router]  CPU: [cpu-load%]  RAM: [memory%]  Uptime: [uptime]  [simbol]
+  (jika tidak dapat diakses: tulis nama router dan ✗)
 
 ---
 
@@ -116,9 +125,9 @@ Router DHCP gagal diakses: (nama jika ada)
 ---
 
 ## 5. ANOMALI LOG
-[Daftar pesan penting dari log. Jika tidak ada anomali, tulis "Tidak ditemukan anomali signifikan."]
-  - ROUTER-X: interface ether2 flap pukul 01:23
-  - ROUTER-Y: login gagal 3x dari 192.168.1.100
+[Isi dari get_router_log — jika tidak ada anomali, tulis "Tidak ditemukan anomali signifikan."]
+  - [nama router dari tool]: [event dari log — exact]
+  - [nama router dari tool]: [event dari log — exact]
 
 ---
 

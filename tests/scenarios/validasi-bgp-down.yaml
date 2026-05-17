@@ -1,0 +1,31 @@
+id: validasi-bgp-down
+description: BGP primary session down → monitor produce SEGERA → wati validasi → delegasi ke config
+fixture_set: validasi_bgp_down
+input: "morning check router idren"
+
+expected_agents:
+  - monitor_agent
+  - validasi_agent
+
+acceptance_criteria:
+  - type: agent_used
+    agent: monitor_agent
+    description: monitor_agent harus mendeteksi masalah BGP
+
+  - type: agent_used
+    agent: validasi_agent
+    description: validasi_agent (wati) harus dipanggil otomatis setelah monitor menemukan SEGERA
+
+  - type: tool_called
+    tool: get_bgp_sessions
+    description: get_bgp_sessions harus dipanggil (oleh monitor dan/atau wati)
+
+  - type: output_contains_any
+    texts:
+      - "delegasikan ke config_agent"
+      - "KONFIRMASI"
+      - "config_agent"
+    description: Wati harus mengkonfirmasi masalah dan mendelegasikan ke config_agent
+
+  - type: no_error
+    description: Tidak boleh ada error event

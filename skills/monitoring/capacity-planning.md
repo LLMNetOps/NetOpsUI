@@ -158,9 +158,11 @@ ROUTER RESOURCE
 
 Rekomendasi Prioritas:
   1. [KRITIS/PERLU/OPSIONAL] [tindakan konkret berdasarkan data aktual]
-  2. [PERLU PERHATIAN] Monitor GATE-ARENA — 80% utilisasi WAN
-  3. [RENDAH] Review proses di DIST-FILKOM — CPU 72% konsisten
+  2. [PERLU PERHATIAN] [tindakan konkret berdasarkan data aktual]
+  3. [RENDAH] [tindakan atau catatan berdasarkan data aktual]
 ```
+
+*(Narasi wajib: jelaskan temuan kapasitas secara keseluruhan — interface mana yang mendekati batas, pool DHCP mana yang perlu perhatian, dan router mana yang resource-nya tinggi. Gunakan data dari laporan di atas, bukan asumsi. 2–4 kalimat.)*
 
 ## Catatan
 - Analisis kapasitas sebaiknya dilakukan setiap 3 bulan (awal semester)

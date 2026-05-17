@@ -15,6 +15,12 @@ triggers:
   - morning check kampus
   - cek pagi idren
   - cek pagi kampus
+  - status jaringan idren
+  - status router idren
+  - cek jaringan idren
+  - kondisi router idren
+  - cek idren
+  - kondisi idren
 tools:
   - list_routers
   - check_reachability
@@ -210,6 +216,8 @@ Setiap nilai dalam tabel harus dari tool result. Satu baris per router.
 |--------|------|--------|---------|
 | [nama dari list_routers] | [role] | ✅ Up / 🚨 Down | [ms dari tool] |
 
+*(Narasi wajib: jelaskan apakah semua router up, ada yang unreachable atau latensi tinggi, dan apa artinya secara operasional. 2–3 kalimat.)*
+
 ## Resource Kampus *(skip jika scope IDREN)*
 
 *(Isi dari hasil get_system_info — skip jika semua normal)*
@@ -217,6 +225,8 @@ Setiap nilai dalam tabel harus dari tool result. Satu baris per router.
 | Router | CPU | Memory | Uptime | Status |
 |--------|-----|--------|--------|--------|
 | [nama router] | [CPU%] | [Mem%] | [uptime] | ✅/⚠️/🚨 |
+
+*(Narasi wajib: jelaskan kondisi resource router kampus — apakah ada yang overload, baru restart, atau semua normal. 2–3 kalimat.)*
 
 ## BGP Session
 
@@ -228,6 +238,8 @@ Setiap nilai dalam tabel harus dari tool result. Satu baris per router.
 
 *Jika ada session down: sebutkan nama peer, jumlah prefiks, dan durasi down dari tool result.*
 
+*(Narasi wajib: jelaskan kondisi BGP secara keseluruhan — berapa session down, tipe peer apa yang terdampak (upstream/node), dan apa dampaknya ke konektivitas IDREN. Session backup yang down saat primary up bukan masalah — jelaskan perbedaannya. 2–4 kalimat.)*
+
 ## Traffic Puncak
 
 *(Isi dari hasil get_top_interfaces_all — jika tidak ada data: tulis "Tidak ada data traffic")*
@@ -235,6 +247,8 @@ Setiap nilai dalam tabel harus dari tool result. Satu baris per router.
 | Interface | Router | Utilisasi | Status |
 |-----------|--------|-----------|--------|
 | [nama interface] | [nama router] | [%] | ✅/⚠️/🚨 |
+
+*(Narasi wajib: jelaskan interface mana yang paling sibuk, apakah ada yang mendekati batas, dan apa arti kolom utilisasi ini (bytes/second vs total volume). 2–3 kalimat.)*
 
 ## Log 24 Jam
 
@@ -244,6 +258,8 @@ Setiap nilai dalam tabel harus dari tool result. Satu baris per router.
 |--------|-------|--------|--------|
 | [nama router] | [jenis event atau —] | [jumlah atau 0] | ✅ Bersih / 🚨 |
 
+*(Narasi wajib: jelaskan event apa yang muncul, mana yang normal (SSH login, winbox denied) vs yang perlu diperhatikan (brute force, link flapping, BGP state change). 2–3 kalimat.)*
+
 ## NetBox Drift *(skip jika scope kampus)*
 
 *(Isi dari hasil get_netbox_drift_report — satu baris per router)*
@@ -251,6 +267,8 @@ Setiap nilai dalam tabel harus dari tool result. Satu baris per router.
 | Router | Drift Item | Jumlah | Status |
 |--------|-----------|--------|--------|
 | [nama router] | [item drift atau —] | [jumlah atau 0] | ✅ Sinkron / ⚠️ |
+
+*(Narasi wajib: jelaskan apa itu drift NetBox, router mana yang sinkron vs ada perbedaan, dan apakah drift yang ada perlu segera ditindaklanjuti. 2–3 kalimat.)*
 
 ---
 

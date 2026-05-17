@@ -31,6 +31,21 @@ Gunakan skill ini untuk mendapatkan gambaran kondisi jaringan kampus secara kese
 Cocok untuk pemeriksaan rutin pagi hari, sebelum event besar (ujian, wisuda), atau saat
 ada laporan umum "jaringan bermasalah" tanpa detail spesifik.
 
+## Scope Check
+
+Sebelum mulai, tentukan scope dari query:
+
+| Kata kunci dalam query | Scope |
+|------------------------|-------|
+| "idren" | Hanya role `gate_idren` |
+| "kampus" | Hanya role `backbone` + `access` |
+| "backbone" | Hanya role `backbone` |
+| "access" | Hanya role `access` |
+| Tidak ada kata kunci | Semua role (default) |
+
+Filter hasil `list_routers()` sesuai scope sebelum memanggil tool berikutnya.
+Jangan cek router di luar scope.
+
 ## Prosedur
 
 ### Langkah 1: Cek Reachability Semua Router
@@ -114,17 +129,23 @@ Untuk router yang menunjukkan masalah (CPU tinggi, interface error, restart baru
 |--------|--------|---------|
 | [nama dari list_routers()] | [✅/🚨 dari check_reachability] | [RTT ms atau timeout] |
 
+*(Narasi wajib: jelaskan kondisi reachability — berapa yang up/down, latensi normal atau tinggi, dan apa implikasinya. 2–3 kalimat.)*
+
 ## Resource
 
 | Router | CPU | Memory | Uptime | Status |
 |--------|-----|--------|--------|--------|
 | [nama dari list_routers()] | [cpu-load% dari get_system_info] | [memory% dari get_system_info] | [uptime dari get_system_info] | [✅/⚠️/🚨] |
 
+*(Narasi wajib: jelaskan kondisi CPU dan memory router — mana yang overload atau mendekati batas, uptime rendah berarti baru restart. 2–3 kalimat.)*
+
 ## Protokol Routing
 
 | Router | BGP | OSPF | Status |
 |--------|-----|------|--------|
 | [hanya router GATE-* atau BORDER-*] | [X/Y established dari get_bgp_sessions] | [Full/Down dari get_ospf_neighbors] | [✅/⚠️/🚨] |
+
+*(Narasi wajib: jelaskan kondisi routing — BGP session down artinya koneksi ke peer terputus, OSPF non-Full artinya ada masalah routing internal. Sebutkan dampak konkret jika ada yang bermasalah. 2–4 kalimat.)*
 
 ## Action Items
 

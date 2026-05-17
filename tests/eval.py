@@ -234,7 +234,8 @@ def run_scenario(scenario: dict, mock_mode: bool = True, verbose: bool = False) 
                 # "[supervisor] → monitor_agent" atau "[supervisor] routing to config_agent"
                 for agent_name in [
                     "monitor_agent", "diagnose_agent", "config_agent",
-                    "security_agent", "document_agent",
+                    "security_agent", "document_agent", "validasi_agent",
+                    "netbox_agent",
                 ]:
                     if agent_name in content and agent_name not in result.called_agents:
                         result.called_agents.append(agent_name)

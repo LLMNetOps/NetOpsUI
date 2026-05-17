@@ -368,6 +368,65 @@ def supervisor_node(state: "NetworkOpsState") -> dict:
                 "agent_log": [_log("supervisor", "routing", _doc_log)],
             }
 
+        # Priority 3: post-validasi routing — setelah wati selesai, baca delegation string.
+        # HARUS ada di early-return block karena supervisor selalu early-return saat last == AIMessage.
+        if _early_prev == "validasi_agent":
+            _wati_txt = _clean(last.content or "")
+            if "delegasikan ke config_agent" in _wati_txt and "config_agent" in _early_valid:
+                _wati_log = "→ config_agent  skills: []  | validasi-delegation: wati → config_agent"
+                return {
+                    "next_agent": "config_agent",
+                    "active_agent": "supervisor",
+                    "injected_skills": [],
+                    "original_intent": _early_intent,
+                    "messages": [HumanMessage(content=(
+                        "Wati (validasi_agent) sudah memverifikasi action items. "
+                        "Lihat verdict validasi di atas — eksekusi item KONFIRMASI sesuai rekomendasi Wati. "
+                        "Minta approval operator sebelum setiap operasi write."
+                    ))],
+                    "agent_log": [_log("supervisor", "routing", _wati_log)],
+                }
+            elif "delegasikan ke diagnose_agent" in _wati_txt and "diagnose_agent" in _early_valid:
+                _wati_log = "→ diagnose_agent  skills: []  | validasi-delegation: wati → diagnose_agent"
+                return {
+                    "next_agent": "diagnose_agent",
+                    "active_agent": "supervisor",
+                    "injected_skills": [],
+                    "original_intent": _early_intent,
+                    "messages": [HumanMessage(content=(
+                        "Wati (validasi_agent) sudah memverifikasi action items — root cause dari item KONFIRMASI tidak jelas. "
+                        "Lakukan investigasi lebih dalam berdasarkan verdict Wati di atas."
+                    ))],
+                    "agent_log": [_log("supervisor", "routing", _wati_log)],
+                }
+            else:
+                return {
+                    "next_agent": "END",
+                    "active_agent": "supervisor",
+                    "agent_log": [_log("supervisor", "routing", "→ END (validasi: tidak perlu tindakan)")],
+                }
+
+        # Priority 4: validasi trigger — setelah data-agent selesai dengan SEGERA items.
+        # HARUS ada di early-return block; kode serupa di bawah (line ~522) tidak pernah dicapai
+        # karena early-return block selalu return lebih dulu.
+        _DATA_AGENTS_EARLY = {"monitor_agent", "diagnose_agent", "security_agent"}
+        if (_early_prev in _DATA_AGENTS_EARLY
+                and "validasi_agent" in _early_valid
+                and not _early_wants_file):
+            _segera_txt = _clean(last.content or "")
+            if "🚨 **SEGERA**" in _segera_txt:
+                _val_log = (
+                    f"→ validasi_agent  skills: ['action-validation']  | "
+                    f"validasi-trigger: {_early_prev} produced SEGERA items"
+                )
+                return {
+                    "next_agent": "validasi_agent",
+                    "active_agent": "supervisor",
+                    "injected_skills": ["action-validation"],
+                    "original_intent": _early_intent,
+                    "agent_log": [_log("supervisor", "routing", _val_log)],
+                }
+
         return {
             "next_agent": "END",
             "active_agent": "supervisor",
@@ -519,6 +578,38 @@ def supervisor_node(state: "NetworkOpsState") -> dict:
         next_agent = "END"
         data["reasoning"] = f"loop guard: {_prev_agent} baru selesai, cegah re-route ke agent sama"
 
+    # NOTE: Validasi trigger dan post-validasi routing di bawah ini adalah SECONDARY FALLBACK
+    # untuk kasus supervisor LLM dipanggil ulang setelah user kirim pesan baru (HumanMessage).
+    # Kasus primer (agent baru selesai → last == AIMessage) sudah ditangani di early-return
+    # block (Priority 3 dan 4) — kode di bawah tidak pernah dicapai untuk kasus itu.
+    _DATA_AGENTS = {"monitor_agent", "diagnose_agent", "security_agent"}
+    if (next_agent == "END"
+            and _prev_agent in _DATA_AGENTS
+            and "validasi_agent" in valid_agent_names):
+        _last_ai_msg = next((m for m in reversed(messages) if isinstance(m, AIMessage)), None)
+        _last_ai_txt = (_last_ai_msg.content or "") if _last_ai_msg else ""
+        if "🚨 **SEGERA**" in _last_ai_txt and not _wants_file:
+            next_agent = "validasi_agent"
+            data["reasoning"] = (
+                f"validasi-trigger (llm-path): {_prev_agent} produced SEGERA items → validasi_agent"
+            )
+            _existing_skills = data.get("relevant_skills") or []
+            if "action-validation" not in _existing_skills:
+                data["relevant_skills"] = ["action-validation"] + list(_existing_skills)
+
+    if _prev_agent == "validasi_agent":
+        _last_ai_msg = next((m for m in reversed(messages) if isinstance(m, AIMessage)), None)
+        _wati_txt = (_last_ai_msg.content or "") if _last_ai_msg else ""
+        if "delegasikan ke config_agent" in _wati_txt and "config_agent" in valid_agent_names:
+            next_agent = "config_agent"
+            data["reasoning"] = "validasi-delegation (llm-path): wati delegated to config_agent"
+        elif "delegasikan ke diagnose_agent" in _wati_txt and "diagnose_agent" in valid_agent_names:
+            next_agent = "diagnose_agent"
+            data["reasoning"] = "validasi-delegation (llm-path): wati delegated to diagnose_agent"
+        else:
+            next_agent = "END"
+            data["reasoning"] = "validasi-delegation (llm-path): no action needed → END"
+
     # Router discovery override: jika ada error "tidak dikenal" dari validate_router(),
     # route ke config_agent/netbox_agent dengan skill router-discovery untuk auto-discover.
     if next_agent == "END":
@@ -608,8 +699,8 @@ Tool yang tersedia (HANYA ini yang boleh dipanggil): {tool_names}
 def _make_specialist_node(agent_name: str):
     defn = _agent_loader.get(agent_name)
     tools = _resolve_tools(agent_name)
-    tool_map_local = {t.name: t for t in tools}
-    tool_names_str = ", ".join(t.name for t in tools)
+    _tool_names = [t.name for t in tools]
+    tool_names_str = ", ".join(_tool_names)
     agent_body = defn.body if defn else ""
     context_window = defn.context_window if defn else 10
     _model = defn.model if defn else None
@@ -637,19 +728,23 @@ def _make_specialist_node(agent_name: str):
         skill_objs = [s for n in skill_names if (s := _skill_lib.get_by_name(n))]
         skill_ctx = _skill_lib.inject_context(skill_objs) if skill_objs else ""
 
+        _pedoman_skill = _skill_lib.get_by_name("pedoman-agent")
+        pedoman = _pedoman_skill.body if _pedoman_skill else _PEDOMAN
+
         sys_content = _SPECIALIST_SYS.format(
             agent_body=agent_body,
             tool_names=tool_names_str,
-            pedoman=_PEDOMAN,
+            pedoman=pedoman,
             skill_context=skill_ctx,
         ).strip()
         sys_msg = SystemMessage(content=sys_content)
 
         context_msgs = list(state["messages"])[-context_window:]
+        _current_tool_map = {n: TOOL_MAP[n] for n in _tool_names if n in TOOL_MAP}
         all_msgs, logs = _react_loop(
             llm_with_tools,
             [sys_msg] + context_msgs,
-            tool_map_local,
+            _current_tool_map,
             agent_name,
             max_iters=_max_iters,
         )
@@ -735,11 +830,14 @@ def config_node(state: dict) -> dict:
     skill_objs = [s for n in skill_names if (s := _skill_lib.get_by_name(n))]
     skill_ctx = _skill_lib.inject_context(skill_objs) if skill_objs else ""
 
+    _pedoman_skill = _skill_lib.get_by_name("pedoman-agent")
+    _pedoman = _pedoman_skill.body if _pedoman_skill else _PEDOMAN
+
     _config_tool_names = ", ".join(t.name for t in _CONFIG_TOOLS)
     sys_msg = SystemMessage(content=_SPECIALIST_SYS.format(
         agent_body=_agent_loader.system_prompt("config_agent"),
         tool_names=_config_tool_names,
-        pedoman=_PEDOMAN,
+        pedoman=_pedoman,
         skill_context=skill_ctx,
     ).strip())
 
@@ -859,9 +957,10 @@ def config_node(state: dict) -> dict:
 
 # ── Exported node functions ───────────────────────────────────────────────────
 
-monitor_node  = _make_specialist_node("monitor_agent")
-diagnose_node = _make_specialist_node("diagnose_agent")
-security_node = _make_specialist_node("security_agent")
-document_node = _make_specialist_node("document_agent")
+monitor_node   = _make_specialist_node("monitor_agent")
+diagnose_node  = _make_specialist_node("diagnose_agent")
+security_node  = _make_specialist_node("security_agent")
+document_node  = _make_specialist_node("document_agent")
+validasi_node  = _make_specialist_node("validasi_agent")
 netbox_node   = _make_specialist_node("netbox_agent")
 # config_node defined above with interrupt() support

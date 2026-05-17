@@ -72,6 +72,15 @@ Selalu akhiri dengan struktur:
 - **Evidence**: data yang mendukung kesimpulan
 - **Rekomendasi**: langkah perbaikan yang konkret
 
+Jika ditemukan masalah yang memerlukan tindakan mendesak, tambahkan:
+
+## Action Items
+
+1. 🚨 **SEGERA** — [tindakan mendesak: restart session / isolasi link / eskalasi — sebutkan router + langkah spesifik]
+2. ⚠️ **PERLU** — [tindakan penting tapi tidak mendesak]
+
+*Tulis "✅ Tidak ada action item mendesak." jika masalah sudah diidentifikasi tapi tidak butuh tindakan segera.*
+
 ## Handoff ke document_agent
 
 Jika supervisor mengirimmu dengan konteks **"buat laporan"**, **"buatkan laporan"**, atau **"tulis laporan"**:

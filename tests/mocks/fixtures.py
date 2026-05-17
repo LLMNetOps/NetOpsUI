@@ -400,6 +400,68 @@ def _current_time() -> str:
 
 # ── Named fixture sets untuk scenario ────────────────────────────────────────
 
+# ── Router list dengan gate_idren role (untuk scope test) ─────────────────────
+
+_ROUTER_LIST_WITH_IDREN = """Router yang tersedia:
+
+  GATE-IDREN-UB  103.22.20.254    ROS v7  role=gate_idren  servers: —
+  GATE-IDREN-UI  103.22.21.254    ROS v7  role=gate_idren  servers: —
+  DTI            10.45.185.1      ROS v7  role=backbone    servers: DTI-server
+  FIB            10.45.186.1      ROS v7  role=backbone    servers: FIB-server
+  FH             10.45.187.1      ROS v7  role=backbone    servers: FH-server
+  FEB            10.45.188.1      ROS v7  role=backbone    servers: FEB-server
+  FILKOM         10.45.197.1      ROS v7  role=backbone    servers: FILKOM-server"""
+
+# ── BGP primary session DOWN (trigger validasi scenario) ─────────────────────
+
+_BGP_PRIMARY_DOWN = {
+    "GATE-IDREN-UB": """BGP Sessions — GATE-IDREN-UB (103.22.20.254)  Local AS: 23700
+Total: 2  Established: 1  Down: 1
+────────────────────────────────────────────────────────────────────────────────
+  #  St    Type    RemAS  RemoteIP                  Uptime            Pfx  Name
+────────────────────────────────────────────────────────────────────────────────
+  1  ✗DWN  ebgp    7713   103.22.20.1               —                     0  IDREN-upstream
+  2  ✓EST  ebgp    23710  10.45.0.2                 21d14h08m          1024  UB-transit
+
+✗ 1 session DOWN (primary uplink):
+  - #1 IDREN-upstream  (remote: 103.22.20.1 AS7713)  last-stopped: 0d00h45m
+  Dampak: konektivitas ke jaringan IDREN nasional TERPUTUS selama 45 menit.""",
+}
+
+_BGP_PRIMARY_NOW_UP = {
+    "GATE-IDREN-UB": """BGP Sessions — GATE-IDREN-UB (103.22.20.254)  Local AS: 23700
+Total: 2  Established: 2  Down: 0
+────────────────────────────────────────────────────────────────────────────────
+  #  St    Type    RemAS  RemoteIP                  Uptime            Pfx  Name
+────────────────────────────────────────────────────────────────────────────────
+  1  ✓EST  ebgp    7713   103.22.20.1               0d00h03m          45000  IDREN-upstream
+  2  ✓EST  ebgp    23710  10.45.0.2                 21d14h08m          1024  UB-transit
+
+✓ Semua session established.""",
+}
+
+# ── Security with SEGERA format ───────────────────────────────────────────────
+
+_SECURITY_WITH_SEGERA = {
+    **_SECURITY,
+    "FEB": """Security Audit — FEB (10.45.188.1)
+Firewall Rules  : 30 rules aktif
+SSH             : enabled (port 22)
+Winbox          : disabled ✓
+Telnet          : disabled ✓
+
+Recent Auth Failures (1 jam terakhir): 847 failures
+Top attacker IPs:
+  185.220.101.47  →  412 attempts  (burst pattern = credential stuffing otomatis)
+  185.220.101.48  →  298 attempts
+  193.106.31.45   →  137 attempts
+
+🚨 **SEGERA** — Serangan brute force aktif dari 3 IP: blokir segera di firewall FEB.
+Perintah: /ip/firewall/address-list/add list=blacklist address=185.220.101.47""",
+}
+
+# ── Named fixture sets untuk scenario ────────────────────────────────────────
+
 FIXTURE_SETS: dict[str, dict[str, object]] = {
     "default": {
         "list_routers": lambda: _ROUTER_LIST,
@@ -444,6 +506,42 @@ FIXTURE_SETS: dict[str, dict[str, object]] = {
         "get_system_info": lambda router_name: _SYSTEM_INFO.get(
             router_name, _make_system_info(router_name, cpu=89 if router_name == "FPIK" else 12)
         ),
+    },
+    # Validasi flow: BGP primary DOWN → monitor triggers wati → wati konfirmasi masih down → config
+    "validasi_bgp_down": {
+        "list_routers": lambda: _ROUTER_LIST_WITH_IDREN,
+        "get_bgp_sessions": lambda router_name: _BGP_PRIMARY_DOWN.get(
+            router_name, f"Tidak ada BGP session di {router_name}."
+        ),
+        "get_ospf_neighbors": _ospf,
+        "check_reachability": _reachability_normal,
+        "check_ssh_access": lambda router_name: f"✓ {router_name}: SSH accessible",
+        "get_interface_stats": _interface_stats,
+    },
+    # Validasi resolved: BGP DOWN saat monitor, tapi sudah UP saat wati verifikasi
+    "validasi_bgp_resolved": {
+        "list_routers": lambda: _ROUTER_LIST_WITH_IDREN,
+        "get_bgp_sessions": lambda router_name: _BGP_PRIMARY_NOW_UP.get(
+            router_name, f"Tidak ada BGP session di {router_name}."
+        ),
+        "check_reachability": _reachability_normal,
+        "check_ssh_access": lambda router_name: f"✓ {router_name}: SSH accessible",
+    },
+    # Scope test: hanya router gate_idren yang diperiksa
+    "scope_idren": {
+        "list_routers": lambda: _ROUTER_LIST_WITH_IDREN,
+        "check_reachability": _reachability_normal,
+        "get_system_info": _system_info,
+    },
+    # Security brute force dengan action items SEGERA (trigger validasi)
+    "security_brute_force_segera": {
+        "audit_security": lambda router_name="all": _SECURITY_WITH_SEGERA.get(
+            router_name, _SECURITY.get(router_name, _SECURITY["GATE-IDREN-UB"])
+        ),
+        "get_router_log": _router_log,
+        "check_reachability": _reachability_normal,
+        "get_bgp_sessions": _bgp,
+        "get_system_info": _system_info,
     },
 }
 
