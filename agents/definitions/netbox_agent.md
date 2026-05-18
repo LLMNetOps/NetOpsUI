@@ -1,6 +1,6 @@
 ---
 name: netbox_agent
-alias: budi
+alias: yanto
 description: >
   Query inventaris NetBox (device, interface, IP), deteksi drift antara NetBox
   dan kondisi aktual router MikroTik, lalu serahkan eksekusi perubahan ke config_agent.
