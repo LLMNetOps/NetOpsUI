@@ -88,15 +88,19 @@ AGENT_INFO: dict[str, str] = {
     "joko":    "config",
     "satria":  "security",
     "budi":    "dokumen",
+    "yanto":   "netbox",
+    "wati":    "validasi",
 }
 
 _ROLE_TO_ALIAS: dict[str, str] = {
-    "monitor_agent":  "eko",
-    "diagnose_agent": "agus",
-    "config_agent":   "joko",
-    "security_agent": "satria",
-    "document_agent": "budi",
-    "supervisor":     "bambang",
+    "monitor_agent":   "eko",
+    "diagnose_agent":  "agus",
+    "config_agent":    "joko",
+    "security_agent":  "satria",
+    "document_agent":  "budi",
+    "netbox_agent":    "yanto",
+    "validasi_agent":  "wati",
+    "supervisor":      "bambang",
 }
 
 KANBAN_COLS: list[tuple[str, str]] = [
@@ -106,6 +110,7 @@ KANBAN_COLS: list[tuple[str, str]] = [
     ("menunggu", "MENUNGGU"),
     ("selesai",  "SELESAI"),
     ("gagal",    "GAGAL"),
+    ("nonaktif", "NONAKTIF"),
 ]
 
 _KANBAN_COL_COLOR: dict[str, int] = {
@@ -115,6 +120,7 @@ _KANBAN_COL_COLOR: dict[str, int] = {
     "menunggu": C_WARN,
     "selesai":  C_TITLE,
     "gagal":    C_ERR,
+    "nonaktif": C_DIM,
 }
 
 _kanban_lock = threading.Lock()
@@ -124,16 +130,40 @@ def _kanban_blank() -> dict:
     return {"col": "standby", "col_since": time.time(), "tool_count": 0, "last_tool": ""}
 
 
+def _kanban_nonaktif() -> dict:
+    return {"col": "nonaktif", "col_since": time.time(), "tool_count": 0, "last_tool": "disabled"}
+
+
+def _get_disabled_aliases() -> set[str]:
+    """Return alias set of agents with enabled=false in their definition."""
+    try:
+        from agents.loader import AgentLoader  # noqa: PLC0415
+        loader = AgentLoader()
+        return {d.alias for d in loader.all(include_disabled=True) if not d.enabled}
+    except Exception:
+        return set()
+
+
+_DISABLED_ALIASES: set[str] = _get_disabled_aliases()
+
+
 def _set_col(agents: dict, alias: str, col: str) -> None:
     """Set agent column and record transition timestamp."""
     agents[alias]["col"] = col
     agents[alias]["col_since"] = time.time()
 
 
+def _initial_agents() -> dict:
+    return {
+        alias: _kanban_nonaktif() if alias in _DISABLED_ALIASES else _kanban_blank()
+        for alias in AGENT_INFO
+    }
+
+
 _kanban_state: dict = {
     "query":       "",
     "query_start": time.time(),
-    "agents":      {alias: _kanban_blank() for alias in AGENT_INFO},
+    "agents":      _initial_agents(),
 }
 
 
@@ -142,9 +172,10 @@ def _kanban_reset(query: str) -> None:
         now = time.time()
         _kanban_state["query"] = query[:60]
         _kanban_state["query_start"] = now
-        _kanban_state["agents"] = {alias: _kanban_blank() for alias in AGENT_INFO}
-        _kanban_state["agents"]["bambang"]["col"] = "berjalan"
-        _kanban_state["agents"]["bambang"]["col_since"] = now
+        agents = _initial_agents()
+        agents["bambang"]["col"] = "berjalan"
+        agents["bambang"]["col_since"] = now
+        _kanban_state["agents"] = agents
 
 
 def _kanban_update(event_type: str, content: str) -> None:

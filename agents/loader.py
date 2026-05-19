@@ -39,6 +39,8 @@ class AgentDefinition:
     reasoning: bool = False
     # Max ReAct iterations (tool calls) before forced summary
     max_iters: int = 20
+    # Set False di frontmatter untuk nonaktifkan agent tanpa hapus file
+    enabled: bool = True
 
 
 def _parse_definition_file(path: Path) -> Optional[AgentDefinition]:
@@ -90,6 +92,7 @@ def _parse_definition_file(path: Path) -> Optional[AgentDefinition]:
         ollama_host=str(fm.get("ollama_host", "")),
         reasoning=bool(fm.get("reasoning", False)),
         max_iters=int(fm.get("max_iters", 20)),
+        enabled=bool(fm.get("enabled", True)),
     )
 
 
@@ -139,7 +142,7 @@ class AgentLoader:
         """
         warnings: list[str] = []
 
-        for defn in self._agents.values():
+        for defn in self.all(include_disabled=True):
             agent_tool_set = set(defn.tools)
 
             # Check tool existence
@@ -175,8 +178,11 @@ class AgentLoader:
     def get(self, name: str) -> Optional[AgentDefinition]:
         return self._agents.get(name)
 
-    def all(self) -> list[AgentDefinition]:
-        return list(self._agents.values())
+    def all(self, include_disabled: bool = False) -> list[AgentDefinition]:
+        agents = list(self._agents.values())
+        if include_disabled:
+            return agents
+        return [a for a in agents if a.enabled]
 
     def tool_list(self, agent_name: str) -> list[str]:
         """Return the tool name list for an agent, or [] if not found."""

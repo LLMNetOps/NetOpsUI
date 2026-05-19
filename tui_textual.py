@@ -43,15 +43,19 @@ AGENTS_DEF: list[dict] = [
     {"name": "joko",    "role": "config",     "color": "#ffa657"},
     {"name": "satria",  "role": "security",   "color": "#ff7b72"},
     {"name": "budi",    "role": "dokumen",    "color": "#a8c7fa"},
+    {"name": "yanto",   "role": "netbox",     "color": "#e3b341"},
+    {"name": "wati",    "role": "validasi",   "color": "#f78166"},
 ]
 
 ALIAS_MAP: dict[str, str] = {
-    "monitor_agent":  "eko",
-    "diagnose_agent": "agus",
-    "config_agent":   "joko",
-    "security_agent": "satria",
-    "document_agent": "budi",
-    "supervisor":     "bambang",
+    "monitor_agent":   "eko",
+    "diagnose_agent":  "agus",
+    "config_agent":    "joko",
+    "security_agent":  "satria",
+    "document_agent":  "budi",
+    "netbox_agent":    "yanto",
+    "validasi_agent":  "wati",
+    "supervisor":      "bambang",
 }
 
 STATE_COLORS: dict[str, str] = {
@@ -367,7 +371,8 @@ class AgentCard(Widget):
             yield Static(av, classes="a-av")
             yield Static(s.name, classes="a-name")
             _ROLE_ABBR = {"supervisor": "SUPV", "monitor": "MON", "diagnosa": "DIAG",
-                          "config": "CONF", "security": "SEC", "dokumen": "DOC"}
+                          "config": "CONF", "security": "SEC", "dokumen": "DOC",
+                          "netbox": "NBX", "validasi": "VAL"}
             yield Static(_ROLE_ABBR.get(s.role, s.role.upper()[:4]), classes="a-role")
         with Horizontal(classes="a-row"):
             yield Static(Text(f"● {s.state}", style=sc), classes="a-chip", id=f"chip-{s.name}")
@@ -406,7 +411,7 @@ class AgentRail(Widget):
     def compose(self) -> ComposeResult:
         with Horizontal(id="agent-rail-head"):
             yield Static("AGENTS", id="agent-rail-title")
-            yield Static("0/6", id="agent-rail-count")
+            yield Static("0/8", id="agent-rail-count")
         with ScrollableContainer(id="agent-list"):
             for d in AGENTS_DEF:
                 card = AgentCard(self._states[d["name"]])
@@ -447,7 +452,7 @@ class AgentRail(Widget):
     def _upd_count(self) -> None:
         active = sum(1 for s in self._states.values() if s.state in ("BERJALAN", "MENUNGGU"))
         try:
-            self.query_one("#agent-rail-count", Static).update(f"{active}/6")
+            self.query_one("#agent-rail-count", Static).update(f"{active}/8")
         except Exception:
             pass
 
