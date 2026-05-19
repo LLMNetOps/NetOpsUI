@@ -1,0 +1,35 @@
+id: netbox-read
+description: Query inventaris NetBox untuk router GATE-IDREN-UB (device, interface, IP)
+fixture_set: default
+input: "lihat data netbox router GATE-IDREN-UB — tampilkan interface dan IP yang terdokumentasi"
+
+expected_agents:
+  - netbox_agent
+
+expected_tools:
+  - get_netbox_devices
+  - get_netbox_device_interfaces
+
+acceptance_criteria:
+  - type: agent_used
+    agent: netbox_agent
+    description: netbox_agent (yanto) harus menangani permintaan ini
+
+  - type: tool_called
+    tool: get_netbox_devices
+    description: Harus ambil daftar device NetBox terlebih dahulu
+
+  - type: tool_called
+    tool: get_netbox_device_interfaces
+    description: Harus query interface managed-by-agent
+
+  - type: no_error
+    description: Tidak boleh ada error event
+
+  - type: trace_contains_any
+    texts:
+      - "vlan702"
+      - "qsfp28-1-1"
+      - "managed-by-agent"
+      - "GATE-IDREN-UB"
+    description: Output harus berisi data interface real dari NetBox (parent qsfp28-1-1)

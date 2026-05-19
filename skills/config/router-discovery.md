@@ -140,15 +140,24 @@ Ditemukan dan tervalidasi:
 Menambahkan ke config.yaml — menunggu approval operator...
 ```
 
-Langsung jalankan `add_router_to_config(...)` — interrupt gate akan meminta approval.
-
-Setelah approval berhasil, simpan ke cross-session memory:
+Simpan hasil discovery ke cross-session memory:
 ```
 remember_router_fact(router_name=<nama>, fact_type="discovered_ip", value=<IP>, source=<cara ditemukan>)
 remember_router_fact(router_name=<nama>, fact_type="ros_version", value=<"6" atau "7">, source="discovery")
 ```
 
-Setelah approval dan penambahan berhasil, **langsung lanjutkan** task awal operator
+Lalu **handoff ke config_agent** dengan instruksi:
+```
+Tolong tambahkan router berikut ke config.yaml:
+  nama     : <nama-router>
+  host     : <IP>
+  ros_version: <6 atau 7>
+  role     : <sesuai konteks, misal: gate_idren>
+
+Sumber IP: <cara ditemukan — NetBox primary_ip / BGP session di router X>
+```
+
+Setelah config_agent berhasil menambahkan router, **langsung lanjutkan** task awal operator
 (cek sistem, drift report, dsb.) tanpa menunggu konfirmasi tambahan.
 
 ### Jika semua IP gagal validasi:
@@ -208,5 +217,5 @@ Jika validasi belum lengkap → coba sumber alternatif, baru lapor jika memang t
 
 | Kondisi | Aksi | Agent Tujuan |
 |---------|------|--------------|
-| Router ditemukan + tervalidasi + ditambahkan | Lanjutkan task awal operator | agent semula (monitor/diagnose) |
+| Router ditemukan + tervalidasi | Handoff ke config_agent untuk add_router_to_config, lalu lanjut task awal | config_agent |
 | Gagal validasi semua IP | Tanya operator IP manual, tunggu input | END (tunggu operator) |

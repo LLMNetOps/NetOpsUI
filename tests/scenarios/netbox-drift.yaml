@@ -1,0 +1,40 @@
+id: netbox-drift
+description: Deteksi drift antara NetBox dan kondisi aktual router GATE-IDREN-UB
+fixture_set: default
+input: "cek perbedaan netbox vs router GATE-IDREN-UB — ada IP yang belum dikonfigurasi di router?"
+
+expected_agents:
+  - netbox_agent
+
+expected_tools:
+  - get_netbox_drift_report
+
+acceptance_criteria:
+  - type: agent_used
+    agent: netbox_agent
+    description: netbox_agent (yanto) harus menangani permintaan ini
+
+  - type: tool_called
+    tool: get_netbox_drift_report
+    description: Harus jalankan drift report sebelum memutuskan aksi
+
+  - type: no_error
+    description: Tidak boleh ada error event
+
+  - type: trace_contains_any
+    texts:
+      - "172.17.0.16/31"
+      - "vlan2009"
+      - "IP PERLU DITAMBAH DI ROUTER"
+      - "172.17.0.4/31"
+    description: Output harus berisi temuan drift IP real (prefix /31 belum ada di router)
+
+  - type: output_contains_any
+    texts:
+      - "172.17.0.16"
+      - "vlan2009"
+      - "vlan2006"
+      - "config_agent"
+      - "handoff"
+      - "perlu ditambah"
+    description: Yanto harus menyebut IP yang perlu ditambah ke router dan rencana handoff ke config_agent

@@ -279,6 +279,13 @@ def _extract_tool_names(content: str) -> list[str]:
         "run_diagnostic", "list_reports", "get_report", "get_report_section",
         "get_report_toc", "list_templates", "read_template", "write_document",
         "create_template", "write_skill", "fetch_url",
+        # NetBox tools
+        "get_netbox_devices", "get_netbox_device_interfaces", "get_netbox_device_ips",
+        "get_netbox_drift_report", "add_netbox_ip_address", "update_netbox_interface",
+        "get_netbox_vlan_groups", "get_next_available_vlan", "get_netbox_vlan_group_detail",
+        "create_netbox_vlan_interface", "populate_netbox_bgp", "populate_netbox_from_router",
+        "get_netbox_bgp_drift", "resolve_router_host", "patch_router_host",
+        "remember_router_fact", "recall_router_facts",
     ]
     return [t for t in known_tools if t in content]
 

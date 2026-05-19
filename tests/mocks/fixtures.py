@@ -460,6 +460,244 @@ Top attacker IPs:
 Perintah: /ip/firewall/address-list/add list=blacklist address=185.220.101.47""",
 }
 
+# ── NetBox mock data ──────────────────────────────────────────────────────────
+
+_NETBOX_DEVICES = """Device di NetBox [idren] (29 total)
+────────────────────────────────────────────────────────────
+  GATE-IDREN-UB    primary_ip=103.78.233.1/32  status=Active  site=Universitas Brawijaya - UB
+  GATE-IDREN-ITS   primary_ip=—                status=Planned  site=Institut Teknologi Sepuluh Nopember - ITS
+  GATE-IDREN-UI    primary_ip=—                status=Planned  site=Universitas Indonesia - UI
+  GATE-IDREN-UGM   primary_ip=—                status=Active   site=Universitas Gadjah Mada - UGM
+  GATE-IDREN-UNDIP primary_ip=—                status=Active   site=Universitas Diponegoro UNDIP
+  GATE-IDREN-UNUD  primary_ip=—                status=Active   site=Universitas Udayana UNUD
+  (... 23 device lain)
+
+Total: 29 device"""
+
+# Semua 39 VLAN interface GATE-IDREN-UB sudah ada di NetBox.
+# Tag managed-by-agent belum diterapkan — tool fallback tampilkan semua.
+_NETBOX_INTERFACES = {
+    "GATE-IDREN-UB": """Interface 'GATE-IDREN-UB' [semua virtual — tag 'managed-by-agent' belum diterapkan] (41 interface)
+────────────────────────────────────────────────────────────
+
+  VLAN-702-CBN-GATE-IDREN-UB-NODE-IDREN-PPNS
+    vlan-id=702  parent=qsfp28-1-1  enabled
+    desc=TO NODE-IDREN-PPNS VIA CBN
+    IPs: 172.17.0.45/30
+
+  vlan906-GATE-ARENAPAC
+    vlan-id=906  parent=qsfp28-2-1  enabled
+    desc=TO GATE-ARENAPAC VIA FIBER
+    IPs: 103.161.244.202/29
+
+  vlan2002-TO-GATE-IDREN-ITS-VIA-TELKOM
+    vlan-id=2002  parent=qsfp28-1-1  enabled
+    desc=TO GATE-IDREN-ITS VIA TELKOM
+    IPs: 172.31.0.21/30
+
+  vlan2006-TO-NODE-IDREN-UNPATTI-VIA-TELKOM
+    vlan-id=2006  parent=qsfp28-1-1  enabled
+    desc=TO NODE-IDREN-UNPATTI VIA TELKOM
+    IPs: 172.17.0.4/31
+
+  vlan2009-TO-GATE-UNEJ-VIA-TELKOM
+    vlan-id=2009  parent=qsfp28-1-1  enabled
+    desc=TO GATE-IDREN-UNEJ VIA TELKOM
+    IPs: 103.241.204.217/31, 172.17.0.16/31
+
+  vlan2014-TO-NODE-UNSRAT-VIA-TELKOM
+    vlan-id=2014  parent=qsfp28-1-1  enabled
+    desc=TO NODE-IDREN-UNSRAT VIA TELKOM
+    IPs: 172.17.0.33/30
+
+  (... 35 interface lain)""",
+}
+
+_NETBOX_IPS = {
+    "GATE-IDREN-UB": """IP Address di NetBox — GATE-IDREN-UB (46 total):
+
+  172.17.0.45/30   interface=VLAN-702-CBN-GATE-IDREN-UB-NODE-IDREN-PPNS  (TO NODE-IDREN-PPNS VIA CBN)
+  103.161.244.202/29 interface=vlan906-GATE-ARENAPAC  (TO GATE-ARENAPAC VIA FIBER)
+  172.31.0.21/30   interface=vlan2002-TO-GATE-IDREN-ITS-VIA-TELKOM
+  172.17.0.4/31    interface=vlan2006-TO-NODE-IDREN-UNPATTI-VIA-TELKOM
+  172.17.0.16/31   interface=vlan2009-TO-GATE-UNEJ-VIA-TELKOM
+  103.241.204.217/31 interface=vlan2009-TO-GATE-UNEJ-VIA-TELKOM
+  172.17.0.33/30   interface=vlan2014-TO-NODE-UNSRAT-VIA-TELKOM
+  103.78.233.1/32  interface=lo0
+  (... 38 IP lain)
+
+Total: 46 IP address""",
+}
+
+# Drift real: semua 39 VLAN interface cocok. Ada 2 IP prefix mismatch (NetBox /31, router /32).
+_NETBOX_DRIFT = {
+    "GATE-IDREN-UB": """Drift Report: GATE-IDREN-UB (172.18.4.220) ↔ NetBox 'GATE-IDREN-UB'
+══════════════════════════════════════════════════════════════════════
+
+[!] Tag 'managed-by-agent' belum ada — membandingkan semua virtual interface
+
+[INTERFACE VLAN] NetBox: 39  |  Router: 39
+  Semua VLAN interface NetBox sudah ada di router (by VLAN ID). ✓
+
+[IP ADDRESS] NetBox: 46  |  Router: 47
+
+  IP PERLU DITAMBAH DI ROUTER (2):
+    + 172.17.0.16/31  interface=vlan2009-TO-GATE-UNEJ-VIA-TELKOM
+      → /ip/address/add address=172.17.0.16/31 interface=vlan2009-TO-GATE-UNEJ-VIA-TELKOM
+    + 172.17.0.4/31  interface=vlan2006-TO-NODE-IDREN-UNPATTI-VIA-TELKOM
+      → /ip/address/add address=172.17.0.4/31 interface=vlan2006-TO-NODE-IDREN-UNPATTI-VIA-TELKOM
+
+  IP ADA DI ROUTER, TIDAK DI NETBOX (3) [informasi]:
+    ? 172.17.0.16/32  interface=vlan2009-TO-GATE-UNEJ-VIA-TELKOM
+    ? 172.17.0.4/32  interface=vlan2006-TO-NODE-IDREN-UNPATTI-VIA-TELKOM
+    ? 192.168.251.1/32  interface=wireguard1-mkt-ai3
+
+══════════════════════════════════════════════════════════════════════
+HASIL: 2 item perlu disinkronisasi ke router (0 interface, 2 IP).
+Handoff ke config_agent untuk eksekusi dengan approval operator.""",
+}
+
+_NETBOX_BGP_DRIFT = """BGP Drift — NetBox vs Router  [IDREN]
+══════════════════════════════════════════════════════════════════════
+
+── GATE-IDREN-UB (103.78.233.1) ──
+  ⚠ Di router, tidak di NetBox (3):
+    - TO-GATE-IDREN-ITS-VIA-TELKOM  AS23711  ✓  (remote: 172.31.0.22)
+    - TO-GATE-IDREN-UNUD-VIA-TELKOM AS23720  ✓  (remote: 172.31.0.10)
+    - TO-GATE-ARENAPAC              AS55818  ✓  (remote: 103.161.244.201)
+  ✓ Di kedua sumber (2): TO-IDREN-UPSTREAM, TO-GATE-IDREN-UI  cocok.
+
+── GATE-IDREN-ITS (172.31.0.22) ──
+  ✓ Sinkron — 4 session cocok.
+
+══════════════════════════════════════════════════════════════════════
+Ada drift. Jalankan populate_netbox_bgp() untuk sinkronisasi."""
+
+_NETBOX_BGP_POPULATE = """Populate NetBox BGP — GATE-IDREN-UB [EKSEKUSI]
+══════════════════════════════════════════════════════════════════════
+
+  [auto-create ASN] AS23720
+  [auto-create ASN] AS55818
+  ✓ TO-GATE-IDREN-ITS-VIA-TELKOM  — created (remote: 172.31.0.22 AS23711)
+  ✓ TO-GATE-IDREN-UNUD-VIA-TELKOM — created (remote: 172.31.0.10 AS23720)
+  ✓ TO-GATE-ARENAPAC              — created (remote: 103.161.244.201 AS55818)
+
+Selesai: 3 session ditambahkan ke NetBox."""
+
+# Router punya 35 VLAN interface, NetBox baru dokumentasikan 4.
+# Dry-run menampilkan 31 interface yang belum terdokumentasi.
+_NETBOX_POPULATE_FROM_ROUTER_DRY = """Populate NetBox dari Router: GATE-IDREN-UB → 'GATE-IDREN-UB' [DRY-RUN]
+══════════════════════════════════════════════════════════════════════
+
+[FIX PARENT] 0 interface perlu diperbaiki:
+  Tidak ada.
+
+[INTERFACE BARU] 0 VLAN interface akan dibuat:
+  Tidak ada. Semua 39 VLAN interface router sudah terdokumentasi di NetBox.
+
+[IP BARU] 1 IP address akan ditambah:
+  192.168.251.1/32  interface=wireguard1-mkt-ai3
+
+[KONFLIK PREFIX] 2 IP perlu verifikasi manual:
+  Router: 172.17.0.16/32  NetBox: 172.17.0.16/31  interface=vlan2009-TO-GATE-UNEJ-VIA-TELKOM
+  Router: 172.17.0.4/32   NetBox: 172.17.0.4/31   interface=vlan2006-TO-NODE-IDREN-UNPATTI-VIA-TELKOM
+  → Tidak diubah otomatis. Periksa prefix yang benar dan update manual di NetBox.
+
+══════════════════════════════════════════════════════════════════════
+DRY-RUN selesai. Untuk eksekusi, jalankan ulang dengan dry_run=False."""
+
+_NETBOX_VLAN_GROUPS = """VLAN Groups di NetBox [IDREN]:
+
+  vg-indosat   range=551-600   active=7   reserved=0   kosong=43
+  vg-moratel   range=601-650   active=4   reserved=0   kosong=46
+  vg-cbn       range=701-760   active=3   reserved=0   kosong=57
+  vg-iforte    range=1101-1110 active=4   reserved=0   kosong=6
+  vg-hsp       range=1051-1060 active=2   reserved=0   kosong=8
+  vg-telkom    range=2001-2050 active=15  reserved=0   kosong=35
+  vg-mgmt      range=2-100     active=5   reserved=0   kosong=94
+
+Total: 7 VLAN group"""
+
+_NETBOX_NEXT_VLAN = {
+    "vg-indosat": "VLAN berikutnya tersedia di group 'vg-indosat': ID=558 (slot kosong)",
+    "vg-moratel": "VLAN berikutnya tersedia di group 'vg-moratel': ID=604 (slot kosong)",
+    "vg-cbn":     "VLAN berikutnya tersedia di group 'vg-cbn': ID=704 (slot kosong)",
+    "vg-telkom":  "VLAN berikutnya tersedia di group 'vg-telkom': ID=2016 (slot kosong)",
+}
+
+_NETBOX_VLAN_GROUP_DETAIL = {
+    "vg-telkom": """Detail VLAN Group: vg-telkom (range 2001-2050)
+
+  Active (15):  2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009,
+                2012, 2014, 2015, 2016, 2020, 2025
+  Reserved (0): (tidak ada)
+  Kosong (35):  2010-2011, 2013, 2017-2019, 2021-2024, 2026-2050""",
+    "vg-indosat": """Detail VLAN Group: vg-indosat (range 551-600)
+
+  Active (7):   551, 552, 553, 554, 555, 556, 557
+  Reserved (0): (tidak ada)
+  Kosong (43):  558-600""",
+}
+
+
+def _netbox_devices(instance: str = "idren") -> str:
+    return _NETBOX_DEVICES
+
+
+def _netbox_interfaces(device_name: str, instance: str = "auto") -> str:
+    return _NETBOX_INTERFACES.get(device_name, f"Tidak ada interface managed untuk '{device_name}'.")
+
+
+def _netbox_ips(device_name: str, instance: str = "auto") -> str:
+    return _NETBOX_IPS.get(device_name, f"Tidak ada IP address di NetBox untuk '{device_name}'.")
+
+
+def _netbox_drift(router_name: str, device_name: str = "", instance: str = "auto") -> str:
+    return _NETBOX_DRIFT.get(router_name, f"Tidak ada drift data untuk '{router_name}'.")
+
+
+def _netbox_bgp_drift(router_name: str = "", instance: str = "idren") -> str:
+    return _NETBOX_BGP_DRIFT
+
+
+def _netbox_bgp_populate(router_name: str = "", instance: str = "idren") -> str:
+    return _NETBOX_BGP_POPULATE
+
+
+def _netbox_populate_from_router(router_name: str, device_name: str = "", dry_run: bool = True, instance: str = "auto") -> str:
+    return _NETBOX_POPULATE_FROM_ROUTER_DRY
+
+
+def _netbox_vlan_groups(instance: str = "idren") -> str:
+    return _NETBOX_VLAN_GROUPS
+
+
+def _netbox_next_vlan(group_slug: str, instance: str = "idren") -> str:
+    return _NETBOX_NEXT_VLAN.get(group_slug, f"Group '{group_slug}' tidak ditemukan.")
+
+
+def _netbox_vlan_group_detail(group_slug: str, instance: str = "idren") -> str:
+    return _NETBOX_VLAN_GROUP_DETAIL.get(group_slug, f"Detail group '{group_slug}' tidak ditemukan.")
+
+
+def _netbox_create_vlan(device_name: str, vlan_id: int, parent_interface: str, description: str = "", instance: str = "idren") -> str:
+    return f"✓ Interface vlan{vlan_id} berhasil dibuat di NetBox untuk '{device_name}' (parent={parent_interface})."
+
+
+def _netbox_add_ip(ip_with_prefix: str, interface_name: str, device_name: str, description: str = "", instance: str = "auto") -> str:
+    return f"✓ IP {ip_with_prefix} berhasil ditambahkan ke NetBox (interface={interface_name}, device={device_name})."
+
+
+def _netbox_update_interface(device_name: str, interface_name: str, instance: str = "auto", **kwargs) -> str:
+    return f"✓ Interface '{interface_name}' di '{device_name}' berhasil diupdate di NetBox."
+
+
+def _resolve_router_host(router_name: str) -> str:
+    hosts = {"GATE-IDREN-UB": "103.22.20.254", "GATE-IDREN-ITS": "103.25.10.1"}
+    ip = hosts.get(router_name.upper(), "10.0.0.1")
+    return f"Router '{router_name}' → host={ip}"
+
+
 # ── Named fixture sets untuk scenario ────────────────────────────────────────
 
 FIXTURE_SETS: dict[str, dict[str, object]] = {
@@ -491,6 +729,24 @@ FIXTURE_SETS: dict[str, dict[str, object]] = {
         "get_report": lambda filename: f"# Laporan\n[konten laporan {filename}]",
         "fetch_url": lambda url: f"Konten dari {url}:\n[mock content]",
         "write_skill": lambda domain, name, content: f"Skill {name} berhasil disimpan di skills/{domain}/{name}.md",
+        # NetBox tools — default fixture (data kosong/netral)
+        "get_netbox_devices": _netbox_devices,
+        "get_netbox_device_interfaces": _netbox_interfaces,
+        "get_netbox_device_ips": _netbox_ips,
+        "get_netbox_drift_report": _netbox_drift,
+        "get_netbox_bgp_drift": _netbox_bgp_drift,
+        "populate_netbox_bgp": _netbox_bgp_populate,
+        "populate_netbox_from_router": _netbox_populate_from_router,
+        "get_netbox_vlan_groups": _netbox_vlan_groups,
+        "get_next_available_vlan": _netbox_next_vlan,
+        "get_netbox_vlan_group_detail": _netbox_vlan_group_detail,
+        "create_netbox_vlan_interface": _netbox_create_vlan,
+        "add_netbox_ip_address": _netbox_add_ip,
+        "update_netbox_interface": _netbox_update_interface,
+        "resolve_router_host": _resolve_router_host,
+        "patch_router_host": lambda router_name, host, **kw: f"✓ Host router '{router_name}' diupdate → {host}",
+        "remember_router_fact": lambda router_name, fact_type, value, source="": f"✓ Fact disimpan: {router_name}.{fact_type}={value}",
+        "recall_router_facts": lambda router_name: f"Facts untuk '{router_name}': (tidak ada data tersimpan)",
     },
     "dhcp_exhaustion": {
         "audit_dhcp": _dhcp_exhaustion,

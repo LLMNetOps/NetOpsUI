@@ -11,6 +11,11 @@ triggers:
   - drift netbox
   - netbox ke router
   - update router dari netbox
+  - perbedaan netbox vs router
+  - netbox tidak sesuai router
+  - sinkronkan router dari netbox
+  - terapkan drift ke router
+  - netbox beda dengan kondisi aktual
 tools:
   - get_netbox_drift_report
   - get_netbox_device_interfaces
