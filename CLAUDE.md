@@ -6,8 +6,9 @@ Platform operasional jaringan kampus berbasis LangGraph multi-agent. Agent SSH k
 
 ```bash
 source .venv/bin/activate
-python tui.py          # TUI ncurses saat ini
-# python tui_textual.py  # TUI baru (belum diimplementasi — Phase 8)
+python tui.py          # TUI ncurses (production)
+python server.py       # Web server (FastAPI) — http://localhost:8000
+# python tui_textual.py  # TUI Textual (experimental)
 ```
 
 Membutuhkan `config.yaml` (tidak di-commit) dan `.env` dengan `OLLAMA_BASE_URL` + `OLLAMA_MODEL`.
