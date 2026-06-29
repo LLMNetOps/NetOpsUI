@@ -1,4 +1,6 @@
-# CLAUDE.md — llmnetops
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 Platform operasional jaringan kampus berbasis LangGraph multi-agent. Agent SSH ke router MikroTik (RouterOS v6/v7), menganalisis kondisi jaringan, dan mengeksekusi perubahan dengan approval operator.
 
@@ -6,11 +8,43 @@ Platform operasional jaringan kampus berbasis LangGraph multi-agent. Agent SSH k
 
 ```bash
 source .venv/bin/activate
-python tui.py          # TUI ncurses saat ini
-# python tui_textual.py  # TUI baru (belum diimplementasi — Phase 8)
+python tui.py          # TUI ncurses (production)
 ```
 
 Membutuhkan `config.yaml` (tidak di-commit) dan `.env` dengan `OLLAMA_BASE_URL` + `OLLAMA_MODEL`.
+
+## Setup
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env       # edit OLLAMA_BASE_URL dan OLLAMA_MODEL
+cp config.yaml.example config.yaml  # edit kredensial SSH + daftar router
+```
+
+## Testing & Evaluation
+
+```bash
+python tests/eval.py                   # semua scenarios, mock mode (tidak butuh router)
+python tests/eval.py bgp-ospf-report   # satu scenario by ID
+python tests/eval.py --list            # list scenario tersedia
+python tests/eval.py --lab             # pakai tool asli (butuh koneksi router)
+python tests/eval.py -v                # verbose (tampilkan semua events)
+```
+
+Scenarios didefinisikan sebagai YAML di `tests/scenarios/`. Mock fixtures di `tests/mocks/fixtures.py`.
+
+### Skill Review Workflow
+
+```bash
+python tests/review.py                 # list semua pending skills
+python tests/review.py show <name>     # tampilkan skill + checklist
+python tests/review.py approve <name>  # pindah ke production (live via hot-reload)
+python tests/review.py reject <name>   # hapus dari pending
+```
+
+Agent yang menulis skill baru via `write_skill()` → masuk `skills/.pending/` → operator review → approve/reject.
 
 ## Branch
 
@@ -33,9 +67,11 @@ tui.py  →  agent.py (public API)  →  agents/nodes.py  →  tools/*.py  →  
 ```
 
 - **`agent.py`** — hanya public API: `create_agent()`, `stream_agent_response()`, `resume_after_approval()`. Zero LLM logic.
+- **`agents/graph.py`** — `build_graph()` — assembles StateGraph: nodes, edges, conditional routing. Entry point for graph compilation.
 - **`agents/nodes.py`** — semua node LangGraph: `supervisor_node`, `_make_specialist_node()` factory, `config_node`.
 - **`agents/loader.py`** — baca `agents/definitions/*.md`, parse frontmatter YAML jadi `AgentDefinition`.
 - **`agents/tools.py`** — `TOOL_MAP: dict[str, tool]` — registry semua tools per domain.
+- **`agents/metrics.py`** — `TokenMetricsCallback` — logs Ollama token usage per LLM call to `data/metrics.jsonl`.
 - **`tools/*.py`** — 31+ atomic `@tool` functions, semua SSH ke MikroTik.
 - **`skills/library.py`** — `SkillLibrary` dengan hot reload via `watchfiles`.
 - **`skills/**/*.md`** — prosedur kerja agent; ditambah tanpa coding Python.
@@ -213,6 +249,7 @@ config.yaml      # kredensial SSH + daftar router
 backups/         # hasil backup config router
 laporan/         # laporan yang digenerate agent
 output/          # output lain
+data/            # SQLite checkpoints (riwayat percakapan) + metrics.jsonl
 ```
 
 ---
