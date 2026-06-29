@@ -1,0 +1,45 @@
+services:
+  backend:
+    build:
+      context: ..
+      dockerfile: frontend/Dockerfile.backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ../config.yaml:/app/config.yaml
+      - ../.env:/app/.env:ro
+      - ../backups:/app/backups
+      - ../laporan:/app/laporan
+      - ../data:/app/data
+      - ../skills:/app/skills
+      - ../agents/definitions:/app/agents/definitions
+    environment:
+      - PYTHONUNBUFFERED=1
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - netops
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:80"
+    volumes:
+      # Hot reload: mount host files directly into Nginx html dir
+      - ./index.html:/usr/share/nginx/html/index.html:ro
+      - ./css:/usr/share/nginx/html/css:ro
+      - ./js:/usr/share/nginx/html/js:ro
+      - ./assets:/usr/share/nginx/html/assets:ro
+      - ./fonts:/usr/share/nginx/html/fonts:ro
+    depends_on:
+      - backend
+    networks:
+      - netops
+    restart: unless-stopped
+
+networks:
+  netops:
+    driver: bridge

@@ -1,756 +1,2026 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="id">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>NetOps AI · Web Dashboard</title>
-<style>
-/* ============================================================
-   NetOps AI — Color & Type Tokens
-   Dark theme only. NOC console / precision instrument aesthetic.
-   ============================================================ */
-
-@font-face { font-family: 'IBM Plex Mono'; font-style: normal; font-weight: 400; font-display: swap; src: url('fonts/IBMPlexMono-Regular.woff2') format('woff2'); }
-@font-face { font-family: 'IBM Plex Mono'; font-style: normal; font-weight: 500; font-display: swap; src: url('fonts/IBMPlexMono-Medium.woff2') format('woff2'); }
-@font-face { font-family: 'IBM Plex Mono'; font-style: normal; font-weight: 600; font-display: swap; src: url('fonts/IBMPlexMono-SemiBold.woff2') format('woff2'); }
-@font-face { font-family: 'IBM Plex Sans'; font-style: normal; font-weight: 400; font-display: swap; src: url('fonts/IBMPlexSans-Regular.woff2') format('woff2'); }
-@font-face { font-family: 'IBM Plex Sans'; font-style: normal; font-weight: 500; font-display: swap; src: url('fonts/IBMPlexSans-Medium.woff2') format('woff2'); }
-@font-face { font-family: 'IBM Plex Sans Condensed'; font-style: normal; font-weight: 500; font-display: swap; src: url('fonts/IBMPlexSansCondensed-Medium.woff2') format('woff2'); }
-@font-face { font-family: 'IBM Plex Sans Condensed'; font-style: normal; font-weight: 600; font-display: swap; src: url('fonts/IBMPlexSansCondensed-SemiBold.woff2') format('woff2'); }
-
-:root {
-  --bg-0: #08090b;
-  --bg-1: #0e1014;
-  --bg-2: #15181e;
-  --bg-3: #1c2028;
-  --border-1: #252932;
-  --border-2: #363b46;
-  --fg-0: #e8eaee;
-  --fg-1: #a8aeba;
-  --fg-2: #6c7280;
-  --fg-3: #454a55;
-  --ok: #7ee787;
-  --ok-dim: #2d4a32;
-  --warn: #f0b85c;
-  --warn-dim: #4a3a1c;
-  --err: #ff7b72;
-  --err-dim: #4a1f1f;
-  --info: #79c0ff;
-  --info-dim: #1c3147;
-  --agent-bambang: #d2a8ff;
-  --agent-eko: #7ee787;
-  --agent-agus: #79c0ff;
-  --agent-joko: #ffa657;
-  --agent-satria: #ff7b72;
-  --agent-budi: #a8c7fa;
-  --state-standby: var(--fg-2);
-  --state-antrean: var(--info);
-  --state-berjalan: var(--ok);
-  --state-menunggu: var(--warn);
-  --state-selesai: var(--fg-1);
-  --state-gagal: var(--err);
-  --font-mono: 'IBM Plex Mono', ui-monospace, 'JetBrains Mono', Menlo, Consolas, monospace;
-  --font-sans: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --font-cond: 'IBM Plex Sans Condensed', 'IBM Plex Sans', system-ui, sans-serif;
-  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-6: 24px; --sp-8: 32px; --sp-12: 48px;
-  --r-0: 0; --r-1: 2px; --r-full: 9999px;
-  --shadow-elev: 0 8px 32px rgba(0,0,0,0.6), 0 0 0 1px var(--border-1);
-  --shadow-glow-ok: 0 0 6px rgba(126,231,135,0.6);
-  --shadow-glow-warn: 0 0 6px rgba(240,184,92,0.6);
-  --shadow-glow-err: 0 0 6px rgba(255,123,114,0.6);
-  --t-fast: 120ms cubic-bezier(0.2,0,0,1);
-  --t-base: 180ms cubic-bezier(0.2,0,0,1);
-  --t-modal: 320ms cubic-bezier(0.2,0,0,1);
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>LLMNetOps - Enterprise Console</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms"></script>
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      colors: {
+        "primary":"#002444","on-primary":"#ffffff","primary-container":"#1b3a5c",
+        "on-primary-container":"#87a4cc","secondary":"#94492d","on-secondary":"#ffffff",
+        "secondary-container":"#fe9d7b","on-secondary-container":"#773218",
+        "tertiary":"#142438","tertiary-container":"#2a3a4e",
+        "error":"#ba1a1a","on-error":"#ffffff","error-container":"#ffdad6",
+        "surface":"#f7f9fc","surface-dim":"#d8dadd","surface-bright":"#f7f9fc",
+        "surface-container-lowest":"#ffffff","surface-container-low":"#f2f4f7",
+        "surface-container":"#eceef1","surface-container-high":"#e6e8eb",
+        "surface-container-highest":"#e0e3e6",
+        "on-surface":"#191c1e","on-surface-variant":"#43474e",
+        "outline":"#73777f","outline-variant":"#c3c6cf",
+        "background":"#f7f9fc","on-background":"#191c1e",
+        "inverse-surface":"#2d3133","inverse-on-surface":"#eff1f4",
+      },
+      spacing: {
+        sidebar_width:"240px",header_height:"56px",container_gutter:"24px",
+        stack_gap_sm:"4px",stack_gap_md:"12px",stack_gap_lg:"24px",
+      },
+      fontFamily: {
+        "display-lg":["IBM Plex Sans"],  "headline-md":["IBM Plex Sans"],
+        "title-sm":["IBM Plex Sans"],    "body-md":["IBM Plex Sans"],
+        "body-sm":["IBM Plex Sans"],     "label-caps":["IBM Plex Sans"],
+        "data-mono":["IBM Plex Mono"],   "data-mono-sm":["IBM Plex Mono"],
+      },
+      fontSize: {
+        "display-lg":["30px",{lineHeight:"38px",letterSpacing:"-0.02em",fontWeight:"600"}],
+        "headline-md":["24px",{lineHeight:"32px",fontWeight:"600"}],
+        "title-sm":["18px",{lineHeight:"24px",fontWeight:"500"}],
+        "body-md":["14px",{lineHeight:"20px",fontWeight:"400"}],
+        "body-sm":["13px",{lineHeight:"18px",fontWeight:"400"}],
+        "label-caps":["11px",{lineHeight:"16px",letterSpacing:"0.05em",fontWeight:"700"}],
+        "data-mono":["13px",{lineHeight:"18px",fontWeight:"450"}],
+        "data-mono-sm":["11px",{lineHeight:"14px",fontWeight:"450"}],
+      },
+    },
+  },
 }
-
-html, body { background: var(--bg-0); color: var(--fg-0); font-family: var(--font-mono); font-size: 13px; line-height: 1.45; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
-
-.t-display { font-family: var(--font-cond); font-weight: 500; font-size: 32px; line-height: 1.1; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
-.t-h1 { font-family: var(--font-cond); font-weight: 500; font-size: 22px; line-height: 1.2; }
-.t-h2 { font-family: var(--font-cond); font-weight: 500; font-size: 16px; line-height: 1.3; text-transform: uppercase; letter-spacing: 0.06em; }
-.t-h3 { font-family: var(--font-cond); font-weight: 500; font-size: 13px; line-height: 1.4; text-transform: uppercase; letter-spacing: 0.08em; }
-.t-body { font-family: var(--font-sans); font-weight: 400; font-size: 14px; line-height: 1.5; }
-.t-data { font-family: var(--font-mono); font-weight: 400; font-size: 13px; line-height: 1.45; }
-.t-data-sm { font-family: var(--font-mono); font-weight: 400; font-size: 12px; line-height: 1.4; }
-.t-num { font-family: var(--font-mono); font-weight: 500; font-variant-numeric: tabular-nums; font-size: 13px; }
-.t-label { font-family: var(--font-cond); font-weight: 500; font-size: 11px; line-height: 1.3; text-transform: uppercase; letter-spacing: 0.1em; color: var(--fg-2); }
-.t-tag { font-family: var(--font-mono); font-weight: 500; font-size: 10px; line-height: 1.2; text-transform: uppercase; letter-spacing: 0.05em; }
-.t-dim { color: var(--fg-2); } .t-fg1 { color: var(--fg-1); } .t-ok { color: var(--ok); } .t-warn { color: var(--warn); } .t-err { color: var(--err); } .t-info { color: var(--info); }
-
-/* ============================================================
-   Web Dashboard styles
-   ============================================================ */
-
-* { box-sizing: border-box; }
-html, body { margin: 0; padding: 0; height: 100vh; overflow: hidden; }
-
-body::before {
-  content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 9999;
-  background: repeating-linear-gradient(0deg, rgba(255,255,255,0.018) 0 1px, transparent 1px 3px);
-}
-
-.app { display: grid; grid-template-rows: 40px 1fr 24px; height: 100vh; }
-
-/* TOP BAR */
-.topbar { display: flex; align-items: center; padding: 0 16px; gap: 16px; background: var(--bg-1); border-bottom: 1px solid var(--border-1); font-size: 12px; }
-.topbar-left { display: flex; align-items: center; gap: 12px; }
-.topbar-right { margin-left: auto; display: flex; align-items: center; gap: 18px; }
-.logo { font-family: var(--font-mono); font-weight: 500; font-size: 14px; color: var(--fg-0); display: inline-flex; gap: 1px; align-items: center; }
-.logo span { color: var(--fg-0); }
-.logo i { color: var(--ok); font-style: normal; padding: 0 4px; }
-.dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
-.dot-ok { background: var(--ok); }
-.topbar-thread { color: var(--fg-1); font-size: 12px; }
-.tb-meta { display: inline-flex; gap: 6px; align-items: center; font-family: var(--font-mono); }
-.tb-meta .lbl { font-family: var(--font-cond); font-weight: 500; font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--fg-2); }
-.tb-meta .val { color: var(--fg-0); font-variant-numeric: tabular-nums; }
-
-/* MAIN */
-.main { display: grid; grid-template-columns: 64px 1fr 360px; height: 100%; min-height: 0; }
-
-/* LEFT RAIL */
-.leftrail { background: var(--bg-1); border-right: 1px solid var(--border-1); display: flex; flex-direction: column; padding: 8px 0; gap: 1px; }
-.rail-btn { background: transparent; border: none; color: var(--fg-2); padding: 12px 6px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 4px; transition: background 120ms, color 120ms; border-left: 2px solid transparent; width: 100%; }
-.rail-btn:hover { background: var(--bg-2); color: var(--fg-1); }
-.rail-active { background: var(--bg-2); color: var(--fg-0); border-left-color: var(--ok); }
-.rail-glyph { font-size: 18px; line-height: 1; }
-.rail-label { font-family: var(--font-cond); font-size: 9px; text-transform: uppercase; letter-spacing: 0.08em; }
-
-/* CHAT PANEL */
-.chat-panel { display: grid; grid-template-rows: 36px 1fr auto; min-height: 0; background: var(--bg-0); }
-.chat-head { display: flex; align-items: center; padding: 0 16px; gap: 14px; border-bottom: 1px solid var(--border-1); background: var(--bg-1); }
-.chat-head-title { font-family: var(--font-cond); font-weight: 500; font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--fg-1); }
-.chat-head-meta { color: var(--fg-2); font-size: 11px; font-family: var(--font-mono); }
-.chat-head-btns { margin-left: auto; display: flex; gap: 8px; }
-
-.chat-stream { padding: 16px 20px 24px; overflow-y: auto; font-family: var(--font-mono); font-size: 13px; line-height: 1.6; min-height: 0; }
-.chat-stream::-webkit-scrollbar { width: 8px; }
-.chat-stream::-webkit-scrollbar-track { background: var(--bg-0); }
-.chat-stream::-webkit-scrollbar-thumb { background: var(--border-1); }
-
-.ch-line { white-space: pre-wrap; }
-.ch-block { margin: 8px 0; padding: 10px 12px; background: var(--bg-1); border-left: 1px solid var(--border-2); }
-.ch-you { color: var(--ok); font-weight: 500; }
-.ch-user-text { color: var(--fg-0); }
-.ch-ev { color: var(--fg-2); }
-.ch-ok { color: var(--ok); }
-.ch-err { color: var(--err); }
-.ch-warn { color: var(--warn); }
-.ch-ai { color: var(--warn); font-weight: 500; }
-.ch-ai-body { color: var(--fg-0); }
-.ch-ai-cont { color: var(--fg-0); padding-left: 6ch; }
-.ch-dim { color: var(--fg-3); }
-.ch-caret { display: inline-block; width: 7px; height: 13px; background: var(--fg-0); vertical-align: -2px; margin-left: 1px; animation: blink 1s step-start infinite; }
-@keyframes blink { 50% { opacity: 0; } }
-.ch-approval { padding: 8px 10px; background: rgba(74,58,28,0.3); border: 1px solid var(--warn); margin: 6px 0; }
-
-.ch-meter { display: flex; gap: 14px; padding: 6px 0 0; margin-top: 6px; border-top: 1px dashed var(--border-1); font-size: 10px; color: var(--fg-2); font-family: var(--font-mono); }
-.ch-meter span { display: inline-flex; gap: 4px; align-items: center; }
-.ch-meter i { font-style: normal; font-family: var(--font-cond); text-transform: uppercase; letter-spacing: 0.08em; color: var(--fg-3); font-size: 9px; }
-.ch-meter b { font-weight: 500; color: var(--fg-1); font-variant-numeric: tabular-nums; }
-
-/* COMPOSER */
-.composer { display: grid; grid-template-columns: 30px 1fr auto; gap: 0; align-items: stretch; background: var(--bg-1); border-top: 1px solid var(--border-1); padding: 12px 16px; }
-.comp-prompt { font-family: var(--font-mono); font-size: 14px; color: var(--ok); padding-top: 6px; font-weight: 600; }
-.comp-input { background: var(--bg-2); border: 1px solid var(--border-1); color: var(--fg-0); padding: 8px 10px; font-family: var(--font-mono); font-size: 13px; resize: none; outline: none; line-height: 1.5; }
-.comp-input:focus { border-color: var(--border-2); }
-.comp-input::placeholder { color: var(--fg-3); }
-.comp-side { display: flex; flex-direction: column; gap: 6px; align-items: flex-end; padding-left: 14px; justify-content: space-between; }
-.comp-hint { font-family: var(--font-mono); font-size: 10px; color: var(--fg-2); display: inline-flex; gap: 4px; align-items: center; }
-.comp-hint kbd { background: var(--bg-2); border: 1px solid var(--border-1); padding: 1px 5px; font-family: var(--font-mono); font-size: 10px; color: var(--fg-0); }
-
-/* BUTTONS */
-.btn-pri { font-family: var(--font-mono); font-weight: 500; font-size: 12px; padding: 6px 14px; background: var(--bg-3); color: var(--fg-0); border: 1px solid var(--border-2); cursor: pointer; border-radius: 2px; transition: background 120ms; }
-.btn-pri:hover { background: var(--border-1); }
-.btn-pri:disabled { opacity: 0.4; cursor: not-allowed; }
-.btn-ghost { font-family: var(--font-mono); font-weight: 500; font-size: 12px; padding: 6px 14px; background: transparent; color: var(--fg-1); border: 1px solid var(--border-1); cursor: pointer; border-radius: 2px; }
-.btn-err { font-family: var(--font-mono); font-weight: 600; font-size: 12px; padding: 6px 14px; background: var(--err-dim); color: var(--err); border: 1px solid var(--err); cursor: pointer; border-radius: 2px; transition: background 120ms; }
-.btn-err:hover { background: rgba(255,123,114,0.25); }
-.btn-ghost:hover { background: var(--bg-2); border-color: var(--border-2); }
-.btn-warn-fill { font-family: var(--font-mono); font-weight: 600; font-size: 12px; padding: 6px 16px; background: var(--warn); color: var(--bg-0); border: 1px solid var(--warn); cursor: pointer; border-radius: 2px; }
-.btn-warn-fill:hover { filter: brightness(1.1); }
-
-/* AGENT RAIL (right) */
-.agent-rail { background: var(--bg-0); border-left: 1px solid var(--border-1); display: flex; flex-direction: column; min-height: 0; overflow-y: auto; }
-.agent-rail-head { padding: 10px 14px; border-bottom: 1px solid var(--border-1); display: flex; justify-content: space-between; align-items: center; background: var(--bg-1); }
-.agent-rail-title { font-family: var(--font-cond); font-weight: 500; font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--fg-1); }
-.agent-rail-count { font-family: var(--font-mono); font-size: 11px; color: var(--fg-2); }
-.agent-rail-list { display: flex; flex-direction: column; gap: 1px; padding: 1px 0; }
-
-.agent-card { background: var(--bg-1); border: 1px solid var(--border-1); border-left: none; border-right: none; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; position: relative; transition: background 120ms; }
-.agent-card:hover { background: var(--bg-2); }
-.agent-active { background: var(--bg-2); }
-
-.cb { position: absolute; width: 8px; height: 8px; pointer-events: none; }
-.cb1 { left: 0; top: 0; border-left: 1px solid var(--ok); border-top: 1px solid var(--ok); }
-.cb2 { right: 0; top: 0; border-right: 1px solid var(--ok); border-top: 1px solid var(--ok); }
-.cb3 { left: 0; bottom: 0; border-left: 1px solid var(--ok); border-bottom: 1px solid var(--ok); }
-.cb4 { right: 0; bottom: 0; border-right: 1px solid var(--ok); border-bottom: 1px solid var(--ok); }
-
-.agent-head { display: flex; align-items: center; gap: 10px; }
-.agent-av { width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; font-family: var(--font-mono); font-weight: 600; font-size: 11px; color: var(--bg-0); border-radius: 2px; }
-.agent-name { font-family: var(--font-mono); font-weight: 500; font-size: 13px; color: var(--fg-0); }
-.agent-role { font-family: var(--font-cond); font-weight: 500; font-size: 9px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--fg-2); margin-left: auto; }
-
-.agent-state-row { display: flex; align-items: center; gap: 10px; }
-.agent-elapsed { font-family: var(--font-mono); font-size: 10px; color: var(--fg-2); margin-left: auto; font-variant-numeric: tabular-nums; }
-
-.chip { font-family: var(--font-mono); font-weight: 500; font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; padding: 2px 7px; border: 1px solid; display: inline-flex; gap: 6px; align-items: center; line-height: 1.2; }
-.chip-dot { width: 6px; height: 6px; border-radius: 50%; }
-
-.agent-task { font-family: var(--font-mono); font-size: 11px; color: var(--fg-1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.agent-metrics { display: flex; gap: 12px; font-family: var(--font-mono); font-size: 10px; }
-.agent-metrics span { display: inline-flex; gap: 4px; align-items: center; }
-.agent-metrics i { font-style: normal; font-family: var(--font-cond); text-transform: uppercase; letter-spacing: 0.08em; color: var(--fg-3); font-size: 9px; }
-.agent-metrics b { font-weight: 500; color: var(--fg-0); font-variant-numeric: tabular-nums; }
-
-/* STATUS BAR */
-.statusbar { display: flex; align-items: center; padding: 0 16px; background: var(--bg-1); border-top: 1px solid var(--border-1); font-family: var(--font-mono); font-size: 11px; color: var(--fg-2); gap: 14px; }
-.sb-state { color: var(--fg-1); }
-.sb-spacer { flex: 1; }
-.sb-hint { color: var(--fg-2); }
-.sb-hint kbd { background: var(--bg-2); border: 1px solid var(--border-1); padding: 0 4px; font-family: var(--font-mono); font-size: 10px; color: var(--ok); margin: 0 4px 0 8px; }
-
-/* MODAL */
-.modal-backdrop { position: fixed; inset: 0; background: rgba(8,9,11,0.72); -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px); display: flex; align-items: center; justify-content: center; z-index: 100; animation: fadein 180ms cubic-bezier(0.2,0,0,1); }
-@keyframes fadein { from { opacity: 0; } }
-.modal { width: 580px; background: var(--bg-1); border: 1px solid var(--warn); box-shadow: 0 8px 32px rgba(0,0,0,0.6); position: relative; animation: modalin 220ms cubic-bezier(0.2,0,0,1); }
-@keyframes modalin { from { opacity: 0; transform: translateY(8px); } }
-.modal .cb1 { border-color: var(--warn); }
-.modal .cb2 { border-color: var(--warn); }
-.modal .cb3 { border-color: var(--warn); }
-.modal .cb4 { border-color: var(--warn); }
-.modal-head { background: rgba(74,58,28,0.4); border-bottom: 1px solid var(--warn); padding: 10px 16px; font-family: var(--font-cond); font-weight: 500; font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--warn); }
-.modal-body { padding: 16px; display: flex; flex-direction: column; gap: 14px; }
-.modal-title { font-family: var(--font-mono); font-size: 14px; color: var(--fg-0); }
-.modal-title b { color: var(--agent-joko); font-weight: 500; }
-.modal-kv { display: grid; grid-template-columns: 100px 1fr; gap: 6px 14px; font-family: var(--font-mono); font-size: 12px; align-items: start; }
-.modal-kv .k { font-family: var(--font-cond); text-transform: uppercase; letter-spacing: 0.08em; font-size: 10px; color: var(--fg-2); padding-top: 2px; }
-.modal-kv .v { color: var(--fg-0); }
-.modal-actions { display: flex; gap: 8px; justify-content: flex-end; padding: 12px 16px; border-top: 1px solid var(--border-1); background: var(--bg-0); }
-.diff { font-family: var(--font-mono); font-size: 11px; background: var(--bg-0); border: 1px solid var(--border-1); padding: 8px; margin: 0; white-space: pre-wrap; color: var(--fg-1); line-height: 1.5; }
-.diff::first-line { color: var(--ok); }
-
-/* TOKEN METER */
-.tmeter { display: flex; flex-direction: column; gap: 6px; padding: 8px 0 0; font-family: var(--font-mono); font-size: 11px; }
-.tmeter-row { display: flex; align-items: center; gap: 8px; }
-.tmeter-l { font-family: var(--font-cond); font-size: 9px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--fg-3); width: 32px; }
-.tmeter-track { flex: 1; height: 3px; background: var(--bg-3); border-radius: 2px; overflow: hidden; }
-.tmeter-fill { height: 100%; border-radius: 2px; transition: width 400ms ease; }
-.tmeter-v { font-variant-numeric: tabular-nums; color: var(--fg-1); width: 36px; text-align: right; }
-.tmeter-kpis { display: flex; gap: 12px; padding-top: 4px; }
-.tmeter-kpis span { display: inline-flex; gap: 4px; align-items: center; }
-.tmeter-kpis i { font-style: normal; font-family: var(--font-cond); text-transform: uppercase; letter-spacing: 0.08em; color: var(--fg-3); font-size: 9px; }
-.tmeter-kpis b { font-weight: 500; color: var(--fg-0); font-variant-numeric: tabular-nums; }
-</style>
-<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
-<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
-<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+</script>
+<link rel="stylesheet" href="/css/app.css"/>
 </head>
-<body>
-<div id="root"></div>
-<script type="text/babel">
-// ============================================================
-// NetOps AI Web Dashboard — Components + App
-// ============================================================
-const { useState, useEffect, useRef } = React;
+<body class="text-on-surface">
+<div id="app"></div>
 
-// ============ TOP BAR ============
-function TopBar({ thread, ctx, tokens, time, model }) {
-  return (
-    <div className="topbar">
-      <div className="topbar-left">
-        <div className="logo">[<span>NetOps</span><i>·</i><span>AI</span>]</div>
-        <span className="dot dot-ok" style={{boxShadow:'0 0 6px var(--ok)'}}></span>
-        <span className="topbar-thread">{thread}</span>
-      </div>
-      <div className="topbar-right">
-        <span className="tb-meta"><span className="lbl">CTX</span><span className="val">{ctx}%</span></span>
-        <span className="tb-meta"><span className="lbl">TOK</span><span className="val">{tokens}</span></span>
-        <span className="tb-meta"><span className="lbl">MODEL</span><span className="val">{model}</span></span>
-        <span className="tb-meta"><span className="lbl">WIB</span><span className="val">{time}</span></span>
-      </div>
-    </div>
-  );
-}
+<script>
+// ═══════════════════════════════════════════════════════════════════════════
+// LLMNetOps Enterprise Console — Single-Page Application
+// ═══════════════════════════════════════════════════════════════════════════
 
-// ============ LEFT RAIL ============
-function LeftRail({ active, onNav }) {
-  const items = [
-    { id: 'chat', label: 'AI Chat', glyph: '◆' },
-    { id: 'agents', label: 'Agents', glyph: '⊙' },
-    { id: 'routers', label: 'Routers', glyph: '◇' },
-    { id: 'reports', label: 'Reports', glyph: '▤' },
-    { id: 'schedule', label: 'Schedule', glyph: '◷' },
-    { id: 'logs', label: 'Logs', glyph: '≡' },
-  ];
-  return (
-    <div className="leftrail">
-      {items.map(it => (
-        <button key={it.id} className={'rail-btn ' + (active === it.id ? 'rail-active' : '')}
-          onClick={() => onNav(it.id)} title={it.label}>
-          <span className="rail-glyph">{it.glyph}</span>
-          <span className="rail-label">{it.label}</span>
-        </button>
-      ))}
-    </div>
-  );
-}
+// ── Constants ───────────────────────────────────────────────────────────────
 
-// ============ STATUS BAR ============
-function StatusBar({ status, hint }) {
-  return (
-    <div className="statusbar">
-      <span className="sb-state">{status}</span>
-      <span className="sb-spacer"></span>
-      <span className="sb-hint">{hint}</span>
-    </div>
-  );
-}
+const AGENTS = [
+  { name:'supervisor',     alias:'bambang', role:'supervisor',  icon:'account_tree' },
+  { name:'monitor_agent',  alias:'eko',     role:'monitor',     icon:'monitoring' },
+  { name:'diagnose_agent', alias:'agus',    role:'diagnosa',    icon:'troubleshoot' },
+  { name:'config_agent',   alias:'joko',    role:'config',      icon:'settings_suggest' },
+  { name:'security_agent', alias:'satria',  role:'security',    icon:'shield' },
+  { name:'document_agent', alias:'budi',    role:'dokumen',     icon:'description' },
+  { name:'netbox_agent',   alias:'yanto',   role:'netbox',      icon:'storage' },
+  { name:'validasi_agent', alias:'wati',    role:'validasi',    icon:'verified' },
+];
+const ROLE_TO_ALIAS = {};
+AGENTS.forEach(a => { ROLE_TO_ALIAS[a.name] = a.alias });
 
-// ============ CHIPS ============
-function StateChip({ state }) {
-  const map = {
-    STANDBY:  { c: 'var(--fg-2)',  d: 'var(--fg-3)' },
-    ANTREAN:  { c: 'var(--info)',  d: 'var(--info)' },
-    BERJALAN: { c: 'var(--ok)',    d: 'var(--ok)', glow: true },
-    MENUNGGU: { c: 'var(--warn)',  d: 'var(--warn)', glow: true },
-    SELESAI:  { c: 'var(--fg-1)', d: 'var(--border-2)' },
-    GAGAL:    { c: 'var(--err)',   d: 'var(--err)' },
-  };
-  const m = map[state] || map.STANDBY;
-  return (
-    <span className="chip" style={{color: m.c, borderColor: m.d}}>
-      <span className="chip-dot" style={{background: m.c, boxShadow: m.glow ? `0 0 6px ${m.c}` : 'none'}}></span>
-      {state}
-    </span>
-  );
-}
-
-// ============ AGENT CARD ============
-function AgentCard({ agent }) {
-  const initials = agent.name[0];
-  const isActive = agent.state === 'BERJALAN' || agent.state === 'MENUNGGU';
-  return (
-    <div className={'agent-card ' + (isActive ? 'agent-active' : '')}>
-      {isActive && <><span className="cb cb1"></span><span className="cb cb2"></span><span className="cb cb3"></span><span className="cb cb4"></span></>}
-      <div className="agent-head">
-        <div className="agent-av" style={{background: agent.color}}>{initials}</div>
-        <div className="agent-name">{agent.name}</div>
-        <div className="agent-role">{agent.role}</div>
-      </div>
-      <div className="agent-state-row">
-        <StateChip state={agent.state} />
-        {agent.elapsed && <span className="agent-elapsed">{agent.elapsed}</span>}
-      </div>
-      <div className="agent-task" style={agent.taskColor ? {color: agent.taskColor} : null}>
-        {agent.task}
-      </div>
-      {agent.metrics && (
-        <div className="agent-metrics">
-          {agent.metrics.map((m, i) => (
-            <span key={i}><i>{m.l}</i><b>{m.v}</b></span>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ============ CHAT EVENT ============
-function ChatEvent({ ev }) {
-  if (ev.type === 'user') {
-    return <div className="ch-line"><span className="ch-you">Anda:</span> <span className="ch-user-text">{ev.text}</span></div>;
-  }
-  // FIX: was 'route', server sends 'routing'; parse content directly from ev.content
-  if (ev.type === 'routing') {
-    // content: "[supervisor] → monitor_agent  skills: [...]  | reasoning..."
-    const m = ev.content.match(/[→>]\s*(\w+)/);
-    const target = m ? (ALIAS_MAP[m[1]] || m[1]) : ev.content;
-    return <div className="ch-line ch-ev">  ↳ route → <span style={{color:'var(--fg-0)'}}>{target}</span></div>;
-  }
-  // FIX: was 'tool-call' (kebab), server sends 'tool_call'; ev.content is tool string, not ev.tool
-  if (ev.type === 'tool_call') {
-    return <div className="ch-line ch-ev">  ↳ <span className="ch-ok">[{ev.agent}] {ev.content}</span></div>;
-  }
-  // FIX: was 'tool-result' (kebab), server sends 'tool_result'; ev.content is preview string
-  if (ev.type === 'tool_result') {
-    return <div className="ch-line ch-ev">  ↳ <span className="ch-ok">[{ev.agent}]</span> <span className="ch-dim">{ev.content}</span></div>;
-  }
-  // FIX: was 'tool-error' (kebab); agent.py never emits this but keep for future
-  if (ev.type === 'tool_error') {
-    return <div className="ch-line ch-ev">  ↳ <span className="ch-err">[✗ {ev.agent}]</span> <span className="ch-dim">{ev.content}</span></div>;
-  }
-  // FIX: ai event stores text in ev.content, not ev.text
-  if (ev.type === 'ai') {
-    const lines = ev.content ? ev.content.split('\n') : [];
-    const firstLine = lines[0] || '';
-    const rest = lines.slice(1).filter(l => l.trim());
-    return (
-      <div className="ch-block">
-        <div className="ch-line"><span className="ch-ai">AI  :</span> <span className="ch-ai-body">{firstLine}</span></div>
-        {rest.map((l, i) => (
-          <div key={i} className="ch-line ch-ai-cont">{l}</div>
-        ))}
-      </div>
-    );
-  }
-  // FIX: was 'approval' (missing _required suffix); use real data from ev.content
-  if (ev.type === 'approval_required') {
-    const d = ev.content || {};
-    const agent = (d.agent || 'config_agent').replace('_agent', '');
-    return (
-      <div className="ch-line ch-approval">
-        <span className="ch-warn">⚠</span> <span style={{color: 'var(--warn)'}}>{agent} meminta approval</span>
-        <span className="ch-dim"> · {d.action || '?'} · risiko: {d.risk_level || '?'}</span>
-      </div>
-    );
-  }
-  // FIX: add error event rendering (was missing, returned null silently)
-  if (ev.type === 'error') {
-    return <div className="ch-line ch-err">  ✗ error: {ev.content}</div>;
-  }
-  if (ev.type === 'elapsed') {
-    return <div className="ch-line ch-ev">  ↳ <span className="ch-dim">⏱ {ev.content}</span></div>;
-  }
-  return null;
-}
-
-// ============ COMPOSER ============
-function Composer({ onSend, disabled }) {
-  const [v, setV] = useState('');
-  const submit = () => {
-    if (!v.trim()) return;
-    onSend(v);
-    setV('');
-  };
-  return (
-    <div className="composer">
-      <div className="comp-prompt">{'>'}</div>
-      <textarea
-        className="comp-input"
-        placeholder="Tanya bambang… (contoh: cek lease di FILKOM, audit firewall DTI, apply rule blocklist)"
-        value={v}
-        onChange={e => setV(e.target.value)}
-        onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); } }}
-        rows={2}
-        disabled={disabled}
-      />
-      <div className="comp-side">
-        <span className="comp-hint"><kbd>↵</kbd>send</span>
-        <span className="comp-hint"><kbd>⇧↵</kbd>newline</span>
-        <button className="btn-pri" onClick={submit} disabled={disabled}>Send</button>
-      </div>
-    </div>
-  );
-}
-
-// ============ APPROVAL MODAL ============
-// FIX: payload from agent.py is {agent, action, risk_level, details:{router_name,...}}
-// was reading data.tool (missing) and data.args.router_name (wrong key, should be data.details)
-function ApprovalModal({ open, data, onApprove, onReject }) {
-  if (!open) return null;
-  const details = data?.details || {};
-  const action = data?.action || '—';
-  const router = details.router_name || details.name || '—';
-  const riskLevel = data?.risk_level || 'medium';
-  const agent = (data?.agent || 'config_agent').replace('_agent', '');
-  const riskColor = riskLevel === 'high' ? 'var(--err)' : 'var(--warn)';
-  const riskLabel = riskLevel === 'high' ? 'TINGGI' : 'SEDANG';
-  return (
-    <div className="modal-backdrop" onClick={onReject}>
-      <div className="modal" onClick={e => e.stopPropagation()}>
-        <span className="cb cb1"></span><span className="cb cb2"></span><span className="cb cb3"></span><span className="cb cb4"></span>
-        <div className="modal-head">⚠&nbsp;&nbsp;APPROVAL DIPERLUKAN — {agent} / config</div>
-        <div className="modal-body">
-          <div className="modal-title"><b>{agent}</b> meminta izin operasi tulis ke router <span style={{color:'var(--info)'}}>{router}</span></div>
-          <div className="modal-kv">
-            <span className="k">AKSI</span><span className="v">{action}</span>
-            <span className="k">TARGET</span><span className="v">{router}</span>
-            <span className="k">RISIKO</span><span className="v" style={{color: riskColor}}>{riskLabel} — backup otomatis dibuat sebelum eksekusi</span>
-            <span className="k">REVERSIBLE</span><span className="v" style={{color:'var(--ok)'}}>ya</span>
-          </div>
-        </div>
-        <div className="modal-actions">
-          <button className="btn-ghost" onClick={onReject}>Tolak</button>
-          <button className="btn-warn-fill" onClick={onApprove}>Setuju, jalankan</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ============ APP ============
-const THREAD_ID = crypto.randomUUID();
-
-const AGENTS_DEF = [
-  { name: 'bambang', role: 'supervisor', color: '#d2a8ff' },
-  { name: 'eko',     role: 'monitor',    color: '#7ee787' },
-  { name: 'agus',    role: 'diagnosa',   color: '#79c0ff' },
-  { name: 'joko',    role: 'config',     color: '#ffa657' },
-  { name: 'satria',  role: 'security',   color: '#ff7b72' },
-  { name: 'budi',    role: 'dokumen',    color: '#a8c7fa' },
+const NAV_ITEMS = [
+  { id:'dashboard', label:'Dashboard',  icon:'dashboard' },
+  { id:'chat',      label:'AI Chat',    icon:'chat_bubble' },
+  { id:'network',   label:'Network',    icon:'hub' },
+  { id:'dhcp',      label:'DHCP',       icon:'router' },
+  { id:'netbox',    label:'NetBox',     icon:'storage' },
+  { id:'skills',    label:'Skills',     icon:'psychology' },
+  { id:'reports',   label:'Reports',    icon:'assessment' },
+  { id:'backups',   label:'Backups',    icon:'backup' },
+  { id:'metrics',   label:'Metrics',    icon:'insights' },
+  { id:'settings',  label:'Settings',   icon:'settings' },
 ];
 
-// Alias map: agent definition name → display name
-const ALIAS_MAP = { monitor_agent:'eko', diagnose_agent:'agus', config_agent:'joko', security_agent:'satria', document_agent:'budi', supervisor:'bambang' };
+// ── State ───────────────────────────────────────────────────────────────────
 
-function makeAgents() {
-  return AGENTS_DEF.map(a => ({ ...a, state: 'STANDBY', task: '— idle —', taskColor: 'var(--fg-3)', metrics: [] }));
+function makeAgentStates() {
+  const s = {};
+  AGENTS.forEach(a => { s[a.alias] = { state:'standby', detail:'', toolCount:0 } });
+  return s;
 }
 
-function formatTime() {
-  return new Date().toLocaleTimeString('id-ID', { hour12: false });
+const S = {
+  screen: location.hash.slice(1) || 'dashboard',
+  threadId: null,
+  threads: [],
+  messages: [],
+  chatState: 'idle',
+  pendingApproval: null,
+  activeQuery: '',
+  agents: makeAgentStates(),
+  systemStatus: null,
+  toolCount: 0,
+  elapsed: 0,
+};
+
+// ── API ─────────────────────────────────────────────────────────────────────
+
+async function apiCreateSession() {
+  const r = await fetch('/session/new', { method:'POST' });
+  return r.json();
 }
 
-async function* readSSE(response) {
+async function apiStreamChat(threadId, message, onEvent) {
+  const r = await fetch('/chat', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ thread_id: threadId, message }),
+  });
+  await consumeSSE(r, onEvent);
+}
+
+async function apiApprove(threadId, decision, onEvent) {
+  const r = await fetch('/approve', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ thread_id: threadId, decision }),
+  });
+  await consumeSSE(r, onEvent);
+}
+
+async function apiInfo() { return (await fetch('/info')).json(); }
+async function apiStatus() { try { return (await fetch('/api/status')).json(); } catch { return null; } }
+
+async function consumeSSE(response, onEvent) {
   const reader = response.body.getReader();
-  const dec = new TextDecoder();
+  const decoder = new TextDecoder();
   let buf = '';
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
-    buf += dec.decode(value, { stream: true });
-    const lines = buf.split('\n');
-    buf = lines.pop();
-    for (const line of lines) {
+    buf += decoder.decode(value, { stream: true });
+    const frames = buf.split('\n\n');
+    buf = frames.pop();
+    for (const frame of frames) {
+      const line = frame.trim();
+      if (!line || line.startsWith(':')) continue;
       if (line.startsWith('data: ')) {
-        try { yield JSON.parse(line.slice(6)); } catch {}
+        try { const p = JSON.parse(line.slice(6)); onEvent(p.type, p.content); } catch {}
       }
     }
   }
 }
 
-function App() {
-  const [active, setActive] = useState('chat');
-  const [agents, setAgents] = useState(makeAgents());
-  const [events, setEvents] = useState([]);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [approvalData, setApprovalData] = useState(null);
-  const [streaming, setStreaming] = useState(false);
-  const [elapsed, setElapsed] = useState(0);
-  const [time, setTime] = useState(formatTime());
-  const [model, setModel] = useState('…');
-  const [tokTotal, setTokTotal] = useState(0);
-  const [ctxPct, setCtxPct] = useState(0);
-  const streamRef = useRef(null);
-  const abortRef = useRef(null);
-  const startRef = useRef(null);
+// ── Helpers ──────────────────────────────────────────────────────────────────
 
-  // Clock tick
-  useEffect(() => {
-    const t = setInterval(() => setTime(formatTime()), 1000);
-    return () => clearInterval(t);
-  }, []);
+function esc(str) { const d = document.createElement('div'); d.textContent = str; return d.innerHTML; }
+function fmtTime(date) {
+  const d = date || new Date();
+  const pad = n => String(n).padStart(2,'0');
+  return pad(d.getHours())+':'+pad(d.getMinutes())+':'+pad(d.getSeconds());
+}
+function $(id) { return document.getElementById(id); }
 
-  // Elapsed timer while streaming (like TUI live_elapsed)
-  useEffect(() => {
-    if (!streaming) { setElapsed(0); return; }
-    startRef.current = Date.now();
-    const t = setInterval(() => setElapsed(Math.floor((Date.now() - startRef.current) / 1000)), 1000);
-    return () => clearInterval(t);
-  }, [streaming]);
+// ── Component: Status Badge ─────────────────────────────────────────────────
 
-  // Fetch model info once
-  useEffect(() => {
-    fetch('/info').then(r => r.json()).then(d => setModel(d.model)).catch(() => {});
-  }, []);
+function badge(label, v='green') {
+  const c = {
+    green:'bg-green-50 text-green-700 border-green-100',
+    amber:'bg-amber-50 text-amber-700 border-amber-100',
+    red:'bg-red-50 text-red-700 border-red-100',
+    blue:'bg-blue-50 text-blue-700 border-blue-100',
+    gray:'bg-surface-container text-on-surface-variant border-outline-variant',
+  }[v] || 'bg-surface-container text-on-surface-variant border-outline-variant';
+  return `<span class="inline-flex items-center gap-1 px-2 py-0.5 text-label-caps font-label-caps font-bold border rounded-full ${c}">${label}</span>`;
+}
 
-  // Poll /metrics every 5s for topbar CTX/TOK
-  useEffect(() => {
-    function poll() {
-      fetch('/metrics?n=5').then(r => r.json()).then(entries => {
-        if (!entries?.length) return;
-        const last = entries[entries.length - 1];
-        if (last.ctx_util != null) setCtxPct(Math.round(last.ctx_util));
-        if (last.prompt_tokens != null && last.gen_tokens != null)
-          setTokTotal(last.prompt_tokens + last.gen_tokens);
-      }).catch(() => {});
+// ── Component: Agent Card ───────────────────────────────────────────────────
+
+function agentCardHtml(alias, role, state, detail) {
+  const styles = {
+    standby:  { dot:'bg-gray-300',  text:'text-on-surface-variant', label:'STANDBY',  bl:'' },
+    running:  { dot:'bg-green-500', text:'text-green-700',          label:'RUNNING',  bl:'border-l-[3px] border-l-green-500' },
+    waiting:  { dot:'bg-amber-500', text:'text-amber-700',          label:'WAITING',  bl:'border-l-[3px] border-l-amber-500' },
+    done:     { dot:'bg-gray-400',  text:'text-on-surface-variant', label:'DONE',     bl:'' },
+    failed:   { dot:'bg-red-500',   text:'text-red-700',            label:'FAILED',   bl:'border-l-[3px] border-l-red-500' },
+  };
+  const st = styles[state] || styles.standby;
+  const pulse = state==='running' ? 'pulse-green' : '';
+  return `<div class="bg-surface-container-lowest border border-outline-variant ${st.bl} rounded-lg p-3 transition-all">
+    <div class="flex justify-between items-center">
+      <div><span class="text-xs font-bold uppercase text-primary">${alias}</span>
+      <span class="text-[10px] text-on-surface-variant ml-1">${role}</span></div>
+      <div class="flex items-center gap-1.5">
+        <span class="w-2 h-2 rounded-full ${st.dot} ${pulse}"></span>
+        <span class="text-label-caps font-label-caps ${st.text}">${st.label}</span>
+      </div>
+    </div>
+    ${detail ? `<p class="text-[10px] text-on-surface-variant font-data-mono-sm mt-1 truncate">${esc(detail)}</p>` : ''}
+  </div>`;
+}
+
+// ── Component: Card ─────────────────────────────────────────────────────────
+
+function cardHtml(title, body, headerRight) {
+  return `<div class="bg-surface-container-lowest border border-outline-variant rounded-lg shadow-sm">
+    <div class="flex justify-between items-center px-6 py-4 border-b border-outline-variant">
+      <h3 class="text-title-sm font-title-sm font-bold text-primary">${title}</h3>
+      ${headerRight||''}
+    </div>
+    <div class="p-6">${body}</div>
+  </div>`;
+}
+
+function statCardHtml(label, value, trend, trendColor) {
+  const tc = trendColor==='red' ? 'text-red-600' : 'text-green-600';
+  return `<div class="bg-surface-container-lowest border border-outline-variant rounded-lg p-4 shadow-sm">
+    <p class="font-label-caps text-label-caps text-on-surface-variant mb-1">${label}</p>
+    <div class="flex items-baseline gap-2">
+      <span class="text-display-lg font-display-lg text-primary">${value}</span>
+      ${trend ? `<span class="text-data-mono-sm font-data-mono-sm ${tc}">${trend}</span>` : ''}
+    </div>
+  </div>`;
+}
+
+// ── Data helpers (API fetch + rendering) ─────────────────────────────────────
+
+async function apiGet(path) {
+  const r = await fetch(path);
+  if (!r.ok) throw new Error(`HTTP ${r.status} ${path}`);
+  return r.json();
+}
+async function apiPost(path, body) {
+  const r = await fetch(path, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body||{}) });
+  if (!r.ok) throw new Error(`HTTP ${r.status} ${path}`);
+  return r.json();
+}
+async function apiPut(path, body) {
+  const r = await fetch(path, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body||{}) });
+  if (!r.ok) throw new Error(`HTTP ${r.status} ${path}`);
+  return r.json();
+}
+async function apiDelete(path) {
+  const r = await fetch(path, { method:'DELETE' });
+  if (!r.ok) throw new Error(`HTTP ${r.status} ${path}`);
+  return r.json();
+}
+
+// Loading spinner block
+function loadingHtml(msg='Loading...') {
+  return `<div class="flex items-center justify-center gap-3 py-12 text-on-surface-variant">
+    <span class="material-symbols-outlined animate-spin">progress_activity</span>
+    <span class="text-body-sm">${esc(msg)}</span>
+  </div>`;
+}
+// Subtle inline error banner
+function errorHtml(msg) {
+  return `<div class="flex items-center gap-2 px-4 py-2 mb-4 bg-red-50 border border-red-100 rounded-lg text-red-700 text-body-sm">
+    <span class="material-symbols-outlined text-[18px]">error</span>
+    <span>${esc(msg)}</span>
+  </div>`;
+}
+// Monospace result block for plain-text tool output
+function preHtml(text) {
+  return `<pre class="font-data-mono text-data-mono text-sm whitespace-pre-wrap">${esc(text||'')}</pre>`;
+}
+// Render plain-text result inside a card
+function resultCard(title, text, headerRight) {
+  return cardHtml(title, preHtml(text), headerRight);
+}
+
+// Parse list_routers() plain-text output into [{name, host, ros, role, servers}]
+function parseRouterList(text) {
+  if (!text) return [];
+  const out = [];
+  for (const raw of text.split('\n')) {
+    const line = raw.trim();
+    if (!line || line.startsWith('Router yang tersedia')) continue;
+    // Format: NAME  HOST  ROS vN  role=X  network=Y  servers: ...
+    const m = line.match(/^(\S+)\s+(\S+)\s+ROS\s+(v\d+)/i);
+    if (!m) continue;
+    const role = (line.match(/role=(\S+)/)||[])[1] || '';
+    const servers = (line.split('servers:')[1]||'').trim();
+    out.push({ name:m[1], host:m[2], ros:m[3], role, servers });
+  }
+  return out;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Shell
+// ═══════════════════════════════════════════════════════════════════════════
+
+function renderShell() {
+  $('app').innerHTML = `
+  <!-- Sidebar -->
+  <aside class="fixed left-0 top-0 h-full w-[240px] bg-primary-container flex flex-col py-6 z-40">
+    <div class="px-5 mb-8 mt-2">
+      <img src="/assets/llmnetops-logo-formal.png" alt="LLMNetOps" class="h-9 brightness-0 invert">
+    </div>
+    <nav id="sidebar-nav" class="flex-1 px-3 space-y-1 sidebar-scroll overflow-y-auto"></nav>
+    <div class="px-6 pt-4 border-t border-white/10 mt-4">
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 rounded-full bg-secondary-container flex items-center justify-center text-on-secondary-container font-bold text-xs">OP</div>
+        <div class="overflow-hidden">
+          <p class="text-white text-xs font-bold truncate">Operator</p>
+          <p class="text-white/50 text-[10px] truncate">Network Admin</p>
+        </div>
+      </div>
+    </div>
+  </aside>
+  <!-- Header -->
+  <header class="fixed top-0 left-[240px] right-0 h-[56px] bg-surface-container-lowest flex justify-between items-center px-6 z-50 border-b border-outline-variant">
+    <nav class="flex items-center text-on-surface-variant text-body-sm">
+      <span class="font-bold text-primary mr-2">Console</span>
+      <span class="material-symbols-outlined text-[16px] mr-2">chevron_right</span>
+      <span id="breadcrumb-page">Dashboard</span>
+    </nav>
+    <div class="flex items-center gap-4">
+      <div class="flex items-center gap-2 px-3 py-1 bg-green-50 border border-green-100 rounded-full">
+        <span class="relative flex h-2 w-2">
+          <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+          <span class="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+        </span>
+        <span class="font-label-caps text-label-caps text-green-700">SYSTEM ONLINE</span>
+      </div>
+      <button class="text-on-surface-variant hover:bg-surface-container p-1.5 rounded-full transition-colors">
+        <span class="material-symbols-outlined">notifications</span>
+      </button>
+      <div class="h-8 w-8 rounded-full bg-surface-container flex items-center justify-center border border-outline-variant">
+        <span class="material-symbols-outlined text-on-surface-variant text-lg">account_circle</span>
+      </div>
+    </div>
+  </header>
+  <!-- Main -->
+  <main class="ml-[240px] pt-[56px] min-h-screen bg-background">
+    <div id="screen-container"></div>
+  </main>`;
+  renderNav();
+}
+
+function renderNav() {
+  const nav = $('sidebar-nav');
+  nav.innerHTML = NAV_ITEMS.map(item => {
+    const active = S.screen === item.id;
+    const base = 'flex items-center gap-3 px-3 py-2.5 transition-all duration-150 ease-in-out font-label-caps text-label-caps cursor-pointer';
+    const cls = active
+      ? 'text-surface-container-lowest bg-white/10 border-l-[3px] border-secondary-container'
+      : 'text-surface-container-lowest/60 hover:bg-white/5 hover:text-surface-container-lowest border-l-[3px] border-transparent';
+    const fill = active ? "font-variation-settings:'FILL' 1;" : '';
+    return `<a class="${base} ${cls}" data-screen="${item.id}">
+      <span class="material-symbols-outlined" style="${fill}">${item.icon}</span><span>${item.label}</span>
+    </a>`;
+  }).join('');
+  nav.onclick = e => {
+    const a = e.target.closest('[data-screen]');
+    if (a) location.hash = a.dataset.screen;
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Screens
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ── Dashboard ───────────────────────────────────────────────────────────────
+
+async function screenDashboard(c) {
+  // Map agent name → icon (registry visuals fall back to default)
+  const ICONS = {};
+  AGENTS.forEach(a => { ICONS[a.name] = a.icon; });
+
+  // Fetch all dashboard data in parallel; tolerate individual failures.
+  const [statusR, agentsR, routersR] = await Promise.allSettled([
+    apiGet('/api/status'),
+    apiGet('/api/agents'),
+    apiGet('/api/tools/routers'),
+  ]);
+
+  let st = statusR.status==='fulfilled' ? statusR.value : (S.systemStatus || {});
+  if (statusR.status==='fulfilled') S.systemStatus = st;
+  st = st || {};
+
+  // Agent registry — real data when available, fall back to constant.
+  let agentList = AGENTS.map(a => ({ name:a.name, alias:a.alias, role:a.role, icon:a.icon }));
+  if (agentsR.status==='fulfilled' && Array.isArray(agentsR.value.agents) && agentsR.value.agents.length) {
+    agentList = agentsR.value.agents.map(a => ({
+      name: a.name,
+      alias: a.alias || a.name,
+      role: (a.description||'').split('.')[0].slice(0,28) || a.name,
+      icon: ICONS[a.name] || 'smart_toy',
+    }));
+  }
+  const agentCount = agentList.length;
+  const agentCards = agentList.map(a =>
+    `<div class="bg-surface-container-lowest border border-outline-variant rounded-lg p-3 shadow-sm text-center min-w-[120px]">
+      <span class="material-symbols-outlined text-2xl text-primary mb-1">${a.icon}</span>
+      <p class="text-xs font-bold uppercase text-primary">${esc(a.alias)}</p>
+      <p class="text-[10px] text-on-surface-variant truncate">${esc(a.role)}</p>
+    </div>`
+  ).join('');
+
+  // Router health rows from list_routers plain-text output.
+  let routerRowsHtml = `<tr><td class="px-4 py-2 font-medium">—</td><td class="px-4 py-2 font-data-mono text-data-mono">—</td><td class="px-4 py-2">${badge('PENDING','gray')}</td></tr>`;
+  let routerNote = 'Connect to backend to load router data.';
+  if (routersR.status==='fulfilled') {
+    const rows = parseRouterList(routersR.value.result);
+    if (rows.length) {
+      routerRowsHtml = rows.map(r => `<tr>
+        <td class="px-4 py-2 font-medium">${esc(r.name)}</td>
+        <td class="px-4 py-2 font-data-mono text-data-mono">${esc(r.host||'—')}</td>
+        <td class="px-4 py-2">${badge('CONFIGURED','blue')}</td>
+      </tr>`).join('');
+      routerNote = `${rows.length} router(s) configured. Open Network to run reachability checks.`;
+    } else {
+      routerNote = 'No routers configured.';
     }
-    const t = setInterval(poll, 5000);
-    return () => clearInterval(t);
-  }, []);
-
-  // Auto-scroll chat on new events
-  useEffect(() => {
-    if (streamRef.current) streamRef.current.scrollTop = streamRef.current.scrollHeight;
-  }, [events]);
-
-  function agentNameFromSource(source) {
-    const m = String(source).match(/\[([^\]]+)\]/);
-    const raw = m ? m[1] : source;
-    return ALIAS_MAP[raw] || raw;
+  } else {
+    routerNote = 'Backend unavailable — showing placeholder.';
   }
 
-  function setAgentState(name, patch) {
-    setAgents(prev => prev.map(a => a.name === name ? { ...a, ...patch } : a));
+  const ollamaTxt = st.ollama_url ? 'Online' : (st.ollama_host ? 'Online' : '—');
+
+  c.innerHTML = `<div class="p-6 max-w-[1600px] mx-auto">
+    <div class="flex justify-between items-end mb-6">
+      <div>
+        <h2 class="text-headline-md font-headline-md text-primary">Network Overview</h2>
+        <p class="text-body-md text-on-surface-variant">Real-time status of autonomous agents and campus infrastructure.</p>
+      </div>
+    </div>
+    <div class="grid grid-cols-4 gap-6 mb-6">
+      ${statCardHtml('LLM MODEL', esc(st.model||'—'),'')}
+      ${statCardHtml('OLLAMA', ollamaTxt,'','green')}
+      ${statCardHtml('SKILLS', st.skills_loaded!=null?st.skills_loaded:'—','')}
+      ${statCardHtml('AGENTS', String(agentCount), agentCount?`${agentCount} loaded`:'')}
+    </div>
+    ${cardHtml('Agent Registry', `<div class="flex gap-3 overflow-x-auto pb-2">${agentCards}</div>`)}
+    <div class="grid grid-cols-2 gap-6 mt-6">
+      ${cardHtml('Router Health', `
+        <table class="w-full text-left">
+          <thead class="bg-surface-container-low"><tr>
+            <th class="px-4 py-2 text-label-caps font-label-caps text-outline">ROUTER</th>
+            <th class="px-4 py-2 text-label-caps font-label-caps text-outline">HOST</th>
+            <th class="px-4 py-2 text-label-caps font-label-caps text-outline">STATUS</th>
+          </tr></thead>
+          <tbody class="divide-y divide-outline-variant text-body-sm">
+            ${routerRowsHtml}
+          </tbody>
+        </table>
+        <p class="text-[11px] text-on-surface-variant mt-3">${esc(routerNote)}</p>
+      `)}
+      ${cardHtml('Quick Actions', `
+        <div class="grid grid-cols-2 gap-3">
+          <button onclick="location.hash='chat'" class="flex items-center gap-2 px-4 py-3 bg-surface-container-lowest border border-outline-variant rounded-lg hover:bg-surface-container-low transition-colors text-body-sm font-medium text-primary">
+            <span class="material-symbols-outlined text-lg">health_and_safety</span>Health Check</button>
+          <button onclick="location.hash='chat'" class="flex items-center gap-2 px-4 py-3 bg-surface-container-lowest border border-outline-variant rounded-lg hover:bg-surface-container-low transition-colors text-body-sm font-medium text-primary">
+            <span class="material-symbols-outlined text-lg">shield</span>Security Audit</button>
+          <button onclick="location.hash='chat'" class="flex items-center gap-2 px-4 py-3 bg-surface-container-lowest border border-outline-variant rounded-lg hover:bg-surface-container-low transition-colors text-body-sm font-medium text-primary">
+            <span class="material-symbols-outlined text-lg">backup</span>Backup All</button>
+          <button onclick="location.hash='chat'" class="flex items-center gap-2 px-4 py-3 bg-surface-container-lowest border border-outline-variant rounded-lg hover:bg-surface-container-low transition-colors text-body-sm font-medium text-primary">
+            <span class="material-symbols-outlined text-lg">router</span>DHCP Audit</button>
+        </div>
+      `)}
+    </div>
+  </div>`;
+}
+
+// ── Chat ─────────────────────────────────────────────────────────────────────
+
+let _chatEl = null;
+let _elapsedIv = null;
+
+async function screenChat(c) {
+  if (!S.threadId) {
+    try { const r = await apiCreateSession(); S.threadId = r.thread_id; S.threads.push({id:r.thread_id, title:'New Chat', ts:new Date()}); }
+    catch { S.threadId = crypto.randomUUID(); S.threads.push({id:S.threadId, title:'Offline', ts:new Date()}); }
   }
 
-  function resetAgents() {
-    setAgents(makeAgents());
+  c.innerHTML = `
+  <div class="flex h-[calc(100vh-56px)] overflow-hidden">
+    <!-- Threads -->
+    <aside class="w-64 border-r border-outline-variant bg-surface-container-low flex flex-col shrink-0">
+      <div class="p-4 border-b border-outline-variant flex justify-between items-center">
+        <span class="text-label-caps font-label-caps text-on-surface-variant">Active Threads</span>
+        <button id="btn-new-thread" class="material-symbols-outlined text-sm text-primary hover:bg-surface-container rounded p-1 transition-colors">add_box</button>
+      </div>
+      <div class="flex-1 overflow-y-auto chat-scroll p-3 space-y-1" id="thread-list"></div>
+    </aside>
+    <!-- Messages -->
+    <section class="flex-1 flex flex-col min-w-0">
+      <div id="chat-messages" class="flex-1 overflow-y-auto chat-scroll p-6 space-y-6 flex flex-col"></div>
+      <div class="border-t border-outline-variant bg-surface-container-lowest p-4 shrink-0">
+        <div class="flex items-center gap-3 max-w-[900px] mx-auto">
+          <input id="chat-input" type="text" class="flex-1 bg-surface-container-low border border-outline-variant rounded-lg px-4 py-2.5 text-body-md text-on-surface focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all" placeholder="Type a command or ask a question..." autocomplete="off" spellcheck="false">
+          <button id="btn-send" class="px-5 py-2.5 bg-secondary text-white rounded-lg text-body-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed">Send</button>
+        </div>
+        <p class="text-[10px] text-on-surface-variant mt-2 text-center">[Enter] Kirim &middot; [Ctrl+L] Clear</p>
+      </div>
+    </section>
+    <!-- Agent Panel -->
+    <aside class="w-72 border-l border-outline-variant bg-surface-container-low flex flex-col shrink-0">
+      <div class="p-4 border-b border-outline-variant">
+        <span class="text-label-caps font-label-caps text-on-surface-variant">Active Network Agents</span>
+      </div>
+      <div id="agent-panel" class="flex-1 overflow-y-auto chat-scroll p-3 space-y-2"></div>
+      <div class="p-4 border-t border-outline-variant">
+        <p class="text-label-caps font-label-caps text-on-surface-variant mb-1">Active Query</p>
+        <p id="active-query" class="text-[11px] text-on-surface-variant truncate">—</p>
+        <p id="elapsed-display" class="text-[11px] text-primary tabular-nums mt-1"></p>
+      </div>
+    </aside>
+  </div>
+  <!-- Approval Modal -->
+  <div id="approval-overlay" class="hidden fixed inset-0 bg-black/30 backdrop-blur-sm z-[200] flex items-center justify-center">
+    <div class="bg-surface-container-lowest rounded-xl shadow-xl max-w-[500px] w-full mx-4 overflow-hidden">
+      <div class="bg-amber-50 px-6 py-3 flex items-center gap-2 border-b border-amber-200">
+        <span class="material-symbols-outlined text-amber-700">warning</span>
+        <span class="text-label-caps font-label-caps text-amber-800">APPROVAL REQUIRED</span>
+      </div>
+      <div class="p-6">
+        <h3 class="text-title-sm font-title-sm font-bold text-on-surface mb-2">Confirm System Operation</h3>
+        <p class="text-body-sm text-on-surface-variant mb-4">An automated agent has requested permission to perform a high-impact task.</p>
+        <div class="border border-outline-variant rounded-lg divide-y divide-outline-variant text-body-sm">
+          <div class="flex justify-between px-4 py-2.5"><span class="text-label-caps font-label-caps text-on-surface-variant">AGENT</span><span id="m-agent" class="font-medium">—</span></div>
+          <div class="flex justify-between px-4 py-2.5"><span class="text-label-caps font-label-caps text-on-surface-variant">ACTION</span><span id="m-action" class="font-data-mono text-data-mono">—</span></div>
+          <div class="flex justify-between px-4 py-2.5"><span class="text-label-caps font-label-caps text-on-surface-variant">RISK LEVEL</span><span id="m-risk">—</span></div>
+        </div>
+      </div>
+      <div class="px-6 pb-6 flex items-center justify-between">
+        <span class="text-[10px] text-on-surface-variant">[Y] Approve &middot; [N] Reject</span>
+        <div class="flex gap-3">
+          <button id="btn-reject" class="px-4 py-2 border border-red-300 text-red-700 rounded-lg text-body-sm font-medium hover:bg-red-50 transition-colors">Reject</button>
+          <button id="btn-approve" class="px-4 py-2 bg-green-700 text-white rounded-lg text-body-sm font-medium hover:bg-green-800 transition-colors">Approve</button>
+        </div>
+      </div>
+    </div>
+  </div>`;
+
+  _chatEl = $('chat-messages');
+  chatRenderThreads();
+  chatRenderAgents();
+  chatRenderMessages();
+  chatBindEvents();
+}
+
+function chatBindEvents() {
+  const inp = $('chat-input'), btnS = $('btn-send'), btnN = $('btn-new-thread');
+  const btnA = $('btn-approve'), btnR = $('btn-reject');
+
+  async function send() {
+    const text = inp.value.trim();
+    if (!text || S.chatState !== 'idle') return;
+    inp.value = '';
+    S.activeQuery = text;
+    S.messages.push({ role:'user', content:text, ts:new Date(), events:[] });
+    S.messages.push({ role:'agent', content:'', ts:new Date(), events:[], streaming:true });
+    chatResetAgents();
+    chatStartElapsed();
+    S.chatState = 'streaming';
+    chatRenderMessages(); chatUpdateUI();
+    try { await apiStreamChat(S.threadId, text, chatHandleEvent); }
+    catch(e) { chatHandleEvent('error', e.message||'Connection failed'); }
+    chatFinish();
   }
 
-  async function consumeStream(endpoint, body) {
-    const controller = new AbortController();
-    abortRef.current = controller;
-    const t0 = Date.now();
-    setStreaming(true);
+  btnS.onclick = send;
+  inp.onkeydown = e => {
+    if (e.key==='Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+    if (e.key==='l' && e.ctrlKey) { e.preventDefault(); chatClear(); }
+  };
+  btnN.onclick = async () => {
+    try { const r = await apiCreateSession(); S.threadId = r.thread_id; S.threads.push({id:r.thread_id,title:'New Chat',ts:new Date()}); }
+    catch { S.threadId = crypto.randomUUID(); }
+    chatClear();
+  };
+  btnA.onclick = () => chatResolveApproval('approved');
+  btnR.onclick = () => chatResolveApproval('rejected');
+
+  document.addEventListener('keydown', function _ak(e) {
+    if (S.chatState !== 'approval') return;
+    if (e.key==='y'||e.key==='Y') chatResolveApproval('approved');
+    if (e.key==='n'||e.key==='N') chatResolveApproval('rejected');
+  });
+}
+
+function chatHandleEvent(type, content) {
+  const last = S.messages[S.messages.length-1];
+  if (!last || last.role !== 'agent') return;
+  if (type === 'ai') {
+    last.content += (last.content?'\n':'')+content;
+  } else if (type === 'approval_required') {
+    S.chatState = 'approval';
+    try { S.pendingApproval = JSON.parse(content); } catch { S.pendingApproval = {action:content}; }
+    chatShowApproval();
+  } else {
+    last.events.push({ type, content, ts:new Date() });
+    chatUpdateAgentFromEvent(type, content);
+    if (type==='tool_call') S.toolCount++;
+  }
+  chatRenderMessages(); chatUpdateUI();
+}
+
+async function chatResolveApproval(decision) {
+  chatHideApproval();
+  const last = S.messages[S.messages.length-1];
+  if (last) last.events.push({type:'routing',content:`Operator: ${decision==='approved'?'DISETUJUI':'DITOLAK'}`,ts:new Date()});
+  S.chatState = 'streaming';
+  chatRenderMessages();
+  try { await apiApprove(S.threadId, decision, chatHandleEvent); }
+  catch(e) { chatHandleEvent('error', e.message); }
+  chatFinish();
+}
+
+function chatFinish() {
+  const last = S.messages[S.messages.length-1];
+  if (last) last.streaming = false;
+  S.chatState = 'idle';
+  chatStopElapsed();
+  AGENTS.forEach(a => { if (S.agents[a.alias].state==='running') S.agents[a.alias].state='done'; });
+  chatRenderMessages(); chatRenderAgents(); chatUpdateUI();
+}
+
+function chatClear() {
+  S.messages=[]; S.activeQuery=''; S.toolCount=0; S.chatState='idle';
+  Object.keys(S.agents).forEach(k => { S.agents[k]={state:'standby',detail:'',toolCount:0}; });
+  chatStopElapsed();
+  chatRenderMessages(); chatRenderAgents(); chatRenderThreads(); chatUpdateUI();
+}
+
+function chatResetAgents() {
+  Object.keys(S.agents).forEach(k => { S.agents[k]={state:'standby',detail:'',toolCount:0}; });
+  S.agents.bambang = {state:'running',detail:'routing...',toolCount:0};
+  S.toolCount = 0;
+  chatRenderAgents();
+}
+
+function chatUpdateAgentFromEvent(type, content) {
+  const m = content.match(/^\[(\w+)\]\s*(.*)/);
+  if (!m) return;
+  const alias = ROLE_TO_ALIAS[m[1]] || m[1];
+  const msg = m[2];
+  if (type==='routing' && msg.startsWith('→')) {
+    if (S.agents[alias]) S.agents[alias].state='done';
+    const tgt = msg.match(/→\s*(\w+)/)?.[1];
+    const ta = ROLE_TO_ALIAS[tgt];
+    if (ta && S.agents[ta]) { S.agents[ta].state='running'; S.agents[ta].detail=''; }
+  } else if (type==='tool_call') {
+    if (S.agents[alias]) { S.agents[alias].state='running'; S.agents[alias].detail=msg.split('(')[0]; S.agents[alias].toolCount++; }
+  } else if (type==='error') {
+    if (S.agents[alias]) S.agents[alias].state='failed';
+  }
+  chatRenderAgents();
+}
+
+// ── Chat Rendering ──────────────────────────────────────────────────────────
+
+function chatRenderMessages() {
+  const el = $('chat-messages'); if (!el) return;
+  if (S.messages.length === 0) {
+    el.innerHTML = `<div class="flex-1 flex flex-col items-center justify-center text-center">
+      <span class="material-symbols-outlined text-5xl text-outline-variant mb-3">hub</span>
+      <h3 class="text-title-sm font-title-sm text-primary mb-1">LLMNetOps</h3>
+      <p class="text-body-sm text-on-surface-variant max-w-xs">Type a command to start an operational session with the AI agent network.</p>
+    </div>`;
+    return;
+  }
+  el.innerHTML = S.messages.map(m => m.role==='user' ? chatUserMsg(m) : chatAgentMsg(m)).join('');
+  el.scrollTop = el.scrollHeight;
+}
+
+function chatUserMsg(m) {
+  return `<div class="flex flex-col items-end max-w-[85%] self-end">
+    <div class="flex items-center gap-2 mb-1">
+      <span class="text-[10px] text-outline tabular-nums">${fmtTime(m.ts)}</span>
+      <span class="bg-primary text-white px-2 py-0.5 rounded text-[10px] font-bold tracking-wider">ANDA</span>
+    </div>
+    <div class="bg-primary-container text-white p-4 rounded-xl rounded-tr-none shadow-sm">
+      <p class="text-body-md">${esc(m.content)}</p>
+    </div>
+  </div>`;
+}
+
+function chatAgentMsg(m) {
+  const evHtml = m.events.length ? `<div class="bg-on-background rounded-lg p-3 font-data-mono text-data-mono space-y-1.5 mb-3">
+    ${m.events.map(chatEventLine).join('')}</div>` : '';
+  const typing = m.streaming && !m.content ? `<div class="flex items-center gap-1 mt-2">
+    <div class="w-2 h-2 bg-secondary rounded-full bouncing-dot"></div>
+    <div class="w-2 h-2 bg-secondary rounded-full bouncing-dot"></div>
+    <div class="w-2 h-2 bg-secondary rounded-full bouncing-dot"></div></div>` : '';
+  const txt = m.content ? `<div class="text-body-md text-on-surface whitespace-pre-wrap leading-relaxed">${esc(m.content)}</div>` : '';
+  return `<div class="flex flex-col items-start max-w-[90%] self-start">
+    <div class="flex items-center gap-2 mb-1">
+      <span class="bg-secondary text-white px-2 py-0.5 rounded text-[10px] font-bold tracking-wider">AGENT</span>
+      <span class="text-[10px] text-outline tabular-nums">${fmtTime(m.ts)}</span>
+    </div>
+    <div class="bg-surface-container-lowest p-4 rounded-xl rounded-tl-none border border-outline-variant shadow-sm w-full">
+      ${evHtml}${txt}${typing}
+    </div>
+  </div>`;
+}
+
+function chatEventLine(ev) {
+  const c = {routing:{tag:'#fcd34d',l:'ROUTING'},tool_call:{tag:'#60a5fa',l:'TOOL_CALL'},tool_result:{tag:'#4ade80',l:'RESULT'},error:{tag:'#f87171',l:'ERROR'}}[ev.type]||{tag:'#94a3b8',l:ev.type.toUpperCase()};
+  return `<div class="flex items-start gap-2"><span class="font-bold whitespace-nowrap" style="color:${c.tag}">[${c.l}]</span><span class="text-surface-variant break-all">${esc(ev.content)}</span></div>`;
+}
+
+function chatRenderThreads() {
+  const el = $('thread-list'); if (!el) return;
+  el.innerHTML = S.threads.map(t => {
+    const a = t.id===S.threadId;
+    return `<div class="${a?'bg-white border border-outline-variant shadow-sm':'hover:bg-surface-container'} p-3 rounded cursor-pointer transition-colors">
+      <p class="${a?'font-bold text-primary':'font-medium text-on-surface-variant'} text-xs truncate">${esc(t.title)}</p>
+      <p class="text-[10px] ${a?'text-on-surface-variant':'text-outline'} mt-1">${fmtTime(t.ts)}</p>
+    </div>`;
+  }).join('');
+}
+
+function chatRenderAgents() {
+  const el = $('agent-panel'); if (!el) return;
+  el.innerHTML = AGENTS.map(a => agentCardHtml(a.alias, a.role, S.agents[a.alias].state, S.agents[a.alias].detail)).join('');
+}
+
+function chatShowApproval() {
+  const o = $('approval-overlay'); if (!o) return; o.classList.remove('hidden');
+  const p = S.pendingApproval||{};
+  const ae=$('m-agent'), ac=$('m-action'), ar=$('m-risk');
+  if (ae) ae.textContent = p.agent||'config_agent';
+  if (ac) ac.textContent = p.action||'—';
+  if (ar) { const lv=(p.risk_level||'medium').toUpperCase(); const cls=lv==='HIGH'?'bg-red-50 text-red-700 border-red-200':'bg-amber-50 text-amber-700 border-amber-200';
+    ar.innerHTML=`<span class="px-2 py-0.5 text-[10px] font-bold border rounded-full ${cls}">${lv}</span>`; }
+}
+function chatHideApproval() { const o=$('approval-overlay'); if(o) o.classList.add('hidden'); S.pendingApproval=null; }
+
+function chatStartElapsed() {
+  S.elapsed=0; chatStopElapsed(); const st=Date.now();
+  _elapsedIv = setInterval(()=>{
+    S.elapsed = Math.floor((Date.now()-st)/1000);
+    const el=$('elapsed-display'); if(el){const m=String(Math.floor(S.elapsed/60)).padStart(2,'0'),s=String(S.elapsed%60).padStart(2,'0'); el.textContent=`⏱ ${m}:${s}`;}
+  },1000);
+}
+function chatStopElapsed() { if(_elapsedIv){clearInterval(_elapsedIv);_elapsedIv=null;} }
+function chatUpdateUI() { const q=$('active-query'); if(q) q.textContent=S.activeQuery||'—'; }
+
+function chatUnmount() { chatStopElapsed(); }
+
+// ── Placeholder ─────────────────────────────────────────────────────────────
+
+function screenPlaceholder(c, id) {
+  const item = NAV_ITEMS.find(n=>n.id===id)||{label:id,icon:'widgets'};
+  c.innerHTML = `<div class="p-6 max-w-[1600px] mx-auto">
+    <div class="mb-6">
+      <h2 class="text-headline-md font-headline-md text-primary">${item.label}</h2>
+      <p class="text-body-md text-on-surface-variant">This screen is under development.</p>
+    </div>
+    <div class="bg-surface-container-lowest border border-outline-variant rounded-lg p-12 shadow-sm flex flex-col items-center justify-center text-center">
+      <span class="material-symbols-outlined text-5xl text-outline-variant mb-4">${item.icon}</span>
+      <h3 class="text-title-sm font-title-sm text-primary mb-2">${item.label}</h3>
+      <p class="text-body-sm text-on-surface-variant max-w-md">This screen will be implemented in a future update. Use AI Chat to interact with the system.</p>
+      <button onclick="location.hash='chat'" class="mt-4 px-4 py-2 bg-secondary text-white rounded-lg text-body-sm font-medium hover:opacity-90 transition-opacity">Open AI Chat</button>
+    </div>
+  </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Screen Implementations — generated from Stitch mockups
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ── Shared page-header helper ────────────────────────────────────────────────
+
+function pageHeader(title, subtitle, actions) {
+  return `<div class="flex justify-between items-end mb-stack_gap_lg">
+    <div>
+      <h2 class="font-headline-md text-headline-md text-primary">${title}</h2>
+      <p class="text-on-surface-variant text-body-md">${subtitle}</p>
+    </div>
+    ${actions ? `<div class="flex gap-stack_gap_md">${actions}</div>` : ''}
+  </div>`;
+}
+
+// ── Network ──────────────────────────────────────────────────────────────────
+
+async function screenNetwork(c) {
+  // Fetch configured routers from backend; fall back to sample on failure.
+  let routers = [
+    { name:'Core-RT01',  host:'10.0.0.1',     status:'gray', st:'CONFIGURED', rtt:'—', cpu:0, ram:0, up:'—' },
+    { name:'Dist-SW02',  host:'10.5.10.2',    status:'gray', st:'CONFIGURED', rtt:'—', cpu:0, ram:0, up:'—' },
+    { name:'Edge-GW04',  host:'172.16.2.254', status:'gray', st:'CONFIGURED', rtt:'—', cpu:0, ram:0, up:'—' },
+  ];
+  let netErr = '';
+  try {
+    const r = await apiGet('/api/tools/routers');
+    const parsed = parseRouterList(r.result);
+    if (parsed.length) {
+      routers = parsed.map(p => ({ name:p.name, host:p.host, status:'gray', st:'CONFIGURED', rtt:'—', cpu:0, ram:0, up:'—' }));
+    }
+  } catch (e) { netErr = 'Gagal memuat daftar router: ' + e.message; }
+  const barColor = v => v >= 80 ? 'bg-red-600' : v >= 60 ? 'bg-amber-500' : 'bg-green-600';
+  const cell = (v) =>
+    `<td class="py-3 px-2">
+      <div class="flex items-center gap-2 w-32">
+        <div class="flex-1 h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
+          <div class="h-full ${barColor(v)}" style="width:${v}%;"></div>
+        </div>
+        <span class="font-data-mono-sm text-data-mono-sm w-8 text-right">${v}%</span>
+      </div>
+    </td>`;
+  const rows = routers.map(r => `<tr class="hover:bg-surface-container-low transition-colors group">
+    <td class="py-3 px-2">
+      <div class="flex items-center gap-2">
+        <span class="material-symbols-outlined text-outline text-[18px]">router</span>
+        <span class="font-data-mono text-data-mono font-medium text-primary">${esc(r.name)}</span>
+      </div>
+    </td>
+    <td class="py-3 px-2 font-data-mono text-data-mono text-on-surface-variant">${esc(r.host)}</td>
+    <td class="py-3 px-2">${badge(r.st, r.status)}</td>
+    <td class="py-3 px-2 font-data-mono text-data-mono">${esc(r.rtt)}</td>
+    ${cell(r.cpu)}
+    ${cell(r.ram)}
+    <td class="py-3 px-2 font-data-mono-sm text-data-mono-sm text-on-surface-variant">${esc(r.up)}</td>
+  </tr>`).join('');
+
+  const ifaces = [
+    { iface:'ether1 (Uplink)', rx:'842 Mbps', tx:'118 Mbps', pct:84 },
+    { iface:'ether2 (Core-A)', rx:'312 Mbps', tx:'298 Mbps', pct:31 },
+    { iface:'sfp-sfpplus1',    rx:'1.2 Gbps', tx:'940 Mbps', pct:62 },
+    { iface:'vlan100 (Faculty)',rx:'88 Mbps', tx:'44 Mbps',  pct:12 },
+  ];
+  const ifaceRows = ifaces.map(i => `<div class="flex items-center justify-between gap-4 py-2.5 border-b border-outline-variant last:border-0">
+    <div class="w-40 shrink-0">
+      <p class="font-data-mono text-data-mono font-medium text-primary truncate">${esc(i.iface)}</p>
+    </div>
+    <div class="flex-1 flex items-center gap-2">
+      <div class="flex-1 h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
+        <div class="h-full ${barColor(i.pct)}" style="width:${i.pct}%;"></div>
+      </div>
+      <span class="font-data-mono-sm text-data-mono-sm w-8 text-right">${i.pct}%</span>
+    </div>
+    <div class="flex gap-6 w-48 justify-end font-data-mono-sm text-data-mono-sm">
+      <span class="text-green-700">▼ ${esc(i.rx)}</span>
+      <span class="text-blue-700">▲ ${esc(i.tx)}</span>
+    </div>
+  </div>`).join('');
+
+  const talkers = [
+    { host:'10.0.10.45',   name:'MEDIA-SRV-01',   bytes:'48.2 GB', flows:'12,401' },
+    { host:'172.16.50.112',name:'MKTG-DELL-XPS-04',bytes:'22.9 GB', flows:'8,210'  },
+    { host:'10.100.40.12', name:'BACKUP-NAS-A',    bytes:'18.4 GB', flows:'1,902'  },
+    { host:'192.168.200.8',name:'IOT-GATEWAY',     bytes:'9.1 GB',  flows:'44,108' },
+  ];
+  const talkerRows = talkers.map((t,idx) => `<tr class="${idx%2?'bg-[#F8FAFC]':'bg-white'} hover:bg-surface-container-low transition-colors">
+    <td class="py-2.5 px-4 font-data-mono text-data-mono text-primary">${esc(t.host)}</td>
+    <td class="py-2.5 px-4 text-body-sm">${esc(t.name)}</td>
+    <td class="py-2.5 px-4 text-right font-data-mono text-data-mono">${esc(t.bytes)}</td>
+    <td class="py-2.5 px-4 text-right font-data-mono-sm text-data-mono-sm text-on-surface-variant">${esc(t.flows)}</td>
+  </tr>`).join('');
+
+  c.innerHTML = `<div class="p-container_gutter max-w-[1600px] mx-auto">
+    ${pageHeader('Network Monitor', 'Real-time reachability, resource load, and traffic across managed routers.', `
+      <button id="net-refresh" class="px-4 py-2 bg-surface-container-lowest border border-outline-variant rounded text-primary font-body-md hover:bg-surface-container transition-colors flex items-center">
+        <span class="material-symbols-outlined mr-2 text-sm">refresh</span> Refresh
+      </button>
+      <button id="net-healthcheck" class="px-4 py-2 bg-secondary text-white rounded font-body-md hover:bg-secondary/90 transition-colors flex items-center">
+        <span class="material-symbols-outlined mr-2 text-sm">monitoring</span> Run Health Check
+      </button>`)}
+    ${netErr ? errorHtml(netErr) : ''}
+
+    <!-- Router Overview -->
+    <div class="bg-surface-container-lowest border border-outline-variant rounded-lg mb-stack_gap_lg overflow-hidden">
+      <div class="px-6 py-4 border-b border-outline-variant flex justify-between items-center">
+        <h3 class="font-title-sm text-title-sm text-primary">Router Overview</h3>
+        <span class="text-label-caps font-label-caps text-on-surface-variant">Live Updates</span>
+      </div>
+      <div class="overflow-x-auto px-6 pb-2">
+        <table class="w-full text-left border-collapse">
+          <thead>
+            <tr class="text-label-caps font-label-caps text-outline border-b border-outline-variant">
+              <th class="py-3 px-2">Router</th>
+              <th class="py-3 px-2">Host</th>
+              <th class="py-3 px-2">Status</th>
+              <th class="py-3 px-2">RTT</th>
+              <th class="py-3 px-2">CPU</th>
+              <th class="py-3 px-2">RAM</th>
+              <th class="py-3 px-2">Uptime</th>
+            </tr>
+          </thead>
+          <tbody id="net-router-body" class="divide-y divide-outline-variant">${rows}</tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-12 gap-stack_gap_lg">
+      <!-- Interface Traffic -->
+      <div class="col-span-12 xl:col-span-7 bg-surface-container-lowest border border-outline-variant rounded-lg">
+        <div class="px-6 py-4 border-b border-outline-variant flex justify-between items-center">
+          <h3 class="font-title-sm text-title-sm text-primary">Interface Traffic — Core-RT01</h3>
+          <span class="text-label-caps font-label-caps text-on-surface-variant">RX / TX</span>
+        </div>
+        <div class="px-6 py-2">${ifaceRows}</div>
+      </div>
+
+      <!-- Top Talkers -->
+      <div class="col-span-12 xl:col-span-5 bg-surface-container-lowest border border-outline-variant rounded-lg overflow-hidden">
+        <div class="px-6 py-4 border-b border-outline-variant flex justify-between items-center">
+          <h3 class="font-title-sm text-title-sm text-primary">Top Talkers</h3>
+          <span class="text-label-caps font-label-caps text-on-surface-variant">Last 1h</span>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse">
+            <thead class="bg-surface-container-low">
+              <tr class="text-label-caps font-label-caps text-outline border-b border-outline-variant">
+                <th class="py-3 px-4">Host</th>
+                <th class="py-3 px-4">Name</th>
+                <th class="py-3 px-4 text-right">Volume</th>
+                <th class="py-3 px-4 text-right">Flows</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-outline-variant">${talkerRows}</tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>`;
+
+  // Run reachability against all routers and update the router table.
+  async function runReachability() {
+    const body = $('net-router-body');
+    const btn = $('net-refresh');
+    if (btn) btn.disabled = true;
+    if (body) body.innerHTML = `<tr><td class="py-6 px-2 text-center text-on-surface-variant" colspan="7">${loadingHtml('Memeriksa reachability...')}</td></tr>`;
     try {
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-        signal: controller.signal,
-      });
-      if (!res.ok) {
-        setEvents(e => [...e, { type: 'error', content: `HTTP ${res.status}` }]);
-        return;
-      }
-      for await (const ev of readSSE(res)) {
-        handleServerEvent(ev);
-        if (ev.type === 'approval_required') return; // keep streaming=true, wait for approve/reject
-      }
-      // Stream done normally — add elapsed summary like TUI "[⏱ selesai dalam X.Xs]"
-      const secs = ((Date.now() - t0) / 1000).toFixed(1);
-      setEvents(e => [...e, { type: 'elapsed', content: `selesai dalam ${secs}s` }]);
-    } catch (err) {
-      if (err.name !== 'AbortError') {
-        setEvents(e => [...e, { type: 'error', content: String(err) }]);
-      } else {
-        const secs = ((Date.now() - t0) / 1000).toFixed(1);
-        setEvents(e => [...e, { type: 'elapsed', content: `dibatalkan setelah ${secs}s` }]);
-      }
+      const r = await apiPost('/api/tools/reachability/all', {});
+      const results = r.results || {};
+      const newRows = routers.map(rt => {
+        const txt = results[rt.name] || '';
+        const ok = /reachable|up|online|berhasil|ping ok|alive|0% packet loss|success/i.test(txt) && !/unreachable|gagal|fail|timeout|100% packet loss/i.test(txt);
+        const down = /unreachable|gagal|fail|timeout|100% packet loss/i.test(txt);
+        const status = down ? 'red' : ok ? 'green' : 'amber';
+        const st = down ? 'OFFLINE' : ok ? 'ONLINE' : 'UNKNOWN';
+        return `<tr class="hover:bg-surface-container-low transition-colors group">
+          <td class="py-3 px-2"><div class="flex items-center gap-2"><span class="material-symbols-outlined text-outline text-[18px]">router</span><span class="font-data-mono text-data-mono font-medium text-primary">${esc(rt.name)}</span></div></td>
+          <td class="py-3 px-2 font-data-mono text-data-mono text-on-surface-variant">${esc(rt.host)}</td>
+          <td class="py-3 px-2">${badge(st, status)}</td>
+          <td class="py-3 px-2 font-data-mono-sm text-data-mono-sm text-on-surface-variant truncate max-w-[260px]" title="${esc(txt)}">${esc((txt||'—').split('\n')[0].slice(0,60))}</td>
+          <td class="py-3 px-2 text-on-surface-variant" colspan="3">—</td>
+        </tr>`;
+      }).join('');
+      if (body) body.innerHTML = newRows;
+    } catch (e) {
+      if (body) body.innerHTML = `<tr><td class="py-4 px-2 text-red-700 text-body-sm" colspan="7">Gagal: ${esc(e.message)}</td></tr>`;
     } finally {
-      abortRef.current = null;
-      setStreaming(false);
+      if (btn) btn.disabled = false;
     }
   }
 
-  function cancelStream() {
-    if (abortRef.current) {
-      abortRef.current.abort();
-      setAgents(prev => prev.map(a =>
-        a.state === 'BERJALAN' ? { ...a, state: 'STANDBY', task: '— idle —', taskColor: 'var(--fg-3)' } : a
-      ));
-    }
-  }
+  const refreshBtn = $('net-refresh');
+  if (refreshBtn) refreshBtn.onclick = runReachability;
+  const hcBtn = $('net-healthcheck');
+  if (hcBtn) hcBtn.onclick = () => { location.hash = 'chat'; };
+}
 
-  function handleServerEvent(ev) {
-    const { type, content } = ev;
+// ── DHCP ─────────────────────────────────────────────────────────────────────
 
-    if (type === 'routing') {
-      // content: "[bambang] → monitor_agent  skills: [...]  | reasoning"
-      // bambang ALWAYS becomes SELESAI on routing (matches tui.py _kanban_update)
-      setAgentState('bambang', { state: 'SELESAI', task: '✓ routed', taskColor: null });
-      const m = content.match(/[→>]\s*(\w+)/);
-      const raw = m ? m[1] : null;
-      const target = raw ? (ALIAS_MAP[raw] || raw) : null;
-      if (target && target !== 'END') {
-        setAgentState(target, { state: 'BERJALAN', task: '⠹ berjalan…', taskColor: null });
-      }
-      setEvents(e => [...e, { type: 'routing', content }]);
+async function screenDHCP(c) {
+  // Fetch DHCP audit (plain text) for the pool section.
+  let auditText = '', auditErr = '';
+  try { auditText = (await apiGet('/api/tools/dhcp/audit')).result || ''; }
+  catch (e) { auditErr = 'Gagal memuat audit DHCP: ' + e.message; }
 
-    } else if (type === 'tool_call') {
-      const agentName = agentNameFromSource(content);
-      const tool = content.replace(/^\[[^\]]+\]\s*/, '');
-      setAgentState(agentName, { state: 'BERJALAN', task: `⠹ ${tool}`, taskColor: null });
-      setEvents(e => [...e, { type: 'tool_call', content: tool, agent: agentName }]);
+  const pools = [
+    { name:'Campus-Core-A',   sub:'10.0.10.0/24',     total:254,  pct:42, status:'Healthy',  cls:'green' },
+    { name:'Guest-WiFi-North',sub:'172.16.50.0/22',   total:1022, pct:84, status:'Warning',  cls:'amber' },
+    { name:'IoT-Sensor-Mesh', sub:'192.168.200.0/24', total:254,  pct:96, status:'Critical', cls:'red'   },
+    { name:'DataCenter-VLAN40',sub:'10.100.40.0/24',  total:254,  pct:12, status:'Healthy',  cls:'green' },
+  ];
+  const poolBar = cls => ({green:'bg-green-600',amber:'bg-amber-500',red:'bg-red-600'}[cls]);
+  const statusPill = (label,cls) => {
+    const c2 = {green:'bg-green-100 text-green-800',amber:'bg-amber-100 text-amber-800',red:'bg-red-100 text-red-800'}[cls];
+    return `<span class="px-2 py-0.5 rounded-full ${c2} font-label-caps text-label-caps">${label}</span>`;
+  };
+  const poolRows = pools.map(p => `<tr class="hover:bg-surface-container-low transition-colors group">
+    <td class="py-3 px-2 font-body-md text-primary font-medium">${esc(p.name)}</td>
+    <td class="py-3 px-2 font-data-mono text-data-mono">${esc(p.sub)}</td>
+    <td class="py-3 px-2 font-data-mono text-data-mono">${p.total}</td>
+    <td class="py-3 px-2 w-48">
+      <div class="flex items-center gap-2">
+        <div class="flex-1 h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
+          <div class="h-full ${poolBar(p.cls)}" style="width:${p.pct}%;"></div>
+        </div>
+        <span class="font-data-mono-sm text-data-mono-sm">${p.pct}%</span>
+      </div>
+    </td>
+    <td class="py-3 px-2 text-right">${statusPill(p.status, p.cls)}</td>
+  </tr>`).join('');
 
-    } else if (type === 'tool_result') {
-      const agentName = agentNameFromSource(content);
-      const preview = content.replace(/^\[[^\]]+\]\s*/, '').slice(0, 80);
-      setAgentState(agentName, { task: `✓ ${preview}` });
-      setEvents(e => [...e, { type: 'tool_result', content: preview, agent: agentName }]);
+  const leases = [
+    { ip:'10.0.10.45',     mac:'A1:B2:C3:D4:E5:F6', host:'PRINTER-HR-302',  pool:'Campus-Core-A',    exp:'6h 12m remaining' },
+    { ip:'10.0.10.89',     mac:'22:33:44:55:66:77', host:'LAPTOP-782JKS',   pool:'Campus-Core-A',    exp:'2h 45m remaining' },
+    { ip:'172.16.51.12',   mac:'BC:12:34:56:78:90', host:'IP-PHONE-405',    pool:'Guest-WiFi-North', exp:'Expired (Static Reserved)' },
+    { ip:'192.168.200.11', mac:'00:11:22:33:44:55', host:'IOT-TEMP-SENSOR', pool:'IoT-Sensor-Mesh',  exp:'14h 50m remaining' },
+    { ip:'172.16.50.201',  mac:'AA:BB:CC:DD:EE:FF', host:'IPAD-SALES-ROOM', pool:'Guest-WiFi-North', exp:'1h 05m remaining' },
+  ];
+  const leaseRows = leases.map((l,i) => `<tr class="${i%2?'bg-[#F8FAFC]':'bg-white'} hover:bg-surface-container-low transition-colors group">
+    <td class="py-3 px-6 font-data-mono text-data-mono text-primary">${esc(l.ip)}</td>
+    <td class="py-3 px-6 font-data-mono text-data-mono text-on-surface-variant">${esc(l.mac)}</td>
+    <td class="py-3 px-6 font-body-sm text-body-sm">${esc(l.host)}</td>
+    <td class="py-3 px-6 text-body-sm text-on-surface-variant">${esc(l.pool)}</td>
+    <td class="py-3 px-6 text-body-sm text-on-surface-variant">${esc(l.exp)}</td>
+    <td class="py-3 px-6 text-right">
+      <button class="text-primary hover:bg-surface-container p-1 rounded"><span class="material-symbols-outlined text-sm">more_vert</span></button>
+    </td>
+  </tr>`).join('');
 
-    } else if (type === 'ai') {
-      // All BERJALAN agents → SELESAI (matches tui.py: no specific target tracking needed)
-      setAgents(prev => prev.map(a =>
-        a.state === 'BERJALAN' ? { ...a, state: 'SELESAI', task: '✓ selesai', taskColor: null } : a
-      ));
-      setEvents(e => [...e, { type: 'ai', content }]);
+  c.innerHTML = `<div class="p-container_gutter max-w-[1600px] mx-auto">
+    ${pageHeader('DHCP Infrastructure Monitor', 'Real-time IP address space management and lease orchestration.', `
+      <button class="px-4 py-2 bg-surface-container-lowest border border-outline-variant rounded text-primary font-body-md hover:bg-surface-container transition-colors flex items-center">
+        <span class="material-symbols-outlined mr-2 text-sm">download</span> Export CSV
+      </button>
+      <button class="px-4 py-2 bg-secondary text-white rounded font-body-md hover:bg-secondary/90 transition-colors flex items-center">
+        <span class="material-symbols-outlined mr-2 text-sm">add</span> Create New Pool
+      </button>`)}
 
-    } else if (type === 'approval_required') {
-      let data = {};
-      try { data = JSON.parse(content); } catch {}
-      const agentName = agentNameFromSource(data.agent || 'config_agent');
-      setAgentState(agentName, { state: 'MENUNGGU', task: `⊙ ${data.action || 'approval'}`, taskColor: 'var(--warn)' });
-      setApprovalData(data);
-      setModalOpen(true);
-      setEvents(e => [...e, { type: 'approval_required', content: data }]);
-
-    } else if (type === 'error') {
-      setAgents(prev => prev.map(a =>
-        a.state === 'BERJALAN' ? { ...a, state: 'GAGAL', task: '✗ error', taskColor: 'var(--err)' } : a
-      ));
-      setEvents(e => [...e, { type: 'error', content }]);
-    }
-  }
-
-  async function handleSend(text) {
-    resetAgents();
-    // bambang starts BERJALAN like tui.py _kanban_reset
-    setAgentState('bambang', { state: 'BERJALAN', task: '⠹ routing…', taskColor: null });
-    setEvents(e => [...e, { type: 'user', text }]);
-    await consumeStream('/chat', { thread_id: THREAD_ID, message: text });
-  }
-
-  async function approve() {
-    setModalOpen(false);
-    const agentName = agentNameFromSource(approvalData?.agent || 'config_agent');
-    setAgentState(agentName, { state: 'BERJALAN', task: '⠹ executing…', taskColor: null });
-    await consumeStream('/approve', { thread_id: THREAD_ID, decision: 'approved' });
-  }
-
-  async function reject() {
-    setModalOpen(false);
-    const agentName = agentNameFromSource(approvalData?.agent || 'config_agent');
-    setAgentState(agentName, { state: 'GAGAL', task: '✗ ditolak operator', taskColor: 'var(--err)' });
-    await consumeStream('/approve', { thread_id: THREAD_ID, decision: 'rejected' });
-  }
-
-  const activeCount = agents.filter(a => a.state === 'BERJALAN' || a.state === 'MENUNGGU').length;
-  const streamingLabel = streaming ? `⠹ agent bekerja… ${elapsed}s` : '● siap';
-
-  return (
-    <div className="app">
-      <TopBar thread={`thread/${THREAD_ID.slice(0,8)}`} ctx={ctxPct} tokens={tokTotal > 0 ? tokTotal.toLocaleString() : '—'} time={time} model={model} />
-      <div className="main">
-        <LeftRail active={active} onNav={setActive} />
-        <div className="chat-panel">
-          <div className="chat-head">
-            <span className="chat-head-title">AI Chat</span>
-            <span className="chat-head-meta">{streamingLabel}</span>
-            <div className="chat-head-btns">
-              {streaming && <button className="btn-err" onClick={cancelStream}>■ Stop</button>}
-              <button className="btn-ghost" onClick={() => { setEvents([]); resetAgents(); }}>Clear</button>
+    <!-- Pool Utilization + Stats -->
+    <div class="grid grid-cols-12 gap-stack_gap_lg mb-stack_gap_lg">
+      <div class="col-span-12 lg:col-span-8 bg-surface-container-lowest border border-outline-variant rounded-lg p-stack_gap_md">
+        <div class="flex justify-between items-center mb-4 pb-2 border-b border-outline-variant">
+          <h3 class="font-title-sm text-title-sm text-primary">Active Pool Utilization</h3>
+          <span class="text-label-caps font-label-caps text-on-surface-variant">Live Audit</span>
+        </div>
+        ${auditErr ? errorHtml(auditErr) : ''}
+        ${auditText
+          ? `<div class="max-h-[360px] overflow-auto">${preHtml(auditText)}</div>`
+          : (auditErr
+              ? `<div class="overflow-x-auto"><table class="w-full text-left border-collapse">
+                  <thead><tr class="text-label-caps font-label-caps text-outline border-b border-outline-variant">
+                    <th class="pb-3 px-2">Pool Name</th><th class="pb-3 px-2">Subnet Range</th><th class="pb-3 px-2">Total IPs</th><th class="pb-3 px-2">Utilization</th><th class="pb-3 px-2 text-right">Status</th>
+                  </tr></thead>
+                  <tbody class="divide-y divide-outline-variant">${poolRows}</tbody>
+                </table></div>`
+              : `<p class="text-body-sm text-on-surface-variant py-6 text-center">Tidak ada data audit DHCP.</p>`)}
+      </div>
+      <div class="col-span-12 lg:col-span-4 flex flex-col gap-stack_gap_lg">
+        <div class="bg-primary text-surface-container-lowest p-6 rounded-lg relative overflow-hidden">
+          <div class="relative z-10">
+            <p class="text-label-caps font-label-caps opacity-60 mb-2">Total Managed Leases</p>
+            <h4 class="text-display-lg font-display-lg mb-4">12,482</h4>
+            <div class="flex items-center text-green-300 text-sm font-medium">
+              <span class="material-symbols-outlined text-sm mr-1">trending_up</span> +124 since last hour
             </div>
           </div>
-          <div className="chat-stream" ref={streamRef}>
-            {events.map((ev, i) => <ChatEvent key={i} ev={ev} />)}
-            {streaming && <div className="ch-line ch-ev">  <span className="ch-caret"></span></div>}
-          </div>
-          <Composer onSend={handleSend} disabled={streaming || modalOpen} />
+          <div class="absolute right-[-20px] top-[-20px] opacity-10"><span class="material-symbols-outlined text-[140px]">hub</span></div>
         </div>
-        <div className="agent-rail">
-          <div className="agent-rail-head">
-            <span className="agent-rail-title">Agents</span>
-            <span className="agent-rail-count">{activeCount}/6 active</span>
+        <div class="bg-surface-container-lowest border border-outline-variant p-6 rounded-lg">
+          <div class="flex items-center justify-between mb-4">
+            <h4 class="font-title-sm text-title-sm text-primary">System Health</h4>
+            <span class="w-3 h-3 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]"></span>
           </div>
-          <div className="agent-rail-list">
-            {agents.map(a => <AgentCard key={a.name} agent={a} />)}
+          <div class="space-y-4">
+            <div class="flex justify-between items-center"><span class="text-body-sm text-on-surface-variant">Server Response</span><span class="font-data-mono text-data-mono text-primary">12ms</span></div>
+            <div class="flex justify-between items-center"><span class="text-body-sm text-on-surface-variant">Conflict Detection</span><span class="font-data-mono text-data-mono text-green-600">Active</span></div>
+            <div class="flex justify-between items-center"><span class="text-body-sm text-on-surface-variant">Sync Latency</span><span class="font-data-mono text-data-mono text-primary">0.8s</span></div>
           </div>
         </div>
       </div>
-      <StatusBar
-        status={modalOpen ? '⊙ APPROVAL PENDING' : streaming ? `⠹ streaming ${elapsed}s` : '● ready'}
-        hint={<><kbd>↵</kbd>send <kbd>⇧↵</kbd>newline</>}
-      />
-      <ApprovalModal open={modalOpen} data={approvalData} onApprove={approve} onReject={reject} />
     </div>
-  );
+
+    <!-- Lookup Device -->
+    <div class="bg-surface-container-lowest border border-outline-variant rounded-lg p-stack_gap_md mb-stack_gap_lg">
+      <div class="flex flex-col md:flex-row gap-6">
+        <div class="md:w-1/3 border-r border-outline-variant pr-6">
+          <h3 class="font-title-sm text-title-sm text-primary mb-4">Lookup Device</h3>
+          <div class="space-y-4">
+            <div>
+              <label class="block text-label-caps font-label-caps text-outline mb-1.5">Identifier</label>
+              <div class="relative">
+                <input id="dhcp-search-input" class="w-full border border-outline-variant rounded-lg py-2 px-3 text-body-md focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all" placeholder="IP, MAC or Hostname..." type="text"/>
+                <button id="dhcp-search-btn" class="absolute right-2 top-1/2 -translate-y-1/2 bg-primary text-white p-1 rounded hover:bg-primary-container transition-colors">
+                  <span class="material-symbols-outlined text-sm">search</span>
+                </button>
+              </div>
+            </div>
+            <div class="p-3 bg-surface-container-low rounded border border-outline-variant italic text-body-sm text-on-surface-variant">
+              Quick tip: cari berdasarkan IP, MAC, atau hostname.
+            </div>
+          </div>
+        </div>
+        <div class="flex-1">
+          <div id="dhcp-search-result" class="min-h-[120px] flex items-center justify-center text-on-surface-variant text-body-sm">
+            Masukkan identifier lalu tekan Enter untuk mencari perangkat.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Recent Leases Browser -->
+    <div class="bg-surface-container-lowest border border-outline-variant rounded-lg overflow-hidden flex flex-col">
+      <div class="px-6 py-4 border-b border-outline-variant flex justify-between items-center">
+        <h3 class="font-title-sm text-title-sm text-primary">Recent Leases Browser</h3>
+        <div class="flex gap-2">
+          <button class="p-1.5 hover:bg-surface-container rounded transition-colors text-on-surface-variant"><span class="material-symbols-outlined">filter_list</span></button>
+          <button class="p-1.5 hover:bg-surface-container rounded transition-colors text-on-surface-variant"><span class="material-symbols-outlined">refresh</span></button>
+        </div>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse">
+          <thead class="bg-surface-container-low">
+            <tr class="text-label-caps font-label-caps text-outline border-b border-outline-variant">
+              <th class="py-3 px-6">Assigned IP</th>
+              <th class="py-3 px-6">Hardware Address</th>
+              <th class="py-3 px-6">Hostname / Client ID</th>
+              <th class="py-3 px-6">Pool</th>
+              <th class="py-3 px-6">Expiry</th>
+              <th class="py-3 px-6 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-outline-variant">${leaseRows}</tbody>
+        </table>
+      </div>
+      <div class="px-6 py-4 bg-surface-container-low border-t border-outline-variant flex items-center justify-between">
+        <span class="text-body-sm text-on-surface-variant">Showing 1 to 5 of 1,245 leases</span>
+        <div class="flex gap-1">
+          <button class="w-8 h-8 flex items-center justify-center border border-outline-variant rounded bg-surface-container-lowest text-on-surface-variant hover:bg-surface-container"><span class="material-symbols-outlined text-sm">chevron_left</span></button>
+          <button class="w-8 h-8 flex items-center justify-center border border-primary rounded bg-primary text-white font-body-sm">1</button>
+          <button class="w-8 h-8 flex items-center justify-center border border-outline-variant rounded bg-surface-container-lowest font-body-sm hover:bg-surface-container">2</button>
+          <button class="w-8 h-8 flex items-center justify-center border border-outline-variant rounded bg-surface-container-lowest font-body-sm hover:bg-surface-container">3</button>
+          <button class="w-8 h-8 flex items-center justify-center border border-outline-variant rounded bg-surface-container-lowest text-on-surface-variant hover:bg-surface-container"><span class="material-symbols-outlined text-sm">chevron_right</span></button>
+        </div>
+      </div>
+    </div>
+  </div>`;
+
+  // Wire DHCP device lookup → POST /api/tools/dhcp/search
+  const sInput = $('dhcp-search-input');
+  const sBtn = $('dhcp-search-btn');
+  const sOut = $('dhcp-search-result');
+  async function doSearch() {
+    const q = (sInput.value || '').trim();
+    if (!q) return;
+    sOut.classList.remove('items-center','justify-center');
+    sOut.innerHTML = loadingHtml('Mencari perangkat...');
+    try {
+      const r = await apiPost('/api/tools/dhcp/search', { query: q });
+      sOut.innerHTML = `<div class="w-full max-h-[300px] overflow-auto">${preHtml(r.result || 'Tidak ada hasil.')}</div>`;
+    } catch (e) {
+      sOut.innerHTML = errorHtml('Pencarian gagal: ' + e.message);
+    }
+  }
+  if (sBtn) sBtn.onclick = doSearch;
+  if (sInput) sInput.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); doSearch(); } };
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+// ── NetBox ───────────────────────────────────────────────────────────────────
+
+function netboxToggle(id) {
+  const row = $(id);
+  if (row) row.classList.toggle('hidden');
+}
+
+async function screenNetBox(c) {
+  c.innerHTML = `<div class="p-container_gutter max-w-[1600px] mx-auto">
+    ${pageHeader('NetBox Source of Truth', 'Managed device inventory, configuration drift, and L2 domain tracking.', `
+      <div class="flex items-center bg-surface-container-low px-3 py-1.5 rounded-lg border border-outline-variant">
+        <span class="material-symbols-outlined text-[18px] mr-2 text-outline">storage</span>
+        <span class="font-body-sm text-body-sm text-on-surface">NetBox</span>
+        <div class="flex items-center ml-4 pl-4 border-l border-outline-variant">
+          <span id="netbox-status-dot" class="w-2 h-2 rounded-full bg-outline mr-2"></span>
+          <span id="netbox-status-text" class="text-[11px] font-bold text-outline uppercase tracking-wider">Checking</span>
+        </div>
+      </div>`)}
+
+    <div class="grid grid-cols-12 gap-stack_gap_lg">
+      <!-- Managed Devices -->
+      <div class="col-span-12 xl:col-span-8">
+        <div class="bg-surface-container-lowest border border-outline-variant rounded-lg overflow-hidden flex flex-col">
+          <div class="px-4 py-3 border-b border-outline-variant flex justify-between items-center">
+            <h3 class="font-title-sm text-title-sm font-bold text-primary">Managed Devices</h3>
+            <div class="flex gap-2">
+              <button class="px-3 py-1.5 border border-outline-variant text-primary font-label-caps text-label-caps rounded flex items-center hover:bg-surface-container transition-all"><span class="material-symbols-outlined text-[16px] mr-1">filter_list</span> FILTER</button>
+              <button class="px-3 py-1.5 border border-outline-variant text-primary font-label-caps text-label-caps rounded flex items-center hover:bg-surface-container transition-all"><span class="material-symbols-outlined text-[16px] mr-1">download</span> EXPORT</button>
+            </div>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+              <thead class="bg-surface-container-low">
+                <tr>
+                  <th class="px-4 py-3 font-label-caps text-label-caps text-outline uppercase">Device Name</th>
+                  <th class="px-4 py-3 font-label-caps text-label-caps text-outline uppercase">Site</th>
+                  <th class="px-4 py-3 font-label-caps text-label-caps text-outline uppercase">Role</th>
+                  <th class="px-4 py-3 font-label-caps text-label-caps text-outline uppercase">Status</th>
+                  <th class="px-4 py-3 font-label-caps text-label-caps text-outline uppercase text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="netbox-device-body" class="divide-y divide-outline-variant">
+                <tr><td colspan="5">${loadingHtml('Memuat perangkat NetBox...')}</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div id="netbox-device-raw" class="px-4 pb-4"></div>
+        </div>
+      </div>
+
+      <!-- Configuration Drift -->
+      <div class="col-span-12 xl:col-span-4">
+        <div class="bg-surface-container-lowest border-2 border-amber-200 rounded-lg shadow-sm flex flex-col h-full">
+          <div class="p-4 border-b border-amber-100 bg-amber-50/50 flex justify-between items-center">
+            <div class="flex items-center"><span class="material-symbols-outlined text-amber-600 mr-2">warning</span><h3 class="font-title-sm text-title-sm font-bold text-amber-900">Configuration Drift</h3></div>
+            <span class="bg-amber-200 text-amber-900 px-2 py-0.5 rounded text-[10px] font-bold">4 ISSUES</span>
+          </div>
+          <div class="p-4 flex-1 space-y-4">
+            <p class="text-body-sm text-on-surface-variant">Detected mismatches between NetBox (Source of Truth) and live device state.</p>
+            <div class="p-3 border border-outline-variant rounded bg-surface-container-low space-y-2">
+              <div class="flex justify-between items-center">
+                <span class="font-data-mono-sm text-data-mono-sm text-primary font-bold">KMP-CORE-SW01</span>
+                <span class="bg-error-container text-on-error-container px-2 py-0.5 rounded text-[10px] font-bold uppercase">Mismatch</span>
+              </div>
+              <div class="grid items-center gap-3" style="grid-template-columns:1fr 40px 1fr;">
+                <div class="bg-surface-container-lowest p-2 border border-outline-variant rounded truncate font-data-mono-sm text-data-mono-sm">description core_link</div>
+                <div class="text-center text-outline font-data-mono-sm text-data-mono-sm">→</div>
+                <div class="bg-surface-container-lowest p-2 border border-outline-variant rounded truncate font-data-mono-sm text-data-mono-sm">description UPLINK_...</div>
+              </div>
+              <div class="flex justify-between text-[10px] text-outline font-medium px-1"><span>NETBOX</span><span>ROUTER</span></div>
+            </div>
+            <div class="p-3 border border-outline-variant rounded bg-surface-container-low space-y-2">
+              <div class="flex justify-between items-center">
+                <span class="font-data-mono-sm text-data-mono-sm text-primary font-bold">KMP-DIST-SW02</span>
+                <span class="bg-orange-100 text-orange-800 px-2 py-0.5 rounded text-[10px] font-bold uppercase">Missing</span>
+              </div>
+              <div class="bg-surface-container-lowest p-2 border border-outline-variant rounded font-data-mono-sm text-data-mono-sm italic text-outline">VLAN 505 (Guest_Wi-Fi) not found in NetBox</div>
+            </div>
+            <div class="p-3 border border-outline-variant rounded bg-surface-container-low space-y-2">
+              <div class="flex justify-between items-center">
+                <span class="font-data-mono-sm text-data-mono-sm text-primary font-bold">KMP-CORE-SW01</span>
+                <span class="bg-error-container text-on-error-container px-2 py-0.5 rounded text-[10px] font-bold uppercase">Mismatch</span>
+              </div>
+              <div class="grid items-center gap-3" style="grid-template-columns:1fr 40px 1fr;">
+                <div class="bg-surface-container-lowest p-2 border border-outline-variant rounded font-data-mono-sm text-data-mono-sm">mtu 1500</div>
+                <div class="text-center text-outline font-data-mono-sm text-data-mono-sm">→</div>
+                <div class="bg-surface-container-lowest p-2 border border-outline-variant rounded font-data-mono-sm text-data-mono-sm">mtu 9000</div>
+              </div>
+            </div>
+          </div>
+          <div class="p-4 border-t border-outline-variant bg-surface-container-lowest">
+            <button class="w-full bg-secondary text-on-secondary font-label-caps text-label-caps py-2.5 rounded-lg flex items-center justify-center hover:opacity-90 shadow-sm transition-all"><span class="material-symbols-outlined mr-2 text-[18px]">sync</span> SYNC ALL TO NETBOX</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- VLAN Groups -->
+      <div class="col-span-12">
+        <div class="bg-surface-container-lowest border border-outline-variant rounded-lg overflow-hidden">
+          <div class="px-6 py-4 border-b border-outline-variant flex justify-between items-center">
+            <div>
+              <h3 class="font-title-sm text-title-sm font-bold text-primary">VLAN Groups &amp; Prefix Management</h3>
+              <p class="text-body-sm text-outline mt-0.5">Enterprise global L2 domain tracking</p>
+            </div>
+            <button class="bg-primary text-white font-label-caps text-label-caps px-4 py-2 rounded-lg flex items-center hover:bg-primary-container transition-all"><span class="material-symbols-outlined mr-2 text-[18px]">add_circle</span> PROVISION NEW</button>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-3 divide-x divide-outline-variant">
+            <div class="p-4">
+              <div class="flex items-center justify-between mb-4"><span class="font-label-caps text-label-caps text-primary font-bold">MANAGEMENT</span><span class="text-[10px] text-outline font-bold">12/32 USED</span></div>
+              <div class="space-y-3">
+                <div class="flex items-center justify-between p-2 rounded hover:bg-surface-container-low transition-colors">
+                  <div><p class="font-data-mono text-data-mono font-medium">10</p><p class="text-[11px] text-outline">Admin_OOB</p></div>
+                  <div class="text-right"><p class="font-data-mono-sm text-data-mono-sm">10.10.10.0/24</p><span class="bg-green-100 text-green-800 text-[9px] px-1.5 py-0.5 rounded font-bold uppercase">Native</span></div>
+                </div>
+                <div class="flex items-center justify-between p-2 rounded hover:bg-surface-container-low transition-colors border-t border-outline-variant/30">
+                  <div><p class="font-data-mono text-data-mono font-medium">11</p><p class="text-[11px] text-outline">Loopbacks</p></div>
+                  <div class="text-right"><p class="font-data-mono-sm text-data-mono-sm">10.255.0.0/24</p></div>
+                </div>
+              </div>
+            </div>
+            <div class="p-4">
+              <div class="flex items-center justify-between mb-4"><span class="font-label-caps text-label-caps text-primary font-bold">USER_DATA</span><span class="text-[10px] text-outline font-bold">88/100 USED</span></div>
+              <div class="space-y-3">
+                <div class="flex items-center justify-between p-2 rounded hover:bg-surface-container-low transition-colors">
+                  <div><p class="font-data-mono text-data-mono font-medium">100</p><p class="text-[11px] text-outline">Faculty_Wired</p></div>
+                  <div class="text-right"><p class="font-data-mono-sm text-data-mono-sm">172.16.1.0/24</p></div>
+                </div>
+                <div class="flex items-center justify-between p-2 rounded hover:bg-surface-container-low transition-colors border-t border-outline-variant/30">
+                  <div><p class="font-data-mono text-data-mono font-medium">200</p><p class="text-[11px] text-outline">Student_Wired</p></div>
+                  <div class="text-right"><p class="font-data-mono-sm text-data-mono-sm">172.16.2.0/23</p><span class="bg-amber-100 text-amber-800 text-[9px] px-1.5 py-0.5 rounded font-bold uppercase">Near Full</span></div>
+                </div>
+              </div>
+            </div>
+            <div class="p-4">
+              <div class="flex items-center justify-between mb-4"><span class="font-label-caps text-label-caps text-primary font-bold">SERVERS</span><span class="text-[10px] text-outline font-bold">2/10 USED</span></div>
+              <div class="space-y-3">
+                <div class="flex items-center justify-between p-2 rounded hover:bg-surface-container-low transition-colors">
+                  <div><p class="font-data-mono text-data-mono font-medium">50</p><p class="text-[11px] text-outline">Core_Services</p></div>
+                  <div class="text-right"><p class="font-data-mono-sm text-data-mono-sm">192.168.10.0/24</p></div>
+                </div>
+                <div class="flex flex-col items-center justify-center p-6 border-2 border-dashed border-outline-variant rounded-lg mt-2">
+                  <span class="material-symbols-outlined text-outline mb-1">add</span>
+                  <span class="text-[11px] text-outline uppercase font-bold">Add Group</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>`;
+
+  // Best-effort NetBox device fetch. Tool returns plain text; if NetBox is not
+  // configured, surface a helpful message instead of the device table.
+  const body = $('netbox-device-body');
+  const raw = $('netbox-device-raw');
+  const dot = $('netbox-status-dot');
+  const stTxt = $('netbox-status-text');
+  function setStatus(ok, label) {
+    if (dot) dot.className = `w-2 h-2 rounded-full mr-2 ${ok?'bg-green-500 animate-pulse':'bg-amber-500'}`;
+    if (stTxt) { stTxt.textContent = label; stTxt.className = `text-[11px] font-bold uppercase tracking-wider ${ok?'text-green-700':'text-amber-700'}`; }
+  }
+  try {
+    const r = await apiGet('/api/netbox/devices');
+    const text = (r.result || '').trim();
+    const notConfigured = /tidak dikonfigurasi|not configured|belum diatur|netbox_url|token.*tidak|tidak tersedia|disabled|error/i.test(text) || !text;
+    if (notConfigured) {
+      setStatus(false, 'Not Configured');
+      if (body) body.innerHTML = `<tr><td colspan="5" class="px-4 py-8 text-center">
+        <span class="material-symbols-outlined text-3xl text-outline mb-2">cloud_off</span>
+        <p class="text-body-sm text-on-surface-variant">NetBox belum dikonfigurasi atau tidak dapat dijangkau.</p>
+        <p class="text-[11px] text-outline mt-1">Atur NETBOX_URL dan NETBOX_TOKEN di .env untuk mengaktifkan inventory.</p>
+        ${text ? `<div class="mt-3 text-left max-w-xl mx-auto">${preHtml(text)}</div>` : ''}
+      </td></tr>`;
+    } else {
+      setStatus(true, 'Connected');
+      // Render the raw device listing (plain text) — structure varies by deployment.
+      if (body) body.innerHTML = `<tr><td colspan="5" class="px-4 py-4">${preHtml(text)}</td></tr>`;
+    }
+  } catch (e) {
+    setStatus(false, 'Unavailable');
+    if (body) body.innerHTML = `<tr><td colspan="5" class="px-4 py-6">${errorHtml('Gagal memuat NetBox: ' + e.message)}</td></tr>`;
+  }
+}
+
+// ── Skills ───────────────────────────────────────────────────────────────────
+
+// Module-scope cache so filter pills can re-render without refetching.
+let _skillsCache = [];
+
+function screenSkills(c) {
+  const DOMAIN_ICONS = {
+    monitoring:'health_and_safety', config:'dns', security:'security',
+    diagnostic:'troubleshoot', diagnosa:'troubleshoot', routing:'route',
+    dhcp:'router', netbox:'storage',
+  };
+  const domainBadge = (kind) => {
+    const label = (kind||'general').toUpperCase();
+    const cls = {
+      monitoring:'bg-primary-container text-on-primary-container',
+      config:'bg-tertiary-container text-tertiary-fixed-dim',
+      security:'bg-secondary text-on-secondary',
+      diagnostic:'bg-blue-100 text-blue-800',
+    }[kind] || 'bg-surface-container text-on-surface-variant';
+    return `<span class="px-2 py-0.5 ${cls} rounded text-[10px] font-bold uppercase">${esc(label)}</span>`;
+  };
+  const triggerPills = arr => `<div class="flex gap-1 flex-wrap">${(arr||[]).slice(0,6).map(t =>
+    `<span class="bg-surface-container text-on-surface-variant px-1.5 py-0.5 rounded font-data-mono-sm text-[10px]">${esc(t)}</span>`).join('')}</div>`;
+  const statusPill = active => active
+    ? `<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-[11px] font-bold"><span class="w-1.5 h-1.5 rounded-full bg-green-600"></span> ACTIVE</span>`
+    : `<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-surface-container text-on-surface-variant text-[11px] font-bold"><span class="w-1.5 h-1.5 rounded-full bg-outline"></span> DRAFT</span>`;
+
+  const pill = (label, domain, active) =>
+    `<button data-skill-filter="${esc(domain)}" class="px-4 py-1.5 rounded-full border text-body-sm font-medium transition-all ${active
+      ? 'border-secondary bg-secondary text-white'
+      : 'border-outline-variant text-on-surface-variant hover:border-secondary hover:text-secondary'}">${label}</button>`;
+
+  // Render the skill table rows from a filtered list.
+  function renderRows(list) {
+    if (!list.length) return `<tr><td class="px-6 py-8 text-center text-on-surface-variant text-body-sm" colspan="7">Tidak ada skill.</td></tr>`;
+    return list.map((s,i) => `<tr class="group hover:bg-surface-container-low transition-colors ${i%2?'bg-surface-container-lowest/50':''}">
+      <td class="px-6 py-4"><input class="rounded border-outline-variant text-primary focus:ring-primary" type="checkbox"/></td>
+      <td class="px-4 py-4"><div class="flex items-center gap-3"><span class="material-symbols-outlined text-primary-container">${DOMAIN_ICONS[s.domain]||'psychology'}</span><span class="font-bold text-body-md text-primary hover:underline cursor-pointer">${esc(s.name)}</span></div></td>
+      <td class="px-4 py-4">${domainBadge(s.domain)}</td>
+      <td class="px-4 py-4">${triggerPills(s.triggers)}</td>
+      <td class="px-4 py-4 text-right font-data-mono text-body-sm">${(s.tools||[]).length}</td>
+      <td class="px-4 py-4">${statusPill(s.enabled!==false)}</td>
+      <td class="px-6 py-4 text-right">
+        <button class="text-on-surface-variant hover:text-primary"><span class="material-symbols-outlined">edit</span></button>
+        <button class="text-on-surface-variant hover:text-error ml-2"><span class="material-symbols-outlined">delete</span></button>
+      </td>
+    </tr>`).join('');
+  }
+
+  // Initial shell with loading state.
+  c.innerHTML = `<div class="p-container_gutter max-w-[1600px] mx-auto">
+    ${pageHeader('Skill Inventory', 'Procedural knowledge library that agents inject at runtime — no Python required.', `
+      <button class="bg-secondary text-white px-4 py-2 rounded font-bold text-body-sm flex items-center gap-2 hover:opacity-90 transition-all">
+        <span class="material-symbols-outlined text-[18px]">add</span> Create New Skill
+      </button>`)}
+    <div id="skills-pending"></div>
+    <div id="skills-filters" class="mb-6 flex flex-wrap items-center gap-3"></div>
+    <div class="bg-surface-container-lowest border border-outline-variant rounded-lg overflow-hidden shadow-sm">
+      <table class="w-full text-left border-collapse">
+        <thead class="bg-surface-container-low border-b border-outline-variant">
+          <tr class="font-label-caps text-label-caps text-on-surface-variant">
+            <th class="px-6 py-3 font-bold w-8"><input class="rounded border-outline-variant text-primary focus:ring-primary" type="checkbox"/></th>
+            <th class="px-4 py-3 font-bold">Skill Name</th>
+            <th class="px-4 py-3 font-bold">Domain</th>
+            <th class="px-4 py-3 font-bold">Trigger Keywords</th>
+            <th class="px-4 py-3 font-bold text-right">Tools</th>
+            <th class="px-4 py-3 font-bold">Status</th>
+            <th class="px-6 py-3 font-bold text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="skills-tbody" class="divide-y divide-outline-variant">
+          <tr><td colspan="7">${loadingHtml('Memuat skill...')}</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>`;
+
+  let activeFilter = 'all';
+  function renderFilters() {
+    const domains = Array.from(new Set(_skillsCache.map(s => s.domain).filter(Boolean))).sort();
+    const fEl = $('skills-filters');
+    if (!fEl) return;
+    const count = activeFilter==='all' ? _skillsCache.length : _skillsCache.filter(s=>s.domain===activeFilter).length;
+    fEl.innerHTML = pill('All Skills','all',activeFilter==='all')
+      + domains.map(d => pill(d.charAt(0).toUpperCase()+d.slice(1), d, activeFilter===d)).join('')
+      + `<div class="h-6 w-[1px] bg-outline-variant mx-2"></div>
+         <span class="text-body-sm text-on-surface-variant/60 font-data-mono">Showing ${count} skill(s)</span>`;
+    fEl.querySelectorAll('[data-skill-filter]').forEach(b => {
+      b.onclick = () => { activeFilter = b.dataset.skillFilter; applyFilter(); renderFilters(); };
+    });
+  }
+  function applyFilter() {
+    const list = activeFilter==='all' ? _skillsCache : _skillsCache.filter(s=>s.domain===activeFilter);
+    const tb = $('skills-tbody');
+    if (tb) tb.innerHTML = renderRows(list);
+  }
+
+  // Fetch skills + pending in parallel.
+  Promise.allSettled([apiGet('/api/skills'), apiGet('/api/skills/pending')]).then(([skR, pdR]) => {
+    if (skR.status==='fulfilled' && Array.isArray(skR.value.skills)) {
+      _skillsCache = skR.value.skills;
+    } else {
+      const tb = $('skills-tbody');
+      if (tb) tb.innerHTML = `<tr><td colspan="7" class="px-6 py-4">${errorHtml('Gagal memuat skill dari backend.')}</td></tr>`;
+    }
+    renderFilters();
+    applyFilter();
+
+    // Pending review banner.
+    const pending = (pdR.status==='fulfilled' && Array.isArray(pdR.value.pending)) ? pdR.value.pending : [];
+    const pEl = $('skills-pending');
+    if (pEl && pending.length) {
+      pEl.innerHTML = `<section class="mb-8">
+        <div class="bg-surface-container-lowest border-l-4 border-amber-500 rounded-lg shadow-sm overflow-hidden">
+          <div class="p-4 border-b border-outline-variant flex justify-between items-center bg-amber-50/30">
+            <div class="flex items-center gap-2">
+              <span class="material-symbols-outlined text-amber-600">pending_actions</span>
+              <h3 class="font-bold text-body-md text-amber-900">Pending Review <span class="ml-2 px-2 py-0.5 bg-amber-200 text-amber-900 rounded-full text-[10px]">${pending.length} NEW</span></h3>
+            </div>
+          </div>
+          <div class="divide-y divide-outline-variant">
+            ${pending.map(p => `<div class="p-4 flex items-center justify-between hover:bg-surface-container-low/50 transition-colors">
+              <div class="flex gap-4 items-start">
+                <div class="p-2 bg-surface-container rounded"><span class="material-symbols-outlined text-on-surface-variant">terminal</span></div>
+                <div>
+                  <h4 class="font-bold text-body-md">${esc(p.name)}</h4>
+                  <p class="text-body-sm text-on-surface-variant font-data-mono-sm">${esc(p.path||'')}</p>
+                </div>
+              </div>
+              <div class="flex gap-2">
+                <button class="px-3 py-1.5 text-body-sm font-bold text-on-error-container border border-error-container rounded hover:bg-error-container/20 transition-all">Reject</button>
+                <button class="px-3 py-1.5 text-body-sm font-bold bg-primary text-white rounded hover:opacity-90 transition-all">Approve &amp; Deploy</button>
+              </div>
+            </div>`).join('')}
+          </div>
+        </div>
+      </section>`;
+    } else if (pEl) {
+      pEl.innerHTML = '';
+    }
+  });
+}
+
+// ── Reports ──────────────────────────────────────────────────────────────────
+
+function reportsTab(btn) {
+  const bar = btn.parentElement;
+  bar.querySelectorAll('button').forEach(b => {
+    b.classList.remove('border-b-2','border-secondary','font-bold','text-primary');
+    b.classList.add('text-outline-variant','font-medium');
+  });
+  btn.classList.remove('text-outline-variant','font-medium');
+  btn.classList.add('border-b-2','border-secondary','font-bold','text-primary');
+}
+
+async function screenReports(c) {
+  // Parse "  NAME.md  (X KB)" lines from list_reports()/list_backups() output.
+  function parseFileNames(text) {
+    if (!text) return [];
+    const out = [];
+    for (const raw of text.split('\n')) {
+      const m = raw.match(/(\S+\.md)\b/);
+      if (m) out.push(m[1]);
+    }
+    return out;
+  }
+
+  c.innerHTML = `<div class="flex h-[calc(100vh-56px)] overflow-hidden">
+    <!-- Archive Explorer -->
+    <section class="w-[320px] flex-shrink-0 bg-surface-container-lowest border-r border-outline-variant overflow-y-auto flex flex-col">
+      <div class="p-4 border-b border-outline-variant flex justify-between items-center bg-surface-container-low">
+        <span class="text-label-caps font-label-caps text-on-surface-variant uppercase">Archive Explorer</span>
+        <button id="reports-refresh" class="p-1.5 hover:bg-surface-container rounded transition-colors"><span class="material-symbols-outlined text-[18px]">refresh</span></button>
+      </div>
+      <div class="flex-1 p-2">
+        <details class="group mb-2" open>
+          <summary class="flex items-center px-2 py-1.5 cursor-pointer hover:bg-surface-container-low rounded-lg list-none transition-colors">
+            <span class="material-symbols-outlined text-[20px] mr-2 text-primary transition-transform group-open:rotate-90">chevron_right</span>
+            <span class="material-symbols-outlined text-[20px] mr-2 text-outline">folder</span>
+            <span class="font-medium text-body-sm">Operational Reports</span>
+          </summary>
+          <div id="reports-list" class="ml-6 mt-1 space-y-0.5 border-l border-outline-variant pl-2">${loadingHtml('Memuat...')}</div>
+        </details>
+        <details class="group" open>
+          <summary class="flex items-center px-2 py-1.5 cursor-pointer hover:bg-surface-container-low rounded-lg list-none transition-colors">
+            <span class="material-symbols-outlined text-[20px] mr-2 text-primary transition-transform group-open:rotate-90">chevron_right</span>
+            <span class="material-symbols-outlined text-[20px] mr-2 text-outline">folder</span>
+            <span class="font-medium text-body-sm">Config Backups</span>
+          </summary>
+          <div id="backups-list" class="ml-6 mt-1 space-y-0.5 border-l border-outline-variant pl-2">${loadingHtml('Memuat...')}</div>
+        </details>
+      </div>
+    </section>
+
+    <!-- Viewer -->
+    <section class="flex-1 flex flex-col bg-surface overflow-hidden">
+      <div class="h-[56px] px-container_gutter flex items-center justify-between bg-surface-container-lowest border-b border-outline-variant">
+        <div class="flex flex-col">
+          <span id="report-title" class="text-title-sm font-title-sm text-primary flex items-center"><span class="material-symbols-outlined text-[20px] mr-2">description</span> Pilih laporan</span>
+          <span class="text-[11px] text-outline flex items-center"><span class="material-symbols-outlined text-[14px] mr-1">schedule</span> Generated by document_agent</span>
+        </div>
+      </div>
+      <div class="flex-1 overflow-y-auto p-12 bg-[#F5F7FA]">
+        <div id="report-content" class="max-w-4xl mx-auto bg-surface-container-lowest shadow-sm border border-outline-variant p-12 min-h-[800px]">
+          <p class="text-body-md text-on-surface-variant">Pilih laporan dari panel kiri untuk menampilkan isinya.</p>
+        </div>
+      </div>
+    </section>
+  </div>`;
+
+  async function loadReport(filename) {
+    const titleEl = document.getElementById('report-title');
+    const contentEl = document.getElementById('report-content');
+    if (titleEl) titleEl.innerHTML = `<span class="material-symbols-outlined text-[20px] mr-2">description</span> ${esc(filename)}`;
+    if (contentEl) contentEl.innerHTML = loadingHtml('Memuat laporan...');
+    try {
+      const r = await apiGet('/api/reports/' + encodeURIComponent(filename));
+      if (contentEl) contentEl.innerHTML = `<pre class="font-data-mono text-data-mono text-sm whitespace-pre-wrap leading-relaxed">${esc(r.result||'')}</pre>`;
+    } catch (e) {
+      if (contentEl) contentEl.innerHTML = errorHtml('Gagal memuat laporan: ' + e.message);
+    }
+  }
+
+  function fileRow(name, onClick) {
+    const el = document.createElement('div');
+    el.className = 'flex items-center px-2 py-1.5 rounded-lg cursor-pointer hover:bg-surface-container-low transition-colors';
+    el.innerHTML = `<span class="material-symbols-outlined text-[18px] mr-2 text-outline-variant">description</span><span class="text-body-sm truncate">${esc(name)}</span>`;
+    el.onclick = onClick;
+    return el;
+  }
+
+  async function loadLists() {
+    const repEl = document.getElementById('reports-list');
+    const bakEl = document.getElementById('backups-list');
+    // Reports
+    try {
+      const r = await apiGet('/api/reports');
+      const files = parseFileNames(r.result);
+      if (repEl) {
+        repEl.innerHTML = '';
+        if (!files.length) repEl.innerHTML = `<p class="text-body-sm text-on-surface-variant px-2 py-1.5">Belum ada laporan.</p>`;
+        files.forEach(f => repEl.appendChild(fileRow(f, () => loadReport(f))));
+      }
+    } catch (e) {
+      if (repEl) repEl.innerHTML = errorHtml('Gagal memuat daftar laporan.');
+    }
+    // Backups (plain-text listing)
+    try {
+      const b = await apiGet('/api/backups');
+      if (bakEl) bakEl.innerHTML = `<div class="px-1 py-1">${preHtml(b.result||'Tidak ada backup.')}</div>`;
+    } catch (e) {
+      if (bakEl) bakEl.innerHTML = errorHtml('Gagal memuat daftar backup.');
+    }
+  }
+
+  await loadLists();
+  const refreshBtn = document.getElementById('reports-refresh');
+  if (refreshBtn) refreshBtn.onclick = loadLists;
+}
+
+// ── Metrics ──────────────────────────────────────────────────────────────────
+
+function metricsTimeTab(btn) {
+  btn.parentElement.querySelectorAll('button').forEach(b => {
+    b.classList.remove('bg-surface-container-lowest','text-primary','shadow-sm');
+    b.classList.add('text-on-surface-variant');
+  });
+  btn.classList.add('bg-surface-container-lowest','text-primary','shadow-sm');
+  btn.classList.remove('text-on-surface-variant');
+}
+
+async function screenMetrics(c) {
+  const statusPill = (label, cls) => {
+    const c2 = cls==='amber' ? 'bg-[#FEF3C7] text-[#92400E]' : (cls==='red' ? 'bg-red-100 text-red-700' : 'bg-[#DCFCE7] text-[#166534]');
+    const dot = cls==='amber' ? 'bg-[#92400E]' : (cls==='red' ? 'bg-red-600' : 'bg-[#166534]');
+    return `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full ${c2} font-bold text-[10px] uppercase"><span class="w-1.5 h-1.5 rounded-full ${dot}"></span> ${label}</span>`;
+  };
+  const nf = n => (n||0).toLocaleString('en-US');
+
+  // Fetch raw metric entries; aggregate per agent.
+  let entries = [];
+  let metricsErr = '';
+  try { entries = await apiGet('/metrics?n=100'); if (!Array.isArray(entries)) entries = []; }
+  catch (e) { metricsErr = 'Gagal memuat metrik: ' + e.message; }
+
+  // Aggregate per agent.
+  const agg = {};
+  for (const e of entries) {
+    const name = e.agent || 'unknown';
+    const a = agg[name] || (agg[name] = { name, calls:0, ctxSum:0, tpsSum:0, predSum:0, genSum:0, promptSum:0 });
+    a.calls += 1;
+    a.ctxSum += (e.ctx_util||0);
+    a.tpsSum += (e.tps||0);
+    a.predSum += (e.predict_util||0);
+    a.genSum += (e.gen_tokens||0);
+    a.promptSum += (e.prompt_tokens||0);
+  }
+  const ROLE_ALIAS = {};
+  AGENTS.forEach(x => { ROLE_ALIAS[x.name] = x.alias; });
+  const agents = Object.values(agg).map(a => {
+    const ctx = a.calls ? Math.round(a.ctxSum / a.calls) : 0;
+    const tps = a.calls ? (a.tpsSum / a.calls) : 0;
+    const cls = ctx >= 90 ? 'red' : (ctx >= 75 ? 'amber' : 'green');
+    const st = ctx >= 90 ? 'Throttled' : (ctx >= 75 ? 'High Load' : 'Optimal');
+    const alias = ROLE_ALIAS[a.name];
+    return {
+      name: alias ? `${a.name} (${alias})` : a.name,
+      calls: a.calls, ctx, tps: tps.toFixed(1), st, cls,
+      predict: a.calls ? Math.round(a.predSum / a.calls) : 0,
+    };
+  }).sort((x,y) => y.calls - x.calls);
+
+  // Totals for stat cards.
+  const totalCalls = entries.length;
+  const avgCtx = entries.length ? (entries.reduce((s,e)=>s+(e.ctx_util||0),0)/entries.length) : 0;
+  const tpsVals = entries.map(e=>e.tps||0).filter(v=>v>0);
+  const meanTps = tpsVals.length ? (tpsVals.reduce((s,v)=>s+v,0)/tpsVals.length) : 0;
+  const warnings = entries.filter(e => (e.ctx_util||0) >= 90 || (e.done_reason && e.done_reason !== 'stop')).length;
+
+  const rows = agents.length
+    ? agents.map((a,i) => `<tr class="${i%2?'bg-[#F8FAFC]':''}">
+        <td class="px-6 py-4 font-medium">${esc(a.name)}</td>
+        <td class="px-6 py-4 text-right font-data-mono">${nf(a.calls)}</td>
+        <td class="px-6 py-4">
+          <div class="flex items-center gap-2">
+            <div class="flex-1 h-2 bg-surface-container rounded-full overflow-hidden max-w-[80px]"><div class="h-full ${a.ctx>=90?'bg-[#ba1a1a]':'bg-primary-container'}" style="width:${Math.min(a.ctx,100)}%;"></div></div>
+            <span class="font-data-mono-sm text-data-mono-sm ${a.ctx>=90?'text-[#ba1a1a]':''}">${a.ctx}%</span>
+          </div>
+        </td>
+        <td class="px-6 py-4 text-center font-data-mono">${a.predict}%</td>
+        <td class="px-6 py-4 text-right font-data-mono">${a.tps}</td>
+        <td class="px-6 py-4">${statusPill(a.st, a.cls)}</td>
+      </tr>`).join('')
+    : `<tr><td colspan="6" class="px-6 py-8 text-center text-on-surface-variant text-body-sm">Belum ada data metrik token.</td></tr>`;
+
+  c.innerHTML = `<div class="p-container_gutter max-w-[1600px] mx-auto">
+    ${pageHeader('Operational Token Analytics', 'Per-agent token consumption, context pressure, and throughput.', `
+      <button class="flex items-center gap-2 px-4 py-2 bg-surface-container-lowest border border-outline-variant text-primary font-body-md rounded-lg hover:bg-surface-container transition-colors"><span class="material-symbols-outlined text-lg">download</span> Export CSV</button>
+      <button id="metrics-refresh" class="flex items-center gap-2 px-4 py-2 bg-secondary text-white font-body-md rounded-lg shadow-sm hover:opacity-90 transition-all"><span class="material-symbols-outlined text-lg">refresh</span> Live Refresh</button>`)}
+    ${metricsErr ? errorHtml(metricsErr) : ''}
+
+    <!-- Stat Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-stack_gap_lg">
+      <div class="bg-surface-container-lowest border border-outline-variant rounded-lg p-5 flex flex-col justify-between">
+        <div>
+          <div class="flex justify-between items-start mb-2"><span class="font-label-caps text-label-caps uppercase text-on-surface-variant">Total LLM Calls</span><span class="material-symbols-outlined text-primary-container opacity-50">call_made</span></div>
+          <div class="font-display-lg text-display-lg text-primary">${nf(totalCalls)}</div>
+        </div>
+        <div class="mt-4 flex items-center gap-1 text-[11px] font-bold text-on-surface-variant"><span class="material-symbols-outlined text-sm">history</span> last 100 samples</div>
+      </div>
+      <div class="bg-surface-container-lowest border border-outline-variant rounded-lg p-5 flex flex-col justify-between">
+        <div>
+          <div class="flex justify-between items-start mb-2"><span class="font-label-caps text-label-caps uppercase text-on-surface-variant">Avg Context Usage</span><span class="material-symbols-outlined text-primary-container opacity-50">data_thresholding</span></div>
+          <div class="font-display-lg text-display-lg text-primary">${avgCtx.toFixed(1)}%</div>
+        </div>
+        <div class="mt-4 h-1.5 w-full bg-surface-container rounded-full overflow-hidden"><div class="h-full bg-primary-container" style="width:${Math.min(avgCtx,100).toFixed(1)}%;"></div></div>
+      </div>
+      <div class="bg-surface-container-lowest border border-outline-variant rounded-lg p-5 flex flex-col justify-between">
+        <div>
+          <div class="flex justify-between items-start mb-2"><span class="font-label-caps text-label-caps uppercase text-on-surface-variant">Mean Speed</span><span class="material-symbols-outlined text-primary-container opacity-50">bolt</span></div>
+          <div class="font-display-lg text-display-lg text-primary">${meanTps.toFixed(1)} <span class="text-body-md font-normal text-on-surface-variant">tok/s</span></div>
+        </div>
+        <div class="mt-4 flex items-center gap-1 text-[11px] font-bold text-on-surface-variant"><span class="material-symbols-outlined text-sm">speed</span> generation throughput</div>
+      </div>
+      <div class="bg-surface-container-lowest border border-outline-variant rounded-lg p-5 flex flex-col justify-between">
+        <div>
+          <div class="flex justify-between items-start mb-2"><span class="font-label-caps text-label-caps uppercase text-on-surface-variant">Context Warnings</span><span class="material-symbols-outlined text-[#92400E]">warning</span></div>
+          <div class="font-display-lg text-display-lg ${warnings?'text-[#92400E]':'text-primary'}">${warnings}</div>
+        </div>
+        <div class="mt-4 flex items-center gap-1 text-[11px] font-bold text-on-surface-variant"><span class="material-symbols-outlined text-sm">schedule</span> high-pressure samples</div>
+      </div>
+    </div>
+
+    <!-- Per-Agent Resource Allocation -->
+    <div class="bg-surface-container-lowest border border-outline-variant rounded-lg overflow-hidden">
+      <div class="px-6 py-4 border-b border-outline-variant flex justify-between items-center">
+        <h3 class="font-title-sm text-title-sm text-primary">Per-Agent Resource Allocation</h3>
+        <span class="px-2 py-1 ${agents.length?'bg-green-100 text-green-800':'bg-surface-container text-on-surface-variant'} text-[10px] font-bold rounded">${agents.length} AGENT(S) WITH METRICS</span>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse">
+          <thead>
+            <tr class="bg-surface-container-low border-b border-outline-variant">
+              <th class="px-6 py-3 font-label-caps text-label-caps uppercase text-on-surface-variant">Agent Name</th>
+              <th class="px-6 py-3 font-label-caps text-label-caps uppercase text-on-surface-variant text-right">LLM Calls</th>
+              <th class="px-6 py-3 font-label-caps text-label-caps uppercase text-on-surface-variant">CTX Usage %</th>
+              <th class="px-6 py-3 font-label-caps text-label-caps uppercase text-on-surface-variant text-center">PRED Util %</th>
+              <th class="px-6 py-3 font-label-caps text-label-caps uppercase text-on-surface-variant text-right">TPS (Avg)</th>
+              <th class="px-6 py-3 font-label-caps text-label-caps uppercase text-on-surface-variant">Status</th>
+            </tr>
+          </thead>
+          <tbody class="font-body-sm text-on-surface divide-y divide-outline-variant/30">${rows}</tbody>
+        </table>
+      </div>
+      <div class="px-6 py-3 bg-surface-container-low flex justify-between items-center text-on-surface-variant">
+        <span class="text-label-caps">${agents.length} agent(s) · ${nf(totalCalls)} samples</span>
+      </div>
+    </div>
+  </div>`;
+
+  const refreshBtn = document.getElementById('metrics-refresh');
+  if (refreshBtn) refreshBtn.onclick = () => screenMetrics(c);
+}
+
+// ── Settings ─────────────────────────────────────────────────────────────────
+
+function settingsTab(tabId) {
+  document.querySelectorAll('.settings-pane').forEach(p => p.classList.add('hidden'));
+  document.querySelectorAll('button[data-stab]').forEach(t => {
+    t.classList.remove('border-b-2','border-primary','text-primary','font-semibold');
+    t.classList.add('text-on-surface-variant');
+  });
+  const pane = $('settings-content-' + tabId);
+  if (pane) pane.classList.remove('hidden');
+  const tab = document.querySelector(`button[data-stab="${tabId}"]`);
+  if (tab) { tab.classList.add('border-b-2','border-primary','text-primary','font-semibold'); tab.classList.remove('text-on-surface-variant'); }
+}
+
+async function screenSettings(c) {
+  const tab = (id, label, active) => `<button data-stab="${id}" onclick="settingsTab('${id}')" class="pb-3 px-1 text-body-md transition-all ${active?'border-b-2 border-primary text-primary font-semibold':'text-on-surface-variant hover:text-primary'}">${label}</button>`;
+
+  c.innerHTML = `<div class="p-container_gutter max-w-[1400px] mx-auto">
+    ${pageHeader('System Settings', 'Configure global parameters for autonomous network operations.', `
+      <button class="px-4 py-2 border border-primary text-primary font-medium text-body-md rounded-md hover:bg-surface-container transition-colors">Discard changes</button>
+      <button class="px-4 py-2 bg-secondary text-white font-medium text-body-md rounded-md hover:bg-secondary/90 transition-colors">Save changes</button>`)}
+
+    <!-- Tabs -->
+    <div class="border-b border-outline-variant mb-stack_gap_lg flex gap-8">
+      ${tab('routers','Routers',true)}
+      ${tab('agents','Agents',false)}
+      ${tab('environment','Environment',false)}
+      ${tab('netbox','NetBox',false)}
+      ${tab('memory','Memory',false)}
+    </div>
+
+    <!-- Routers -->
+    <div class="settings-pane" id="settings-content-routers">
+      <div class="bg-surface-container-lowest border border-outline-variant rounded-lg overflow-hidden">
+        <div class="p-4 border-b border-outline-variant flex justify-between items-center bg-surface-container-low">
+          <h3 class="font-title-sm text-title-sm text-primary">Managed Router Hosts</h3>
+          <button id="settings-add-router" class="text-secondary font-medium text-body-sm flex items-center gap-1"><span class="material-symbols-outlined text-[18px]">add</span> Add Host</button>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse">
+            <thead class="bg-surface-container-low">
+              <tr>
+                <th class="p-3 text-label-caps font-bold text-on-surface-variant border-b border-outline-variant">Hostname</th>
+                <th class="p-3 text-label-caps font-bold text-on-surface-variant border-b border-outline-variant">Management IP</th>
+                <th class="p-3 text-label-caps font-bold text-on-surface-variant border-b border-outline-variant">SSH User</th>
+                <th class="p-3 text-label-caps font-bold text-on-surface-variant border-b border-outline-variant text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="settings-router-body" class="text-body-md"><tr><td colspan="4">${loadingHtml('Memuat router...')}</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Agents -->
+    <div class="settings-pane hidden" id="settings-content-agents">
+      <div id="settings-agents-grid" class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">${loadingHtml('Memuat agent...')}</div>
+    </div>
+
+    <!-- Environment -->
+    <div class="settings-pane hidden" id="settings-content-environment">
+      <div class="max-w-2xl bg-surface-container-lowest border border-outline-variant rounded-lg p-stack_gap_lg shadow-sm">
+        <div class="flex items-center gap-4 mb-6">
+          <div class="w-16 h-16 bg-primary/10 rounded-lg border border-outline-variant flex items-center justify-center"><span class="material-symbols-outlined text-primary text-3xl">dns</span></div>
+          <div><h3 class="font-title-sm text-title-sm text-primary">Ollama Configuration</h3><p class="text-body-sm text-on-surface-variant">Configure the local inference engine connection parameters.</p></div>
+        </div>
+        <div class="space-y-6">
+          <div>
+            <label class="text-body-md font-medium text-primary block mb-2">Base API URL</label>
+            <div class="flex gap-2">
+              <input id="settings-ollama-url" class="flex-1 text-body-sm bg-surface-container-lowest border border-outline-variant rounded-md px-3 py-2 focus:ring-2 focus:ring-primary/10" type="text" value="http://localhost:11434"/>
+            </div>
+            <p class="text-[11px] text-on-surface-variant mt-1">Sumber: variabel lingkungan OLLAMA_BASE_URL.</p>
+          </div>
+          <div>
+            <label class="text-body-md font-medium text-primary block mb-2">Default Inference Model</label>
+            <input id="settings-ollama-model" class="w-full text-body-sm bg-surface-container-lowest border border-outline-variant rounded-md px-3 py-2 focus:ring-2 focus:ring-primary/10" type="text" value=""/>
+          </div>
+          <div class="p-4 bg-surface-container-low rounded-lg border border-outline-variant flex items-start gap-3">
+            <span class="material-symbols-outlined text-on-secondary-container">info</span>
+            <div class="text-body-sm text-on-surface-variant">Inference is currently set to <span class="font-bold">local-only</span>. Edit .env untuk mengubah konfigurasi.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- NetBox -->
+    <div class="settings-pane hidden" id="settings-content-netbox">
+      <div class="max-w-2xl bg-surface-container-lowest border border-outline-variant rounded-lg p-stack_gap_lg shadow-sm">
+        <div class="mb-6 border-b border-outline-variant pb-4"><h3 class="font-title-sm text-title-sm text-primary">Source of Truth (NetBox)</h3><p class="text-body-sm text-on-surface-variant">Connect to your NetBox instance for topology discovery.</p></div>
+        <div class="space-y-6">
+          <div><label class="text-body-md font-medium text-primary block mb-1">Instance URL</label><input class="w-full text-body-sm bg-surface-container-lowest border border-outline-variant rounded-md px-3 py-2 focus:ring-2 focus:ring-primary/10" type="text" placeholder="https://netbox.example.com"/></div>
+          <div>
+            <label class="text-body-md font-medium text-primary block mb-1">API Token</label>
+            <div class="relative"><input class="w-full text-body-sm bg-surface-container-lowest border border-outline-variant rounded-md px-3 py-2 focus:ring-2 focus:ring-primary/10" type="password" placeholder="••••••••"/><button class="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant"><span class="material-symbols-outlined text-[20px]">visibility</span></button></div>
+          </div>
+          <div class="pt-4 flex items-center justify-between border-t border-outline-variant">
+            <div class="flex items-center gap-2"><div class="w-2 h-2 rounded-full bg-outline"></div><span class="text-body-sm text-on-surface-variant font-medium">Konfigurasi NetBox via .env</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Memory -->
+    <div class="settings-pane hidden" id="settings-content-memory">
+      <div class="bg-surface-container-lowest border border-outline-variant rounded-lg overflow-hidden shadow-sm">
+        <div class="p-4 border-b border-outline-variant flex justify-between items-center bg-surface-container-low">
+          <div><h3 class="font-title-sm text-title-sm text-primary">Router Context Facts</h3><p class="text-[11px] text-on-surface-variant">Long-term semantic memory for network topology.</p></div>
+          <button id="settings-memory-refresh" class="px-3 py-1 bg-primary text-white text-body-sm font-medium rounded hover:bg-primary/90 transition-colors flex items-center gap-1"><span class="material-symbols-outlined text-[18px]">refresh</span> Refresh</button>
+        </div>
+        <div id="settings-memory-body" class="p-4">${loadingHtml('Memuat memori...')}</div>
+      </div>
+    </div>
+  </div>`;
+
+  // ── Routers tab ────────────────────────────────────────────────────────────
+  async function loadRouters() {
+    const body = document.getElementById('settings-router-body');
+    if (body) body.innerHTML = `<tr><td colspan="4">${loadingHtml('Memuat router...')}</td></tr>`;
+    try {
+      const r = await apiGet('/api/config/routers');
+      const routers = r.routers || [];
+      const user = r.ssh_username || '';
+      if (!routers.length) {
+        if (body) body.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-on-surface-variant text-body-sm">Belum ada router. Klik "Add Host".</td></tr>`;
+        return;
+      }
+      if (body) body.innerHTML = routers.map(rt => `<tr class="even:bg-surface-container-low hover:bg-surface-container transition-colors" data-router="${esc(rt.name)}">
+        <td class="p-3 border-b border-outline-variant font-medium">${esc(rt.name)}</td>
+        <td class="p-3 border-b border-outline-variant font-data-mono text-data-mono"><input data-field="host" class="bg-transparent border-none focus:ring-0 w-full p-0" type="text" value="${esc(rt.host||'')}"/></td>
+        <td class="p-3 border-b border-outline-variant">${esc(user)}</td>
+        <td class="p-3 border-b border-outline-variant text-right whitespace-nowrap">
+          <button data-act="test" class="px-3 py-1 bg-primary-container text-on-primary-container text-body-sm rounded hover:bg-primary transition-colors">Test</button>
+          <button data-act="save" class="px-3 py-1 ml-1 bg-secondary text-white text-body-sm rounded hover:opacity-90 transition-colors">Save</button>
+          <button data-act="delete" class="px-3 py-1 ml-1 border border-error text-error text-body-sm rounded hover:bg-error-container transition-colors">Delete</button>
+        </td>
+      </tr>`).join('');
+    } catch (e) {
+      if (body) body.innerHTML = `<tr><td colspan="4" class="p-4">${errorHtml('Gagal memuat router: ' + e.message)}</td></tr>`;
+    }
+  }
+
+  // Delegated handlers for router row actions.
+  const routerBody = document.getElementById('settings-router-body');
+  if (routerBody) routerBody.onclick = async (ev) => {
+    const btn = ev.target.closest('button[data-act]');
+    if (!btn) return;
+    const tr = btn.closest('tr[data-router]');
+    const name = tr.dataset.router;
+    const hostInput = tr.querySelector('input[data-field="host"]');
+    const act = btn.dataset.act;
+    btn.disabled = true;
+    const orig = btn.textContent;
+    btn.textContent = '...';
+    try {
+      if (act === 'test') {
+        const r = await apiPost('/api/tools/reachability', { router_name: name });
+        alert(`${name}:\n` + (r.result || 'no result'));
+      } else if (act === 'save') {
+        await apiPut('/api/config/routers/' + encodeURIComponent(name), { field: 'host', value: hostInput.value });
+        alert(`Router ${name} diperbarui.`);
+      } else if (act === 'delete') {
+        if (confirm(`Hapus router ${name}?`)) { await apiDelete('/api/config/routers/' + encodeURIComponent(name)); await loadRouters(); return; }
+      }
+    } catch (e) {
+      alert('Gagal: ' + e.message);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = orig;
+    }
+  };
+
+  const addBtn = document.getElementById('settings-add-router');
+  if (addBtn) addBtn.onclick = async () => {
+    const name = prompt('Nama router:');
+    if (!name) return;
+    const host = prompt('Host / IP:');
+    if (!host) return;
+    try {
+      await apiPost('/api/config/routers', { name, host, ros_version: 7, dhcp_servers: [] });
+      await loadRouters();
+    } catch (e) { alert('Gagal menambah router: ' + e.message); }
+  };
+
+  // ── Agents tab ─────────────────────────────────────────────────────────────
+  const AGENT_ICONS = {};
+  AGENTS.forEach(a => { AGENT_ICONS[a.name] = a.icon; });
+  async function loadAgents() {
+    const grid = document.getElementById('settings-agents-grid');
+    try {
+      const r = await apiGet('/api/agents');
+      const agents = r.agents || [];
+      if (!agents.length) { grid.innerHTML = `<p class="text-body-sm text-on-surface-variant">Tidak ada agent terdaftar.</p>`; return; }
+      grid.innerHTML = agents.map(a => `<div class="bg-surface-container-lowest border border-outline-variant rounded-lg p-stack_gap_md flex flex-col shadow-sm">
+        <div class="flex items-center justify-between mb-4">
+          <div class="flex items-center gap-3"><div class="w-10 h-10 bg-primary/10 rounded flex items-center justify-center"><span class="material-symbols-outlined text-primary">${AGENT_ICONS[a.name]||'smart_toy'}</span></div><h4 class="font-title-sm text-title-sm text-primary">${esc(a.name)}${a.alias?` (${esc(a.alias)})`:''}</h4></div>
+        </div>
+        <div class="space-y-4 flex-1">
+          <p class="text-body-sm text-on-surface-variant">${esc(a.description||'')}</p>
+          <div><label class="text-label-caps text-on-surface-variant block mb-1">Base Model</label><input class="w-full text-body-sm bg-surface-container-low border border-outline-variant rounded p-2" type="text" value="${esc(a.model||'')}" readonly/></div>
+          <div class="grid grid-cols-2 gap-3">
+            <div><label class="text-label-caps text-on-surface-variant block mb-1">Context Length</label><input class="w-full text-body-sm bg-surface-container-low border border-outline-variant rounded p-2" type="number" value="${a.num_ctx||0}" readonly/></div>
+            <div><label class="text-label-caps text-on-surface-variant block mb-1">Timeout (s)</label><input class="w-full text-body-sm bg-surface-container-low border border-outline-variant rounded p-2" type="number" value="${a.timeout||0}" readonly/></div>
+          </div>
+          <div><label class="text-label-caps text-on-surface-variant block mb-1">Enabled Tools (${(a.tools||[]).length})</label><div class="flex flex-wrap gap-2 mt-1">${(a.tools||[]).map(t=>`<span class="px-2 py-1 bg-surface-container border border-outline-variant rounded text-[11px] font-medium">${esc(t)}</span>`).join('') || '<span class="text-[11px] text-on-surface-variant">—</span>'}</div></div>
+          ${(a.skills||[]).length ? `<div><label class="text-label-caps text-on-surface-variant block mb-1">Skills</label><div class="flex flex-wrap gap-2 mt-1">${a.skills.map(s=>`<span class="px-2 py-1 bg-primary-container/40 border border-outline-variant rounded text-[11px] font-medium">${esc(s)}</span>`).join('')}</div></div>` : ''}
+        </div>
+      </div>`).join('');
+    } catch (e) {
+      grid.innerHTML = errorHtml('Gagal memuat agent: ' + e.message);
+    }
+  }
+
+  // ── Memory tab ─────────────────────────────────────────────────────────────
+  async function loadMemory() {
+    const body = document.getElementById('settings-memory-body');
+    if (body) body.innerHTML = loadingHtml('Memuat memori...');
+    try {
+      const r = await apiGet('/api/memory');
+      if (body) body.innerHTML = `<div class="max-h-[500px] overflow-auto">${preHtml(r.result || 'Belum ada fakta tersimpan.')}</div>`;
+    } catch (e) {
+      if (body) body.innerHTML = errorHtml('Gagal memuat memori: ' + e.message);
+    }
+  }
+  const memBtn = document.getElementById('settings-memory-refresh');
+  if (memBtn) memBtn.onclick = loadMemory;
+
+  // ── Environment tab (read-only from /api/status) ───────────────────────────
+  async function loadEnv() {
+    try {
+      const st = await apiGet('/api/status');
+      const u = document.getElementById('settings-ollama-url');
+      const m = document.getElementById('settings-ollama-model');
+      if (u && st.ollama_url) u.value = st.ollama_url;
+      if (m && st.model) m.value = st.model;
+    } catch {}
+  }
+
+  // Kick off all fetches in parallel.
+  loadRouters();
+  loadAgents();
+  loadMemory();
+  loadEnv();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Router
+// ═══════════════════════════════════════════════════════════════════════════
+
+let _currentUnmount = null;
+
+function navigate(id) {
+  if (_currentUnmount) { _currentUnmount(); _currentUnmount=null; }
+  S.screen = id;
+  renderNav();
+  const bc = $('breadcrumb-page');
+  if (bc) { const n=NAV_ITEMS.find(i=>i.id===id); bc.textContent=n?n.label:id; }
+  const c = $('screen-container');
+  switch(id) {
+    case 'dashboard': screenDashboard(c); break;
+    case 'chat': screenChat(c); _currentUnmount=chatUnmount; break;
+    case 'network': screenNetwork(c); break;
+    case 'dhcp': screenDHCP(c); break;
+    case 'netbox': screenNetBox(c); break;
+    case 'skills': screenSkills(c); break;
+    case 'reports': case 'backups': screenReports(c); break;
+    case 'metrics': screenMetrics(c); break;
+    case 'settings': screenSettings(c); break;
+    default: screenPlaceholder(c, id); break;
+  }
+}
+
+function onHash() { navigate(location.hash.slice(1)||'dashboard'); }
+
+// ── Boot ────────────────────────────────────────────────────────────────────
+
+renderShell();
+onHash();
+window.addEventListener('hashchange', onHash);
+
 </script>
 </body>
 </html>
