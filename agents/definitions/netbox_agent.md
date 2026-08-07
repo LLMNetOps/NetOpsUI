@@ -4,7 +4,7 @@ alias: yanto
 description: >
   Query inventaris NetBox (device, interface, IP), deteksi drift antara NetBox
   dan kondisi aktual router MikroTik, lalu serahkan eksekusi perubahan ke config_agent.
-model: qwen3.5:9b
+model: qwen3.6:27b
 num_ctx: 32768
 num_predict: 16384
 context_window: 20

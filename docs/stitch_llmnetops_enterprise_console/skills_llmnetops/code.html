@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>LLMNetOps - Skills Management</title>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Google Fonts: IBM Plex Sans & Mono -->
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Theme Configuration -->
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-secondary-container": "#773218",
+                    "surface-container": "#eceef1",
+                    "secondary-container": "#fe9d7b",
+                    "on-background": "#191c1e",
+                    "outline": "#73777f",
+                    "on-primary-container": "#87a4cc",
+                    "on-secondary": "#ffffff",
+                    "on-primary-fixed-variant": "#2b486b",
+                    "secondary-fixed": "#ffdbcf",
+                    "on-secondary-fixed-variant": "#773218",
+                    "inverse-on-surface": "#eff1f4",
+                    "on-tertiary": "#ffffff",
+                    "primary-fixed": "#d2e4ff",
+                    "on-primary": "#ffffff",
+                    "on-tertiary-fixed-variant": "#38485d",
+                    "on-primary-fixed": "#001c38",
+                    "error-container": "#ffdad6",
+                    "surface-container-low": "#f2f4f7",
+                    "on-secondary-fixed": "#380c00",
+                    "on-surface-variant": "#43474e",
+                    "surface-dim": "#d8dadd",
+                    "secondary": "#94492d",
+                    "on-error": "#ffffff",
+                    "inverse-primary": "#abc9f2",
+                    "primary-fixed-dim": "#abc9f2",
+                    "surface-container-high": "#e6e8eb",
+                    "background": "#f7f9fc",
+                    "primary": "#002444",
+                    "surface-container-highest": "#e0e3e6",
+                    "on-surface": "#191c1e",
+                    "surface-bright": "#f7f9fc",
+                    "surface-variant": "#e0e3e6",
+                    "surface-tint": "#436084",
+                    "on-tertiary-container": "#93a4bc",
+                    "on-error-container": "#93000a",
+                    "on-tertiary-fixed": "#0b1c30",
+                    "primary-container": "#1b3a5c",
+                    "outline-variant": "#c3c6cf",
+                    "tertiary-fixed": "#d3e4fe",
+                    "surface": "#f7f9fc",
+                    "error": "#ba1a1a",
+                    "inverse-surface": "#2d3133",
+                    "tertiary": "#142438",
+                    "secondary-fixed-dim": "#ffb59c",
+                    "tertiary-fixed-dim": "#b7c8e1",
+                    "tertiary-container": "#2a3a4e",
+                    "surface-container-lowest": "#ffffff",
+                    "brand-coral": "#E88B6A"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "stack_gap_sm": "4px",
+                    "stack_gap_lg": "24px",
+                    "component_padding_y": "8px",
+                    "header_height": "56px",
+                    "container_gutter": "24px",
+                    "component_padding_x": "12px",
+                    "sidebar_width": "240px",
+                    "stack_gap_md": "12px"
+            },
+            "fontFamily": {
+                    "display-lg": ["IBM Plex Sans"],
+                    "headline-md": ["IBM Plex Sans"],
+                    "data-mono-sm": ["IBM Plex Mono"],
+                    "title-sm": ["IBM Plex Sans"],
+                    "data-mono": ["IBM Plex Mono"],
+                    "body-md": ["IBM Plex Sans"],
+                    "body-sm": ["IBM Plex Sans"],
+                    "label-caps": ["IBM Plex Sans"]
+            },
+            "fontSize": {
+                    "display-lg": ["30px", {"lineHeight": "38px", "letterSpacing": "-0.02em", "fontWeight": "600"}],
+                    "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                    "data-mono-sm": ["11px", {"lineHeight": "14px", "fontWeight": "450"}],
+                    "title-sm": ["18px", {"lineHeight": "24px", "fontWeight": "500"}],
+                    "data-mono": ["13px", {"lineHeight": "18px", "fontWeight": "450"}],
+                    "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                    "body-sm": ["13px", {"lineHeight": "18px", "fontWeight": "400"}],
+                    "label-caps": ["11px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "700"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        body {
+            font-family: 'IBM Plex Sans', sans-serif;
+            background-color: #f7f9fc;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+        /* Custom scrollbar for data-heavy density */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #c3c6cf; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #73777f; }
+
+        .sidebar-active {
+            color: #ffffff !important;
+            background-color: rgba(255, 255, 255, 0.1);
+            border-left: 3px solid #E88B6A;
+        }
+        
+        .tab-active {
+            background-color: #E88B6A;
+            color: white;
+            border-color: #E88B6A;
+        }
+
+        .code-editor {
+            font-family: 'IBM Plex Mono', monospace;
+            background: #1e1e1e;
+            color: #d4d4d4;
+        }
+    </style>
+</head>
+<body class="text-on-surface">
+<!-- SideNavBar -->
+<aside class="fixed left-0 top-0 h-full w-[240px] bg-primary flex flex-col py-stack_gap_lg z-40">
+<div class="px-6 mb-8">
+<h1 class="font-headline-md text-headline-md font-bold text-surface-container-lowest">LLMNetOps</h1>
+<p class="font-label-caps text-label-caps text-surface-container-lowest/60">Enterprise Console</p>
+</div>
+<nav class="flex-1 space-y-1">
+<a class="flex items-center px-6 py-3 transition-all duration-150 ease-in-out text-surface-container-lowest/60 hover:bg-white/5 hover:text-surface-container-lowest font-label-caps text-label-caps" href="#">
+<span class="material-symbols-outlined mr-3">dashboard</span> Dashboard
+            </a>
+<a class="flex items-center px-6 py-3 transition-all duration-150 ease-in-out text-surface-container-lowest/60 hover:bg-white/5 hover:text-surface-container-lowest font-label-caps text-label-caps" href="#">
+<span class="material-symbols-outlined mr-3">chat_bubble</span> AI Chat
+            </a>
+<a class="flex items-center px-6 py-3 transition-all duration-150 ease-in-out text-surface-container-lowest/60 hover:bg-white/5 hover:text-surface-container-lowest font-label-caps text-label-caps" href="#">
+<span class="material-symbols-outlined mr-3">hub</span> Network
+            </a>
+<a class="flex items-center px-6 py-3 transition-all duration-150 ease-in-out sidebar-active font-label-caps text-label-caps" href="#">
+<span class="material-symbols-outlined mr-3">psychology</span> Skills
+            </a>
+<a class="flex items-center px-6 py-3 transition-all duration-150 ease-in-out text-surface-container-lowest/60 hover:bg-white/5 hover:text-surface-container-lowest font-label-caps text-label-caps" href="#">
+<span class="material-symbols-outlined mr-3">assessment</span> Reports
+            </a>
+<a class="flex items-center px-6 py-3 transition-all duration-150 ease-in-out text-surface-container-lowest/60 hover:bg-white/5 hover:text-surface-container-lowest font-label-caps text-label-caps" href="#">
+<span class="material-symbols-outlined mr-3">settings</span> Settings
+            </a>
+</nav>
+<div class="px-6 mt-auto">
+<div class="flex items-center gap-3 p-2 bg-white/5 rounded-lg">
+<div class="w-8 h-8 rounded-full bg-secondary-container flex items-center justify-center text-on-secondary-container font-bold text-xs">JD</div>
+<div class="overflow-hidden">
+<p class="text-xs font-bold text-white truncate">John Doe</p>
+<p class="text-[10px] text-white/40 truncate">Network Admin</p>
+</div>
+</div>
+</div>
+</aside>
+<!-- TopNavBar -->
+<header class="fixed top-0 right-0 left-[240px] h-[56px] bg-surface-container-lowest border-b border-outline-variant z-50 flex justify-between items-center px-container_gutter">
+<div class="flex items-center gap-4 flex-1">
+<div class="relative w-full max-w-md">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-sm">search</span>
+<input class="w-full bg-surface-container-low border-none rounded-lg pl-10 pr-4 py-1.5 text-body-sm focus:ring-1 focus:ring-primary" placeholder="Search skills, triggers, or tools..." type="text"/>
+</div>
+</div>
+<div class="flex items-center gap-6">
+<button class="text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined">account_circle</span>
+</button>
+</div>
+</header>
+<!-- Main Content Canvas -->
+<main class="ml-[240px] pt-[56px] min-h-screen p-container_gutter">
+<!-- Header & Breadcrumbs -->
+<div class="mb-8 flex justify-between items-end">
+<div>
+<nav class="flex text-[11px] font-bold text-on-surface-variant/60 uppercase tracking-widest mb-1">
+<span>Library</span>
+<span class="mx-2">/</span>
+<span class="text-primary">Skills Management</span>
+</nav>
+<h2 class="font-display-lg text-display-lg text-primary">Skill Inventory</h2>
+</div>
+<button class="bg-brand-coral text-white px-4 py-2 rounded font-bold text-body-sm flex items-center gap-2 hover:brightness-110 transition-all" onclick="toggleModal('skill-modal')">
+<span class="material-symbols-outlined text-[18px]">add</span>
+                Create New Skill
+            </button>
+</div>
+<!-- Pending Review Section -->
+<section class="mb-8">
+<div class="bg-white border-l-4 border-amber-500 rounded-lg shadow-sm overflow-hidden">
+<div class="p-4 border-b border-outline-variant flex justify-between items-center bg-amber-50/30">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-amber-600">pending_actions</span>
+<h3 class="font-bold text-body-md text-amber-900">Pending Review <span class="ml-2 px-2 py-0.5 bg-amber-200 text-amber-900 rounded-full text-[10px]">2 NEW</span></h3>
+</div>
+</div>
+<div class="divide-y divide-outline-variant">
+<!-- Pending Item 1 -->
+<div class="p-4 flex items-center justify-between hover:bg-surface-container-low/50 transition-colors">
+<div class="flex gap-4 items-start">
+<div class="p-2 bg-surface-container rounded">
+<span class="material-symbols-outlined text-on-surface-variant">terminal</span>
+</div>
+<div>
+<h4 class="font-bold text-body-md">BGP-Session-Reset</h4>
+<p class="text-body-sm text-on-surface-variant">Automated mitigation for flapping neighbors via LLM-driven adjacency check.</p>
+<div class="flex gap-2 mt-2">
+<span class="font-data-mono-sm text-[10px] bg-surface-container px-2 py-0.5 rounded text-outline uppercase">Requested by @agent-alpha</span>
+</div>
+</div>
+</div>
+<div class="flex gap-2">
+<button class="px-3 py-1.5 text-body-sm font-bold text-on-error-container border border-error-container rounded hover:bg-error-container/20 transition-all">Reject</button>
+<button class="px-3 py-1.5 text-body-sm font-bold bg-primary text-white rounded hover:opacity-90 transition-all">Approve &amp; Deploy</button>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Filter Pill Bar -->
+<div class="mb-6 flex flex-wrap items-center gap-3">
+<button class="px-4 py-1.5 rounded-full border border-outline-variant text-body-sm font-medium transition-all tab-active">All Skills</button>
+<button class="px-4 py-1.5 rounded-full border border-outline-variant text-body-sm font-medium text-on-surface-variant hover:border-brand-coral hover:text-brand-coral transition-all">Monitoring</button>
+<button class="px-4 py-1.5 rounded-full border border-outline-variant text-body-sm font-medium text-on-surface-variant hover:border-brand-coral hover:text-brand-coral transition-all">Config</button>
+<button class="px-4 py-1.5 rounded-full border border-outline-variant text-body-sm font-medium text-on-surface-variant hover:border-brand-coral hover:text-brand-coral transition-all">Security</button>
+<button class="px-4 py-1.5 rounded-full border border-outline-variant text-body-sm font-medium text-on-surface-variant hover:border-brand-coral hover:text-brand-coral transition-all">Diagnostic</button>
+<div class="h-6 w-[1px] bg-outline-variant mx-2"></div>
+<span class="text-body-sm text-on-surface-variant/60 font-data-mono">Showing 24 active skills</span>
+</div>
+<!-- Main Skills List (AWS Style Data Table) -->
+<div class="bg-white border border-outline-variant rounded-lg overflow-hidden shadow-sm">
+<table class="w-full text-left border-collapse">
+<thead class="bg-surface-container-low border-b border-outline-variant">
+<tr class="font-label-caps text-label-caps text-on-surface-variant">
+<th class="px-6 py-3 font-bold w-8"><input class="rounded border-outline-variant text-primary focus:ring-primary" type="checkbox"/></th>
+<th class="px-4 py-3 font-bold">Skill Name</th>
+<th class="px-4 py-3 font-bold">Domain</th>
+<th class="px-4 py-3 font-bold">Trigger Keywords</th>
+<th class="px-4 py-3 font-bold text-right">Tools</th>
+<th class="px-4 py-3 font-bold">Status</th>
+<th class="px-6 py-3 font-bold text-right">Actions</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant">
+<!-- Row 1 -->
+<tr class="group hover:bg-surface-container-low transition-colors">
+<td class="px-6 py-4"><input class="rounded border-outline-variant text-primary focus:ring-primary" type="checkbox"/></td>
+<td class="px-4 py-4">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary-container">health_and_safety</span>
+<span class="font-bold text-body-md text-primary hover:underline cursor-pointer">network-health-check</span>
+</div>
+</td>
+<td class="px-4 py-4">
+<span class="px-2 py-0.5 bg-primary-container text-on-primary-container rounded text-[10px] font-bold uppercase">Monitoring</span>
+</td>
+<td class="px-4 py-4">
+<div class="flex gap-1 flex-wrap">
+<span class="bg-surface-container text-on-surface-variant px-1.5 py-0.5 rounded font-data-mono-sm text-[10px]">latency</span>
+<span class="bg-surface-container text-on-surface-variant px-1.5 py-0.5 rounded font-data-mono-sm text-[10px]">packet-loss</span>
+<span class="bg-surface-container text-on-surface-variant px-1.5 py-0.5 rounded font-data-mono-sm text-[10px]">jitter</span>
+</div>
+</td>
+<td class="px-4 py-4 text-right font-data-mono text-body-sm">12</td>
+<td class="px-4 py-4">
+<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-[11px] font-bold">
+<span class="w-1.5 h-1.5 rounded-full bg-green-600"></span> ACTIVE
+                            </span>
+</td>
+<td class="px-6 py-4 text-right">
+<button class="text-on-surface-variant hover:text-primary"><span class="material-symbols-outlined">edit</span></button>
+<button class="text-on-surface-variant hover:text-error ml-2"><span class="material-symbols-outlined">delete</span></button>
+</td>
+</tr>
+<!-- Row 2 -->
+<tr class="group hover:bg-surface-container-low transition-colors bg-surface-container-lowest/50">
+<td class="px-6 py-4"><input class="rounded border-outline-variant text-primary focus:ring-primary" type="checkbox"/></td>
+<td class="px-4 py-4">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary-container">dns</span>
+<span class="font-bold text-body-md text-primary hover:underline cursor-pointer">dns-reconciliation</span>
+</div>
+</td>
+<td class="px-4 py-4">
+<span class="px-2 py-0.5 bg-tertiary-container text-tertiary-fixed-dim rounded text-[10px] font-bold uppercase">Config</span>
+</td>
+<td class="px-4 py-4">
+<div class="flex gap-1 flex-wrap">
+<span class="bg-surface-container text-on-surface-variant px-1.5 py-0.5 rounded font-data-mono-sm text-[10px]">record-mismatch</span>
+<span class="bg-surface-container text-on-surface-variant px-1.5 py-0.5 rounded font-data-mono-sm text-[10px]">ttl-fix</span>
+</div>
+</td>
+<td class="px-4 py-4 text-right font-data-mono text-body-sm">4</td>
+<td class="px-4 py-4">
+<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-[11px] font-bold">
+<span class="w-1.5 h-1.5 rounded-full bg-green-600"></span> ACTIVE
+                            </span>
+</td>
+<td class="px-6 py-4 text-right">
+<button class="text-on-surface-variant hover:text-primary"><span class="material-symbols-outlined">edit</span></button>
+<button class="text-on-surface-variant hover:text-error ml-2"><span class="material-symbols-outlined">delete</span></button>
+</td>
+</tr>
+<!-- Row 3 -->
+<tr class="group hover:bg-surface-container-low transition-colors">
+<td class="px-6 py-4"><input class="rounded border-outline-variant text-primary focus:ring-primary" type="checkbox"/></td>
+<td class="px-4 py-4">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary-container">security</span>
+<span class="font-bold text-body-md text-primary hover:underline cursor-pointer">acl-threat-isolation</span>
+</div>
+</td>
+<td class="px-4 py-4">
+<span class="px-2 py-0.5 bg-secondary text-on-secondary rounded text-[10px] font-bold uppercase">Security</span>
+</td>
+<td class="px-4 py-4">
+<div class="flex gap-1 flex-wrap">
+<span class="bg-surface-container text-on-surface-variant px-1.5 py-0.5 rounded font-data-mono-sm text-[10px]">unauthorized-ip</span>
+<span class="bg-surface-container text-on-surface-variant px-1.5 py-0.5 rounded font-data-mono-sm text-[10px]">quarantine</span>
+</div>
+</td>
+<td class="px-4 py-4 text-right font-data-mono text-body-sm">8</td>
+<td class="px-4 py-4">
+<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-surface-container text-on-surface-variant text-[11px] font-bold">
+<span class="w-1.5 h-1.5 rounded-full bg-outline"></span> DRAFT
+                            </span>
+</td>
+<td class="px-6 py-4 text-right">
+<button class="text-on-surface-variant hover:text-primary"><span class="material-symbols-outlined">edit</span></button>
+<button class="text-on-surface-variant hover:text-error ml-2"><span class="material-symbols-outlined">delete</span></button>
+</td>
+</tr>
+</tbody>
+</table>
+<!-- Pagination Footer -->
+<div class="bg-surface-container-low p-4 border-t border-outline-variant flex justify-between items-center">
+<div class="flex gap-2">
+<button class="p-1 border border-outline-variant rounded disabled:opacity-30" disabled=""><span class="material-symbols-outlined">chevron_left</span></button>
+<button class="p-1 border border-outline-variant rounded hover:bg-surface-container"><span class="material-symbols-outlined">chevron_right</span></button>
+</div>
+<div class="text-body-sm text-on-surface-variant">
+                    Page <span class="font-bold text-primary">1</span> of 3
+                </div>
+</div>
+</div>
+</main>
+<!-- Skill Editor Modal (Overlay) -->
+<div class="fixed inset-0 z-[100] flex items-center justify-center bg-primary/40 backdrop-blur-sm hidden" id="skill-modal">
+<div class="bg-white w-[90vw] h-[921px] rounded-xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in duration-300">
+<!-- Modal Header -->
+<div class="px-6 py-4 border-b border-outline-variant flex justify-between items-center bg-surface-container-lowest">
+<div>
+<h3 class="font-headline-md text-headline-md text-primary">Skill Editor</h3>
+<p class="text-body-sm text-on-surface-variant">Define logic and triggers for the LLM Agent</p>
+</div>
+<button class="text-on-surface-variant hover:text-primary" onclick="toggleModal('skill-modal')">
+<span class="material-symbols-outlined text-[32px]">close</span>
+</button>
+</div>
+<!-- Modal Content (Split Panel) -->
+<div class="flex-1 flex overflow-hidden">
+<!-- Left Panel: Form fields -->
+<div class="w-1/3 p-6 border-r border-outline-variant overflow-y-auto bg-surface-container-low">
+<div class="space-y-6">
+<div>
+<label class="block text-[12px] font-bold text-primary mb-1 uppercase tracking-wider">Skill Name</label>
+<input class="w-full border-outline-variant rounded px-3 py-2 text-body-md focus:ring-primary focus:border-primary" type="text" value="network-health-check"/>
+</div>
+<div>
+<label class="block text-[12px] font-bold text-primary mb-1 uppercase tracking-wider">Domain</label>
+<select class="w-full border-outline-variant rounded px-3 py-2 text-body-md focus:ring-primary focus:border-primary">
+<option>Monitoring</option>
+<option>Config</option>
+<option>Security</option>
+<option>Diagnostic</option>
+</select>
+</div>
+<div>
+<label class="block text-[12px] font-bold text-primary mb-1 uppercase tracking-wider">Trigger Keywords</label>
+<div class="flex flex-wrap gap-2 p-3 bg-white border border-outline-variant rounded min-h-[80px]">
+<span class="bg-primary-container text-on-primary-container px-2 py-1 rounded-sm text-xs flex items-center gap-1">latency <span class="material-symbols-outlined text-[14px] cursor-pointer">close</span></span>
+<span class="bg-primary-container text-on-primary-container px-2 py-1 rounded-sm text-xs flex items-center gap-1">packet-loss <span class="material-symbols-outlined text-[14px] cursor-pointer">close</span></span>
+<span class="bg-primary-container text-on-primary-container px-2 py-1 rounded-sm text-xs flex items-center gap-1">jitter <span class="material-symbols-outlined text-[14px] cursor-pointer">close</span></span>
+<input class="border-none p-0 text-xs focus:ring-0 w-24" placeholder="Add keyword..." type="text"/>
+</div>
+</div>
+<div>
+<label class="block text-[12px] font-bold text-primary mb-1 uppercase tracking-wider">Tool Inventory (12)</label>
+<div class="space-y-2">
+<div class="flex items-center justify-between p-2 bg-white rounded border border-outline-variant">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px] text-on-surface-variant">terminal</span>
+<span class="text-body-sm font-data-mono">ssh_exec</span>
+</div>
+<input checked="" class="rounded border-outline-variant text-primary" type="checkbox"/>
+</div>
+<div class="flex items-center justify-between p-2 bg-white rounded border border-outline-variant">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px] text-on-surface-variant">analytics</span>
+<span class="text-body-sm font-data-mono">get_snmp_stats</span>
+</div>
+<input checked="" class="rounded border-outline-variant text-primary" type="checkbox"/>
+</div>
+<div class="flex items-center justify-between p-2 bg-white rounded border border-outline-variant">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px] text-on-surface-variant">api</span>
+<span class="text-body-sm font-data-mono">netbox_query</span>
+</div>
+<input checked="" class="rounded border-outline-variant text-primary" type="checkbox"/>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Right Panel: Markdown Editor -->
+<div class="flex-1 flex flex-col bg-white">
+<div class="flex items-center justify-between px-6 py-2 border-b border-outline-variant bg-surface-container-low">
+<div class="flex border-b border-transparent">
+<button class="px-4 py-2 text-body-sm font-bold border-b-2 border-brand-coral text-brand-coral" id="tab-edit" onclick="setTab('edit')">Edit Definition</button>
+<button class="px-4 py-2 text-body-sm font-medium text-on-surface-variant hover:text-primary transition-all" id="tab-preview" onclick="setTab('preview')">Preview Logic</button>
+</div>
+<div class="flex items-center gap-4">
+<span class="text-[11px] font-data-mono text-on-surface-variant">last_saved: 2m ago</span>
+<span class="material-symbols-outlined text-on-surface-variant cursor-pointer">settings</span>
+</div>
+</div>
+<!-- Editor Canvas -->
+<div class="flex-1 p-0 overflow-hidden relative" id="editor-edit">
+<textarea class="code-editor w-full h-full p-8 outline-none resize-none text-[13px] leading-relaxed" spellcheck="false"># Network Health Check Logic
+## Intent
+Analyze latency spikes and identify bottlenecks across enterprise spine-leaf architecture.
+
+## Instructions
+1. When a trigger keyword is detected, query **NetBox** for the relevant device IP.
+2. Execute `ssh_exec` with `show interface counters` to identify errors.
+3. If packet loss &gt; 1%, run a `mtr` diagnostic to the next hop.
+4. Compare current output with the baseline stored in the metrics database.
+
+## Constraints
+- Never execute write commands on core routers during peak hours (08:00 - 18:00).
+- Always format output as a valid JSON object.
+                        </textarea>
+<div class="absolute bottom-4 right-8 flex gap-2">
+<span class="text-[10px] bg-black/40 text-white px-2 py-1 rounded backdrop-blur">Markdown Mode</span>
+<span class="text-[10px] bg-black/40 text-white px-2 py-1 rounded backdrop-blur">Col 1, Line 14</span>
+</div>
+</div>
+<!-- Preview Canvas -->
+<div class="flex-1 p-8 overflow-y-auto hidden prose prose-sm max-w-none" id="editor-preview">
+<h1 class="text-primary font-bold text-headline-md mb-4">Network Health Check Logic</h1>
+<h2 class="text-body-md font-bold text-on-surface-variant border-b border-outline-variant pb-1 mb-2">Intent</h2>
+<p class="text-body-md mb-6">Analyze latency spikes and identify bottlenecks across enterprise spine-leaf architecture.</p>
+<h2 class="text-body-md font-bold text-on-surface-variant border-b border-outline-variant pb-1 mb-2">Instructions</h2>
+<ol class="list-decimal pl-5 space-y-2 text-body-md mb-6">
+<li>When a trigger keyword is detected, query <strong>NetBox</strong> for the relevant device IP.</li>
+<li>Execute <code>ssh_exec</code> with <code>show interface counters</code> to identify errors.</li>
+<li>If packet loss &gt; 1%, run a <code>mtr</code> diagnostic to the next hop.</li>
+<li>Compare current output with the baseline stored in the metrics database.</li>
+</ol>
+<div class="p-4 bg-amber-50 border border-amber-200 rounded-lg">
+<h3 class="text-amber-800 font-bold text-body-sm mb-1">Constraints</h3>
+<ul class="list-disc pl-5 text-amber-900 text-body-sm">
+<li>Never execute write commands on core routers during peak hours (08:00 - 18:00).</li>
+<li>Always format output as a valid JSON object.</li>
+</ul>
+</div>
+</div>
+</div>
+</div>
+<!-- Modal Footer -->
+<div class="px-6 py-4 border-t border-outline-variant flex justify-end gap-3 bg-surface-container-low">
+<button class="px-4 py-2 rounded border border-outline-variant font-bold text-body-sm hover:bg-surface-container transition-all" onclick="toggleModal('skill-modal')">Cancel</button>
+<button class="px-6 py-2 rounded bg-primary text-white font-bold text-body-sm hover:opacity-90 transition-all">Save Skill Definition</button>
+</div>
+</div>
+</div>
+<!-- UI Interaction Scripts -->
+<script>
+        function toggleModal(id) {
+            const modal = document.getElementById(id);
+            modal.classList.toggle('hidden');
+        }
+
+        function setTab(type) {
+            const editTab = document.getElementById('tab-edit');
+            const previewTab = document.getElementById('tab-preview');
+            const editContent = document.getElementById('editor-edit');
+            const previewContent = document.getElementById('editor-preview');
+
+            if (type === 'edit') {
+                editTab.className = "px-4 py-2 text-body-sm font-bold border-b-2 border-brand-coral text-brand-coral";
+                previewTab.className = "px-4 py-2 text-body-sm font-medium text-on-surface-variant hover:text-primary transition-all";
+                editContent.classList.remove('hidden');
+                previewContent.classList.add('hidden');
+            } else {
+                previewTab.className = "px-4 py-2 text-body-sm font-bold border-b-2 border-brand-coral text-brand-coral";
+                editTab.className = "px-4 py-2 text-body-sm font-medium text-on-surface-variant hover:text-primary transition-all";
+                previewContent.classList.remove('hidden');
+                editContent.classList.add('hidden');
+            }
+        }
+
+        // Close modal on escape key
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                const modal = document.getElementById('skill-modal');
+                if (!modal.classList.contains('hidden')) toggleModal('skill-modal');
+            }
+        });
+    </script>
+</body></html>

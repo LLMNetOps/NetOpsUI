@@ -4,7 +4,7 @@ alias: agus
 description: >
   Investigasi dan diagnosis masalah jaringan: konektivitas, DHCP client gagal,
   routing OSPF/BGP bermasalah, packet loss, dan root cause analysis.
-model: qwen3.5:9b
+model: qwen3.6:27b
 num_ctx: 32768
 num_predict: 16384
 context_window: 20

@@ -4,7 +4,7 @@ alias: eko
 description: >
   Status jaringan kampus, health check semua router, DHCP overview,
   interface stats, dan traffic monitoring.
-model: qwen3.5:9b
+model: qwen3.6:27b
 num_ctx: 32768
 num_predict: 16384
 context_window: 10

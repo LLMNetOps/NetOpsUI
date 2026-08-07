@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Reports &amp; Backups - LLMNetOps</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+        .tree-item-active {
+            background-color: rgba(255, 255, 255, 0.1);
+            border-left: 3px solid #fe9d7b; /* secondary-container from config */
+        }
+        .diff-added { background-color: #dcfce7; color: #166534; }
+        .diff-removed { background-color: #fee2e2; color: #991b1b; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #c3c6cf; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #73777f; }
+        
+        /* Custom scrollbar for navy sidebar */
+        .sidebar-scroll::-webkit-scrollbar-track { background: #002444; }
+        .sidebar-scroll::-webkit-scrollbar-thumb { background: #1b3a5c; }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "on-secondary-container": "#773218",
+                      "surface-container": "#eceef1",
+                      "secondary-container": "#fe9d7b",
+                      "on-background": "#191c1e",
+                      "outline": "#73777f",
+                      "on-primary-container": "#87a4cc",
+                      "on-secondary": "#ffffff",
+                      "on-primary-fixed-variant": "#2b486b",
+                      "secondary-fixed": "#ffdbcf",
+                      "on-secondary-fixed-variant": "#773218",
+                      "inverse-on-surface": "#eff1f4",
+                      "on-tertiary": "#ffffff",
+                      "primary-fixed": "#d2e4ff",
+                      "on-primary": "#ffffff",
+                      "on-tertiary-fixed-variant": "#38485d",
+                      "on-primary-fixed": "#001c38",
+                      "error-container": "#ffdad6",
+                      "surface-container-low": "#f2f4f7",
+                      "on-secondary-fixed": "#380c00",
+                      "on-surface-variant": "#43474e",
+                      "surface-dim": "#d8dadd",
+                      "secondary": "#94492d",
+                      "on-error": "#ffffff",
+                      "inverse-primary": "#abc9f2",
+                      "primary-fixed-dim": "#abc9f2",
+                      "surface-container-high": "#e6e8eb",
+                      "background": "#f7f9fc",
+                      "primary": "#002444",
+                      "surface-container-highest": "#e0e3e6",
+                      "on-surface": "#191c1e",
+                      "surface-bright": "#f7f9fc",
+                      "surface-variant": "#e0e3e6",
+                      "surface-tint": "#436084",
+                      "on-tertiary-container": "#93a4bc",
+                      "on-error-container": "#93000a",
+                      "on-tertiary-fixed": "#0b1c30",
+                      "primary-container": "#1b3a5c",
+                      "outline-variant": "#c3c6cf",
+                      "tertiary-fixed": "#d3e4fe",
+                      "surface": "#f7f9fc",
+                      "error": "#ba1a1a",
+                      "inverse-surface": "#2d3133",
+                      "tertiary": "#142438",
+                      "secondary-fixed-dim": "#ffb59c",
+                      "tertiary-fixed-dim": "#b7c8e1",
+                      "tertiary-container": "#2a3a4e",
+                      "surface-container-lowest": "#ffffff"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "stack_gap_sm": "4px",
+                      "stack_gap_lg": "24px",
+                      "component_padding_y": "8px",
+                      "header_height": "56px",
+                      "container_gutter": "24px",
+                      "component_padding_x": "12px",
+                      "sidebar_width": "240px",
+                      "stack_gap_md": "12px"
+              },
+              "fontFamily": {
+                      "display-lg": ["IBM Plex Sans"],
+                      "headline-md": ["IBM Plex Sans"],
+                      "data-mono-sm": ["IBM Plex Mono"],
+                      "title-sm": ["IBM Plex Sans"],
+                      "data-mono": ["IBM Plex Mono"],
+                      "body-md": ["IBM Plex Sans"],
+                      "body-sm": ["IBM Plex Sans"],
+                      "label-caps": ["IBM Plex Sans"]
+              },
+              "fontSize": {
+                      "display-lg": ["30px", {"lineHeight": "38px", "letterSpacing": "-0.02em", "fontWeight": "600"}],
+                      "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                      "data-mono-sm": ["11px", {"lineHeight": "14px", "fontWeight": "450"}],
+                      "title-sm": ["18px", {"lineHeight": "24px", "fontWeight": "500"}],
+                      "data-mono": ["13px", {"lineHeight": "18px", "fontWeight": "450"}],
+                      "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                      "body-sm": ["13px", {"lineHeight": "18px", "fontWeight": "400"}],
+                      "label-caps": ["11px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "700"}]
+              }
+            },
+          },
+        }
+    </script>
+</head>
+<body class="bg-background text-on-surface font-body-md overflow-hidden">
+<!-- TopNavBar -->
+<header class="fixed top-0 w-full h-[56px] bg-surface-container-lowest z-50 flex justify-between items-center px-container_gutter border-b border-outline-variant">
+<div class="flex items-center gap-stack_gap_md">
+<span class="font-display-lg text-display-lg font-bold text-primary">LLMNetOps</span>
+<div class="hidden md:flex items-center ml-12 bg-surface-container rounded-lg px-3 py-1.5 w-96">
+<span class="material-symbols-outlined text-outline text-[20px] mr-2">search</span>
+<input class="bg-transparent border-none focus:ring-0 text-body-md w-full placeholder:text-outline-variant" placeholder="Search reports, configurations, or logs..." type="text"/>
+</div>
+</div>
+<div class="flex items-center gap-stack_gap_md">
+<button class="p-2 hover:bg-surface-container rounded-full transition-colors text-on-surface-variant">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="p-2 hover:bg-surface-container rounded-full transition-colors text-on-surface-variant">
+<span class="material-symbols-outlined">account_circle</span>
+</button>
+</div>
+</header>
+<!-- SideNavBar -->
+<aside class="fixed left-0 top-0 h-full w-[240px] bg-primary z-40 flex flex-col py-stack_gap_lg transition-all duration-150 ease-in-out sidebar-scroll overflow-y-auto">
+<div class="px-6 mb-8 mt-14">
+<h1 class="font-headline-md text-headline-md font-bold text-surface-container-lowest">LLMNetOps</h1>
+<p class="text-label-caps font-label-caps text-surface-container-lowest/60 uppercase tracking-widest">Enterprise Console</p>
+</div>
+<nav class="flex-1">
+<ul class="space-y-1">
+<li><a class="flex items-center px-6 py-3 text-surface-container-lowest/60 hover:bg-white/5 hover:text-surface-container-lowest transition-all font-label-caps text-label-caps uppercase" href="#"><span class="material-symbols-outlined mr-3">dashboard</span>Dashboard</a></li>
+<li><a class="flex items-center px-6 py-3 text-surface-container-lowest/60 hover:bg-white/5 hover:text-surface-container-lowest transition-all font-label-caps text-label-caps uppercase" href="#"><span class="material-symbols-outlined mr-3">chat_bubble</span>AI Chat</a></li>
+<li><a class="flex items-center px-6 py-3 text-surface-container-lowest/60 hover:bg-white/5 hover:text-surface-container-lowest transition-all font-label-caps text-label-caps uppercase" href="#"><span class="material-symbols-outlined mr-3">hub</span>Network</a></li>
+<li><a class="flex items-center px-6 py-3 text-surface-container-lowest/60 hover:bg-white/5 hover:text-surface-container-lowest transition-all font-label-caps text-label-caps uppercase" href="#"><span class="material-symbols-outlined mr-3">router</span>DHCP</a></li>
+<li><a class="flex items-center px-6 py-3 text-surface-container-lowest/60 hover:bg-white/5 hover:text-surface-container-lowest transition-all font-label-caps text-label-caps uppercase" href="#"><span class="material-symbols-outlined mr-3">storage</span>NetBox</a></li>
+<li><a class="flex items-center px-6 py-3 text-surface-container-lowest/60 hover:bg-white/5 hover:text-surface-container-lowest transition-all font-label-caps text-label-caps uppercase" href="#"><span class="material-symbols-outlined mr-3">psychology</span>Skills</a></li>
+<li><a class="flex items-center px-6 py-3 text-surface-container-lowest bg-white/10 border-l-[3px] border-secondary-container transition-all font-label-caps text-label-caps uppercase" href="#"><span class="material-symbols-outlined mr-3">assessment</span>Reports</a></li>
+<li><a class="flex items-center px-6 py-3 text-surface-container-lowest bg-white/10 border-l-[3px] border-secondary-container transition-all font-label-caps text-label-caps uppercase" href="#"><span class="material-symbols-outlined mr-3">backup</span>Backups</a></li>
+<li><a class="flex items-center px-6 py-3 text-surface-container-lowest/60 hover:bg-white/5 hover:text-surface-container-lowest transition-all font-label-caps text-label-caps uppercase" href="#"><span class="material-symbols-outlined mr-3">insights</span>Metrics</a></li>
+<li><a class="flex items-center px-6 py-3 text-surface-container-lowest/60 hover:bg-white/5 hover:text-surface-container-lowest transition-all font-label-caps text-label-caps uppercase" href="#"><span class="material-symbols-outlined mr-3">settings</span>Settings</a></li>
+</ul>
+</nav>
+</aside>
+<!-- Main Content -->
+<main class="ml-[240px] pt-[56px] h-screen flex">
+<!-- Left Panel: File Browser -->
+<section class="w-[320px] flex-shrink-0 bg-white border-r border-outline-variant overflow-y-auto flex flex-col">
+<div class="p-4 border-b border-outline-variant flex justify-between items-center bg-surface-container-low">
+<span class="text-label-caps font-label-caps text-on-surface-variant uppercase">Archive Explorer</span>
+<button class="p-1.5 hover:bg-surface-container rounded transition-colors">
+<span class="material-symbols-outlined text-[18px]">create_new_folder</span>
+</button>
+</div>
+<div class="flex-1 p-2">
+<!-- Reports Folder -->
+<details class="group mb-2" open="">
+<summary class="flex items-center px-2 py-1.5 cursor-pointer hover:bg-surface-container-low rounded-lg list-none transition-colors">
+<span class="material-symbols-outlined text-[20px] mr-2 text-primary transition-transform group-open:rotate-90">chevron_right</span>
+<span class="material-symbols-outlined text-[20px] mr-2 text-outline">folder</span>
+<span class="font-medium text-body-sm">Operational Reports</span>
+</summary>
+<div class="ml-6 mt-1 space-y-0.5 border-l border-outline-variant pl-2">
+<div class="flex items-center px-2 py-1.5 rounded-lg cursor-pointer hover:bg-surface-container-low transition-colors group/item">
+<span class="material-symbols-outlined text-[18px] mr-2 text-outline-variant">description</span>
+<span class="text-body-sm">Weekly_Status_2023_W42.md</span>
+</div>
+<div class="flex items-center px-2 py-1.5 bg-surface-container-low rounded-lg cursor-pointer border-l-2 border-secondary transition-colors group/item">
+<span class="material-symbols-outlined text-[18px] mr-2 text-secondary">description</span>
+<span class="text-body-sm font-semibold">Anomaly_Detection_Log.md</span>
+</div>
+<div class="flex items-center px-2 py-1.5 rounded-lg cursor-pointer hover:bg-surface-container-low transition-colors group/item">
+<span class="material-symbols-outlined text-[18px] mr-2 text-outline-variant">description</span>
+<span class="text-body-sm">Health_Check_Core_A.md</span>
+</div>
+</div>
+</details>
+<!-- Backups Folder -->
+<details class="group" open="">
+<summary class="flex items-center px-2 py-1.5 cursor-pointer hover:bg-surface-container-low rounded-lg list-none transition-colors">
+<span class="material-symbols-outlined text-[20px] mr-2 text-primary transition-transform group-open:rotate-90">chevron_right</span>
+<span class="material-symbols-outlined text-[20px] mr-2 text-outline">folder</span>
+<span class="font-medium text-body-sm">Config Backups</span>
+</summary>
+<div class="ml-6 mt-1 space-y-0.5 border-l border-outline-variant pl-2">
+<details class="group/sub">
+<summary class="flex items-center px-2 py-1.5 cursor-pointer hover:bg-surface-container-low rounded-lg list-none transition-colors">
+<span class="material-symbols-outlined text-[18px] mr-2 text-primary transition-transform group-open/sub:rotate-90">chevron_right</span>
+<span class="material-symbols-outlined text-[18px] mr-2 text-outline">dns</span>
+<span class="text-body-sm">Core-Switch-01</span>
+</summary>
+<div class="ml-4 mt-0.5 space-y-0.5 border-l border-outline-variant pl-2">
+<div class="flex items-center px-2 py-1.5 rounded-lg cursor-pointer hover:bg-surface-container-low text-body-sm font-data-mono-sm">
+<span class="material-symbols-outlined text-[16px] mr-2">history</span> 2023-11-01_14-00
+                                </div>
+<div class="flex items-center px-2 py-1.5 rounded-lg cursor-pointer hover:bg-surface-container-low text-body-sm font-data-mono-sm">
+<span class="material-symbols-outlined text-[16px] mr-2">history</span> 2023-10-25_09-30
+                                </div>
+</div>
+</details>
+<details class="group/sub">
+<summary class="flex items-center px-2 py-1.5 cursor-pointer hover:bg-surface-container-low rounded-lg list-none transition-colors">
+<span class="material-symbols-outlined text-[18px] mr-2 text-primary transition-transform group-open/sub:rotate-90">chevron_right</span>
+<span class="material-symbols-outlined text-[18px] mr-2 text-outline">router</span>
+<span class="text-body-sm">Edge-Router-B</span>
+</summary>
+<div class="ml-4 mt-0.5 space-y-0.5 border-l border-outline-variant pl-2 text-body-sm">
+<div class="flex items-center px-2 py-1.5 rounded-lg cursor-pointer hover:bg-surface-container-low font-data-mono-sm">
+<span class="material-symbols-outlined text-[16px] mr-2">history</span> 2023-10-30_12-15
+                                </div>
+</div>
+</details>
+</div>
+</details>
+</div>
+</section>
+<!-- Right Panel: Viewer -->
+<section class="flex-1 flex flex-col bg-surface overflow-hidden">
+<!-- Viewer Top Bar -->
+<div class="h-[56px] px-container_gutter flex items-center justify-between bg-white border-b border-outline-variant">
+<div class="flex items-center gap-4">
+<div class="flex flex-col">
+<span class="text-title-sm font-title-sm text-primary flex items-center">
+<span class="material-symbols-outlined text-[20px] mr-2">description</span>
+                            Anomaly_Detection_Log.md
+                        </span>
+<span class="text-[11px] text-outline flex items-center">
+<span class="material-symbols-outlined text-[14px] mr-1">schedule</span> Last updated: 2 hours ago by SystemAgent-04
+                        </span>
+</div>
+</div>
+<div class="flex items-center gap-2">
+<button class="flex items-center px-3 py-1.5 border border-outline-variant rounded hover:bg-surface-container-low transition-colors text-body-sm font-medium">
+<span class="material-symbols-outlined text-[18px] mr-2">difference</span>
+                        Compare Versions
+                    </button>
+<button class="flex items-center px-3 py-1.5 bg-primary text-white rounded hover:bg-primary/90 transition-colors text-body-sm font-medium">
+<span class="material-symbols-outlined text-[18px] mr-2">download</span>
+                        Export PDF
+                    </button>
+<div class="h-6 w-[1px] bg-outline-variant mx-2"></div>
+<button class="p-2 hover:bg-surface-container rounded transition-colors">
+<span class="material-symbols-outlined">more_vert</span>
+</button>
+</div>
+</div>
+<!-- Content Area: Tabs & Toggle -->
+<div class="bg-surface-container-lowest border-b border-outline-variant px-container_gutter flex items-center h-10">
+<div class="flex h-full">
+<button class="border-b-2 border-secondary px-4 text-body-sm font-bold text-primary flex items-center gap-2">
+                        Preview
+                    </button>
+<button class="px-4 text-body-sm font-medium text-outline-variant hover:text-on-surface-variant transition-colors flex items-center gap-2">
+                        Raw Markdown
+                    </button>
+<button class="px-4 text-body-sm font-medium text-outline-variant hover:text-on-surface-variant transition-colors flex items-center gap-2">
+                        Diff View
+                    </button>
+</div>
+</div>
+<!-- Scrollable Viewer Content -->
+<div class="flex-1 overflow-y-auto p-12 bg-[#F5F7FA]">
+<!-- Document Canvas -->
+<div class="max-w-4xl mx-auto bg-white shadow-sm border border-outline-variant p-16 min-h-[1100px] prose prose-slate">
+<!-- Markdown Header -->
+<h1 class="font-display-lg text-display-lg text-primary mb-2 border-b border-outline-variant pb-4">Network Anomaly Detection Report</h1>
+<div class="flex items-center gap-4 mb-10">
+<span class="bg-error-container text-on-error-container text-label-caps font-label-caps px-2 py-0.5 rounded-full uppercase tracking-wider">Critical Alert</span>
+<span class="text-body-sm text-outline">Generated: Nov 01, 2023 | Reference: #ANOM-992-B</span>
+</div>
+<h2 class="text-title-sm font-bold text-primary mt-8 mb-4">1. Executive Summary</h2>
+<p class="text-body-md text-on-surface-variant leading-relaxed">
+                        During the routine scan at 02:45 UTC, LLMNetOps identified a significant deviation in traffic patterns emanating from <strong>Core-Switch-01</strong>. The behavioral agent flagged a 400% increase in outbound SSH attempts to external endpoints. Mitigation protocols were automatically engaged at 02:47 UTC.
+                    </p>
+<h2 class="text-title-sm font-bold text-primary mt-8 mb-4">2. Technical Findings</h2>
+<div class="bg-surface-container-low p-4 rounded-lg border border-outline-variant mb-6">
+<h3 class="text-body-sm font-bold text-primary mb-2 uppercase tracking-wide">Flow Data Excerpt</h3>
+<pre class="font-data-mono text-data-mono overflow-x-auto text-on-primary-container">TIMESTAMP | SRC_IP | DST_IP | PORT | BYTES | FLAG
+02:45:12 | 10.0.1.45 | 185.x.x.x | 22 | 4.2MB | SYN
+02:45:13 | 10.0.1.45 | 185.x.x.x | 22 | 4.2MB | SYN
+02:45:14 | 10.0.1.45 | 185.x.x.x | 22 | 4.2MB | SYN</pre>
+</div>
+<h2 class="text-title-sm font-bold text-primary mt-8 mb-4">3. Diff Comparison (Configuration Change)</h2>
+<p class="text-body-sm text-on-surface-variant mb-4 italic">Comparison between v2.1 (Current) and v2.0 (Last Known Good)</p>
+<div class="border border-outline-variant rounded overflow-hidden font-data-mono text-data-mono leading-tight">
+<div class="grid grid-cols-2 bg-surface-container p-2 text-[11px] font-bold text-outline border-b border-outline-variant">
+<div>V2.0 - STABLE (2023-10-25)</div>
+<div class="border-l border-outline-variant pl-4">V2.1 - ACTIVE (2023-11-01)</div>
+</div>
+<div class="flex w-full">
+<!-- Left: Old -->
+<div class="w-1/2 p-2 bg-white space-y-0.5">
+<div class="flex gap-2">
+<span class="w-4 text-right text-outline-variant select-none">42</span>
+<span>interface GigabitEthernet0/1</span>
+</div>
+<div class="flex gap-2">
+<span class="w-4 text-right text-outline-variant select-none">43</span>
+<span> description UPLINK-TO-HQ</span>
+</div>
+<div class="flex gap-2 diff-removed">
+<span class="w-4 text-right text-red-400 select-none">-</span>
+<span> ip access-group SECURE-IN in</span>
+</div>
+<div class="flex gap-2">
+<span class="w-4 text-right text-outline-variant select-none">45</span>
+<span> ip address 10.255.0.1 255.255.255.252</span>
+</div>
+</div>
+<!-- Right: New -->
+<div class="w-1/2 p-2 bg-white border-l border-outline-variant space-y-0.5">
+<div class="flex gap-2">
+<span class="w-4 text-right text-outline-variant select-none">42</span>
+<span>interface GigabitEthernet0/1</span>
+</div>
+<div class="flex gap-2">
+<span class="w-4 text-right text-outline-variant select-none">43</span>
+<span> description UPLINK-TO-HQ</span>
+</div>
+<div class="flex gap-2 diff-added">
+<span class="w-4 text-right text-green-500 select-none">+</span>
+<span> ip access-group BYPASS-TEMP in</span>
+</div>
+<div class="flex gap-2">
+<span class="w-4 text-right text-outline-variant select-none">45</span>
+<span> ip address 10.255.0.1 255.255.255.252</span>
+</div>
+</div>
+</div>
+</div>
+<h2 class="text-title-sm font-bold text-primary mt-12 mb-4">4. Remediation Action</h2>
+<ul class="list-disc ml-6 text-body-md text-on-surface-variant space-y-2">
+<li>Reverted <code class="bg-surface-container-high px-1 rounded">ip access-group</code> to production baseline.</li>
+<li>Quarantined host <code class="bg-surface-container-high px-1 rounded">10.0.1.45</code> via LLM Agent port shutdown.</li>
+<li>Triggered incident ticket #TKT-8890 in Jira Integration.</li>
+</ul>
+<div class="mt-16 pt-8 border-t border-outline-variant flex justify-between items-end">
+<div class="flex flex-col gap-1">
+<span class="text-[11px] text-outline uppercase font-bold">Verified Digital Signature</span>
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-green-600">verified</span>
+<span class="font-data-mono text-data-mono-sm text-on-surface-variant">SHA256: e3b0c44298fc1c149afbf4c8996fb92427...</span>
+</div>
+</div>
+<div class="flex items-center gap-2 grayscale opacity-50">
+<img class="h-8" data-alt="A clean, minimalist logo of a tech corporation with geometric symbols, representing security and network integrity, subtle navy and orange colors." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCptsSlkmgAZqN37CQTXk3NQ2-Vodq_ELsT2nCCJJa0H8i5mEso9HhB2yuonArYoGQ48oCwhpYtE_DWpdavzceCQc06eCBbCeFXTECE8JYT8Mm4mDR7oq8qHLUWy91ZrhxALMwE0-FOp2A9s56Yx7vfL0JLqYnwSw4TfUvdZnvKYvvmpv1cJP3x_FelB3jldWs3s-uTU9V3qUqSZVPdbddo2E2qNcu2Unoa0H4ruC-spFEBeVumcMTrqP3okbo3p6GSPzxrpu1yCnQ"/>
+</div>
+</div>
+</div>
+</div>
+</section>
+</main>
+<!-- Floating Action Menu (Contextual for Reports) -->
+<div class="fixed bottom-6 right-6 z-50 flex flex-col gap-3">
+<button class="w-14 h-14 bg-secondary-container text-on-secondary-container rounded-full shadow-lg flex items-center justify-center hover:scale-105 transition-transform group relative">
+<span class="material-symbols-outlined text-[28px]">add</span>
+<!-- Tooltip -->
+<span class="absolute right-16 bg-primary text-white text-xs px-3 py-1.5 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity">Create New Report</span>
+</button>
+</div>
+<!-- Micro-interaction Script -->
+<script>
+        // Simple UI interactions
+        document.querySelectorAll('details summary').forEach(summary => {
+            summary.addEventListener('click', () => {
+                // Future logic for lazy-loading folders
+            });
+        });
+
+        // Tab Switching Simulation
+        const tabButtons = document.querySelectorAll('button.text-outline-variant, button.border-secondary');
+        tabButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                tabButtons.forEach(b => {
+                    b.classList.remove('border-b-2', 'border-secondary', 'font-bold', 'text-primary');
+                    b.classList.add('text-outline-variant', 'font-medium');
+                });
+                btn.classList.remove('text-outline-variant', 'font-medium');
+                btn.classList.add('border-b-2', 'border-secondary', 'font-bold', 'text-primary');
+            });
+        });
+
+        // Search Bar focus effect
+        const searchInput = document.querySelector('input[type="text"]');
+        searchInput.addEventListener('focus', () => {
+            searchInput.parentElement.classList.add('ring-2', 'ring-primary/20', 'bg-white');
+        });
+        searchInput.addEventListener('blur', () => {
+            searchInput.parentElement.classList.remove('ring-2', 'ring-primary/20', 'bg-white');
+        });
+    </script>
+</body></html>

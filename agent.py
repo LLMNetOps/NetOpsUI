@@ -269,10 +269,54 @@ def get_available_skills() -> list[dict]:
 
 def get_agent_status() -> dict:
     from agents.nodes import _agent_loader  # noqa: PLC0415
+    from tools.db import db_get_llm_config  # noqa: PLC0415
+
+    cfg = db_get_llm_config()
     defn = _agent_loader.get("supervisor")
-    model = defn.model if defn else os.getenv("OLLAMA_MODEL", "gemma4:e4b")
+    model = defn.model if defn else (cfg.get("model") or os.getenv("OLLAMA_MODEL", "gemma4:e4b"))
     return {
         "skills_loaded": len(_skill_lib),
         "model": model,
-        "ollama_url": os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
+        "ollama_url": cfg.get("base_url") or os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
     }
+
+
+def test_llm_connection(model: str | None = None, base_url: str | None = None) -> dict:
+    """Kirim satu pesan ping ke LLM untuk verifikasi konektivitas dari halaman Settings.
+
+    Menggunakan pabrik LLM yang sama dengan agent (_make_llm) agar hasil test
+    mencerminkan koneksi yang benar-benar dipakai saat runtime.
+    """
+    import time
+    from agents.nodes import _make_llm  # noqa: PLC0415
+    from tools.db import db_get_llm_config  # noqa: PLC0415
+
+    cfg = db_get_llm_config()
+    model = model or cfg.get("model") or os.getenv("OLLAMA_MODEL", "")
+    base_url = base_url or cfg.get("base_url") or os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+    started = time.monotonic()
+    try:
+        llm = _make_llm(
+            temperature=0,
+            model=model,
+            num_predict=8,
+            timeout=10,
+            base_url=base_url,
+            agent_name="connection_test",
+            max_retries=0,
+        )
+        llm.invoke([HumanMessage(content="ping")])
+        return {
+            "ok": True,
+            "model": model,
+            "base_url": base_url,
+            "latency_ms": round((time.monotonic() - started) * 1000),
+        }
+    except Exception as e:
+        return {
+            "ok": False,
+            "model": model,
+            "base_url": base_url,
+            "latency_ms": round((time.monotonic() - started) * 1000),
+            "error": str(e),
+        }

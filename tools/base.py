@@ -108,51 +108,60 @@ _NAME_TO_ENTRIES: dict[str, list[dict[str, Any]]] = {}
 
 
 def load_config() -> None:
-    """Muat config.yaml dan populate global router registry."""
+    """Muat SSH/NetBox dari config.yaml + router registry dari data/netops.db."""
     global _SSH_CONFIG, _SSH_NETWORK_CREDS, _ROUTERS, VALID_ROUTER_NAMES, _NAME_TO_ENTRIES
+    # ── SSH + NetBox dari config.yaml ─────────────────────────────────────────
     try:
         with open(CONFIG_FILE, encoding="utf-8") as f:
-            cfg = yaml.safe_load(f)
-        ssh_cfg = cfg["ssh"]
+            cfg = yaml.safe_load(f) or {}
+        ssh_cfg = cfg.get("ssh", {})
         _SSH_CONFIG = {
-            "username": ssh_cfg["username"],
-            "password": ssh_cfg["password"],
+            "username": ssh_cfg.get("username", ""),
+            "password": ssh_cfg.get("password", ""),
             "timeout": int(ssh_cfg.get("timeout", 15)),
             "port": int(ssh_cfg.get("port", 22)),
         }
-        # Per-network SSH credential overrides: ssh.networks.<network>: {username, password}
         _SSH_NETWORK_CREDS = {
             net: {"username": v["username"], "password": v["password"]}
             for net, v in ssh_cfg.get("networks", {}).items()
             if "username" in v and "password" in v
         }
-        dhcp_flat: list[dict[str, Any]] = []
-        name_to_entries: dict[str, list[dict[str, Any]]] = {}
-        for r in cfg.get("routers", []):
-            base_entry = {
-                "name": r["name"],
-                "host": r["host"],
-                "ros_version": int(r.get("ros_version", 7)),
-                "role": str(r.get("role", "backbone")),
-                "network": str(r.get("network", "kampus")),
-            }
-            dhcp_servers = r.get("dhcp_servers", [])
-            if dhcp_servers:
-                for srv in dhcp_servers:
-                    entry = {**base_entry, "dhcp_server": srv}
-                    dhcp_flat.append(entry)
-                    name_to_entries.setdefault(r["name"], []).append(entry)
-            else:
-                # Router tanpa DHCP server — tetap terdaftar untuk non-DHCP tools
-                entry = {**base_entry, "dhcp_server": None}
-                name_to_entries.setdefault(r["name"], []).append(entry)
-        _ROUTERS = dhcp_flat          # hanya entries dengan dhcp_server nyata
-        _NAME_TO_ENTRIES = name_to_entries
-        VALID_ROUTER_NAMES = frozenset(_NAME_TO_ENTRIES.keys())
     except FileNotFoundError:
         print(f"[base] config.yaml tidak ditemukan: {CONFIG_FILE}", file=sys.stderr)
     except Exception as exc:
-        print(f"[base] Config load error: {exc}", file=sys.stderr)
+        print(f"[base] config.yaml load error: {exc}", file=sys.stderr)
+
+    # ── Router registry dari data/netops.db ───────────────────────────────────
+    try:
+        from tools.db import db_list_routers  # noqa: PLC0415
+        db_rows = db_list_routers()
+    except Exception as exc:
+        print(f"[base] Router DB load error: {exc}", file=sys.stderr)
+        db_rows = []
+
+    dhcp_flat: list[dict[str, Any]] = []
+    name_to_entries: dict[str, list[dict[str, Any]]] = {}
+    for row in db_rows:
+        base_entry = {
+            "name": row["name"],
+            "host": row["host"],
+            "ros_version": int(row["ros_version"]),
+            "role": str(row["role"]),
+            "network": str(row["network"]),
+        }
+        servers = row.get("dhcp_servers") or []
+        if servers:
+            for srv in servers:
+                entry = {**base_entry, "dhcp_server": srv}
+                dhcp_flat.append(entry)
+                name_to_entries.setdefault(row["name"], []).append(entry)
+        else:
+            entry = {**base_entry, "dhcp_server": None}
+            name_to_entries.setdefault(row["name"], []).append(entry)
+
+    _ROUTERS = dhcp_flat
+    _NAME_TO_ENTRIES = name_to_entries
+    VALID_ROUTER_NAMES = frozenset(_NAME_TO_ENTRIES.keys())
 
 
 def reload_config() -> None:

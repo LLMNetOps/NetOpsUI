@@ -2,20 +2,20 @@
 name: commissioning
 domain: config
 triggers:
-  - komisioning
-  - commissioning
-  - komisioning router
-  - komisioning lab
-  - konfigurasi router baru
-  - setup router baru
-  - inisialisasi router
+- komisioning
+- commissioning
+- komisioning router
+- komisioning lab
+- konfigurasi router baru
+- setup router baru
+- inisialisasi router
 tools:
-  - get_report
-  - list_routers
-  - check_reachability
-  - run_command
-  - run_command_write
-  - get_system_info
+- get_report
+- list_routers
+- check_reachability
+- run_command
+- run_command_write
+- get_system_info
 approval_required: true
 enabled: true
 ---

@@ -4,10 +4,11 @@ domain: monitoring
 triggers:
   - MTU mismatch
   - MTU tidak cocok
-  - duplex mismatch
-  - packet drop karena MTU
-  - interface error MTU
-  - congestion karena MTU
+  - packet drop MTU
+  - interface MTU error
+  - fragmentation needed
+  - DF flag drop
+  - ICMP fragment needed
 tools:
   - get_interface_stats
   - get_traffic_summary
@@ -19,137 +20,154 @@ approval_required: false
 
 ## Konteks
 Skill ini digunakan saat muncul gejala:
-- Packet drop tinggi di interface tertentu
-- Duplex mismatch antara dua perangkat
-- Error TX/RX yang tidak wajar
-- Latensi tinggi di link tertentu
-- Pesan "fragmentation needed" di log
+- Packet drop di interface tertentu
+- Error "fragmentation needed and DF set"
+- ICMP type 3 code 4 (port unreachable/fragmentation needed)
+- Latensi tinggi karena fragmentation
+- Log menunjukkan MTU issue
 
 ## Prosedur
 
-### Langkah 1: Ambil statistik interface
-Jalankan `get_interface_stats(router_name)` untuk semua router yang dicurigai.
+### Langkah 1: Ambil Statistik Interface
+Jalankan `get_interface_stats(router_name)` untuk semua router.
 
-Periksa kolom berikut di output:
-- `TX error` dan `RX error` — jika > 0, kemungkinan MTU/duplex mismatch
-- `TX drop` dan `RX drop` — jika tinggi, cek MTU
-- `status` — pastikan interface UP
-- `speed` dan `duplex` — cek apakah match antara kedua sisi
+Cari baris dengan:
+- `TX errors > 0` atau `RX errors > 0`
+- `TX drop > 0` atau `RX drop > 0`
+- `status` = `down` atau `error-down`
 
-**Contoh output yang bermasalah:**
+**Interpretasi:**
+- `TX errors` = error transmit (biasanya duplex mismatch atau MTU issue)
+- `RX errors` = error receive (biasanya kabel rusak atau MTU issue)
+- `TX drop` = packet dropped saat transmit (bisa MTU mismatch)
+- `RX drop` = packet dropped saat receive
+
+### Langkah 2: Cek Traffic Summary
+Jalankan `get_traffic_summary(router_name)` untuk melihat:
+- Total TX/RX bytes dan packets
+- Jumlah drops dan errors per interface
+
+**Interpretasi:**
+- Jika `drops` tinggi tapi `errors` rendah → kemungkinan MTU mismatch
+- Jika `errors` tinggi → kemungkinan kabel rusak atau duplex mismatch
+
+### Langkah 3: Cek Log Router
+Jalankan `get_router_log(router_name, topic="interface", lines=50)` atau `topic="error", lines=50`.
+
+Cari pesan:
+- `ICMP: need to fragment`
+- `ICMP: fragmentation needed and DF set`
+- `MTU: mismatch detected`
+- `interface error`
+- `packet dropped due to MTU`
+
+**Interpretasi:**
+- Pesan `ICMP: need to fragment` = ada packet dengan DF flag yang tidak bisa di-fragment
+- Pesan `fragmentation needed and DF set` = klasik MTU mismatch
+- Pesan `ICMP: fragmentation needed` = target menolak fragmentasi
+
+### Langkah 4: Cek Konfigurasi MTU
+Jalankan `run_command_all(command="/interface/print show")` untuk melihat MTU semua interface.
+
+Cari perbedaan MTU:
+- Interface yang terhubung ke peer dengan MTU berbeda
+- Interface dengan MTU default (1500) yang terhubung ke peer dengan MTU lebih kecil
+- Interface dengan MTU custom yang tidak sinkron dengan peer
+
+**Perintah cek MTU detail:**
 ```
-  Interface    TX error  RX error  TX drop  RX drop  Status  Speed  Duplex
-  ether1      1523      1489      0        0        up      1000   full
-  ether2       0         0         0        0        up      1000   half
+/interface/print show
+/ip/firewall/mangle print where action=mark-connection
 ```
-→ Duplex mismatch: satu sisi full, satu sisi half.
 
-### Langkah 2: Cek traffic summary
-Jalankan `get_traffic_summary(router_name)` untuk melihat pola drop.
+### Langkah 5: Cek Firewall Mangle DF Flag
+Jalankan `run_command_all(command="/ip/firewall/mangle print where action=mark-connection")`.
 
-Cari interface dengan:
-- `TX drop` atau `RX drop` > 0
-- `TX error` atau `RX error` > 0
+Cari rule dengan `mtu-discovery=yes` atau `df=yes`.
 
-**Contoh output:**
+**Interpretasi:**
+- `mtu-discovery=yes` = router akan mengirim ICMP untuk negosiasi MTU
+- `df=yes` = set DF flag pada packet
+- Jika ada packet dengan DF flag dan MTU mismatch → packet akan dropped
+
+### Langkah 6: Identifikasi Peer dengan MTU Berbeda
+Dari hasil Langkah 4, identifikasi interface yang terhubung ke peer lain.
+
+Cek dokumentasi atau hubungi admin peer untuk MTU mereka.
+
+**Contoh:**
+- Interface eth1 MTU=1500 terhubung ke peer dengan MTU=9000 → mismatch
+- Interface VLAN MTU=1500 terhubung ke peer dengan MTU=1400 → mismatch
+
+### Langkah 7: Verifikasi dengan Ping Test
+Jalankan `run_command(command="/tool/finger print")` atau gunakan ping test manual.
+
+**Perintah ping test MTU:**
 ```
-  Interface    TX bytes  RX bytes  TX pkts  RX pkts  TX drop  RX drop  TX err  RX err
-  ether1    1.2T      890G      900M     700M       0        0        1523    1489
-  ether2    1.1T      890G      850M     700M       0        0        0       0
+/ping/remote address=<peer-ip> size=1472 df=yes
+/ping/remote address=<peer-ip> size=1480 df=yes
 ```
-→ ether1 punya error, ether2 tidak. Kemungkinan mismatch.
 
-### Langkah 3: Cek konfigurasi MTU
-Jalankan `run_command` dengan perintah berikut (sesuaikan versi RouterOS):
-
-- RouterOS v7: `/ip/interface/print where name=<interface>`
-- RouterOS v6: `/interface print where name=<interface>`
-
-Cari kolom `MTU` di output.
-
-**Contoh output:**
-```
-NAME     MTU  TYPE
-ether1  1500  ethernet
-ether2  9000  ethernet
-```
-→ ether1 MTU=1500, ether2 MTU=9000. Jika ada VLAN/jump router di tengah, pastikan semua interface di path punya MTU yang konsisten.
-
-### Langkah 4: Cek log untuk fragmentation
-Jalankan `get_router_log(router_name, topic="error", lines=50)`.
-
-Cari kata kunci:
-- `fragmentation needed`
-- `too big`
-- `MTU exceeded`
-- `blackhole`
-
-**Contoh log:**
-```
-2026-04-25 10:23:45 error: IP: packet from 10.0.0.5 to 192.168.1.100: fragmentation needed and DF bit set
-```
-→ Konfirmasi MTU mismatch.
-
-### Langkah 5: Verifikasi dengan ping + DF bit
-Jalankan `run_command` dengan perintah RouterOS:
-```
-/ping <target> do-not-fragment=yes size=1472
-```
-- `do-not-fragment=yes` = set DF (Don't Fragment) bit
-- `size=1472` = payload 1472 bytes; total frame = 1472 + 20 IP header + 8 ICMP header = 1500 bytes (tepat di batas MTU ethernet standar)
-
-Jika ping gagal atau terpotong, berarti MTU path < 1500.
-
-### Langkah 6: Rekomendasi perbaikan
-
-**Jika duplex mismatch:**
-- Pastikan kedua sisi punya `duplex=full`
-- Sampaikan ke operator untuk dieksekusi via `run_command_write` (butuh approval):
-  ```
-  /interface set <interface> duplex=full speed=1000
-  ```
-
-**Jika MTU mismatch:**
-- Set MTU yang konsisten di semua interface di path
-- Sampaikan ke operator untuk dieksekusi via `run_command_write` (butuh approval):
-  - Untuk link Gigabit dengan jumbo frame: `/interface set <interface> mtu=9000`
-  - Untuk link normal: `/interface set <interface> mtu=1500`
-
-**Jika fragmentation needed:**
-- Cek apakah ada firewall rule yang set DF bit
-- Atau kurangi MTU di interface yang bermasalah
-
-> **Catatan:** Semua perintah write di atas memerlukan approval operator. Jangan eksekusi langsung — sampaikan rekomendasi dan tunggu konfirmasi.
+Jika ping size=1472 berhasil tapi size=1480 gagal → MTU max = 1472
 
 ## Output yang Diharapkan
+
 Laporan harus berisi:
-1. Tabel interface dengan kolom: Interface, TX error, RX error, TX drop, RX drop, Status, Speed, Duplex
-2. Tabel konfigurasi MTU per interface
-3. Daftar log error yang relevan
-4. Hasil ping test dengan DF bit
-5. Rekomendasi perbaikan dengan perintah RouterOS
+
+### Tabel 1: Statistik Interface dengan Error
+| Router | Interface | TX Errors | RX Errors | TX Drop | RX Drop | Status |
+|--------|-----------|-----------|-----------|---------|---------|--------|
+
+### Tabel 2: MTU per Interface
+| Router | Interface | MTU | MTU-P2P | Status |
+|--------|-----------|-----|---------|--------|
+
+### Tabel 3: Log MTU Events
+| Router | Timestamp | Message | Severity |
+|--------|-----------|---------|----------|
+
+### Ringkasan
+- Jumlah interface dengan errors
+- Jumlah interface dengan drops
+- Interface yang teridentifikasi MTU mismatch
+- Peer yang perlu disesuaikan MTU-nya
+
+### Rekomendasi
+1. Sesuaikan MTU di kedua sisi peer
+2. Matikan DF flag jika tidak diperlukan
+3. Aktifkan `mtu-discovery=yes` untuk negosiasi otomatis
+4. Tambahkan firewall mangle untuk handle fragmentation
 
 ## Catatan
-- MTU default ethernet = 1500
-- Jumbo frame = 9000 (biasanya untuk link internal datacenter)
-- Pastikan semua router di path punya MTU yang sama
-- Duplex mismatch menyebabkan error tinggi dan packet loss
-- VDSL/DSL biasanya harus MTU=1492 (untuk PPPoE)
 
+### RouterOS v6 vs v7
+- v6: `/interface/ethernet set [find] mtu=1500`
+- v7: `/interface/ethernet set [find] mtu=1500` (sama)
+- v7.15+: ada `mtu-discovery` di `/ip/firewall/mangle`
 
-## Validasi Mandiri
+### MTU Standar
+- Ethernet default: 1500 bytes
+- Jumbo frame: 9000 bytes (harus sinkron kedua sisi)
+- PPPoE overhead: -8 bytes
+- VLAN tag: -4 bytes
+- IP header: 20 bytes (IPv4) atau 40 bytes (IPv6)
+- TCP/UDP header: 20-60 bytes
 
-Sebelum lapor ke operator, pastikan:
-- [ ] Data dikumpulkan dari semua sumber relevan
-- [ ] Temuan dikonfirmasi dengan minimal 2 data point (bukan hanya 1 tool)
-- [ ] Anomali: bandingkan dengan baseline atau history sebelum simpulkan masalah
-- [ ] Jika ada kegagalan tool (SSH timeout, error): coba router/interface alternatif dulu
+### Edge Cases
+- Interface bridge: MTU harus sama semua member
+- VLAN interface: MTU harus diperhitungkan VLAN tag
+- PPPoE: kurangi 8 bytes dari MTU fisik
+- Wireguard: kurangi overhead Wireguard dari MTU
 
-Jika validasi belum lengkap → coba sumber alternatif, baru lapor jika memang tidak bisa resolve.
+### Perintah Perbaikan
+```
+# Set MTU sama di kedua sisi
+/interface/ethernet set [find name=eth1] mtu=1500
+/interface/vlan set [find name=vlan1] mtu=1500
 
-## Handoff
+# Matikan DF flag (opsional)
+/ip/firewall/mangle remove [find df=yes]
 
-| Kondisi | Aksi | Agent Tujuan |
-|---------|------|--------------|
-| MTU mismatch ditemukan — perlu fix | Serahkan interface + perintah MTU fix | config_agent |
-| Tidak ada mismatch | Tidak perlu handoff | END |
+# Aktifkan MTU discovery
+/ip/firewall/mangle add chain=forward action=mark-connection mtu-discovery=yes
+```

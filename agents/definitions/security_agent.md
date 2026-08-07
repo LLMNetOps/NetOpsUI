@@ -4,7 +4,7 @@ alias: satria
 description: >
   Audit postur keamanan router: user accounts, NTP sync, logging,
   deteksi brute force, akses remote, dan hardening konfigurasi MikroTik.
-model: qwen3.5:9b
+model: qwen3.6:27b
 num_ctx: 32768
 num_predict: 8192
 context_window: 20

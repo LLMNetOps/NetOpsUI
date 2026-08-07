@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>LLMNetOps - AI Chat</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .bouncing-dot {
+            animation: bounce 1.4s infinite ease-in-out both;
+        }
+        .bouncing-dot:nth-child(1) { animation-delay: -0.32s; }
+        .bouncing-dot:nth-child(2) { animation-delay: -0.16s; }
+        @keyframes bounce {
+            0%, 80%, 100% { transform: scale(0); }
+            40% { transform: scale(1.0); }
+        }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #cbd5e1; }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "on-secondary-container": "#773218",
+                      "surface-container": "#eceef1",
+                      "secondary-container": "#fe9d7b",
+                      "on-background": "#191c1e",
+                      "outline": "#73777f",
+                      "on-primary-container": "#87a4cc",
+                      "on-secondary": "#ffffff",
+                      "on-primary-fixed-variant": "#2b486b",
+                      "secondary-fixed": "#ffdbcf",
+                      "on-secondary-fixed-variant": "#773218",
+                      "inverse-on-surface": "#eff1f4",
+                      "on-tertiary": "#ffffff",
+                      "primary-fixed": "#d2e4ff",
+                      "on-primary": "#ffffff",
+                      "on-tertiary-fixed-variant": "#38485d",
+                      "on-primary-fixed": "#001c38",
+                      "error-container": "#ffdad6",
+                      "surface-container-low": "#f2f4f7",
+                      "on-secondary-fixed": "#380c00",
+                      "on-surface-variant": "#43474e",
+                      "surface-dim": "#d8dadd",
+                      "secondary": "#94492d",
+                      "on-error": "#ffffff",
+                      "inverse-primary": "#abc9f2",
+                      "primary-fixed-dim": "#abc9f2",
+                      "surface-container-high": "#e6e8eb",
+                      "background": "#f7f9fc",
+                      "primary": "#002444",
+                      "surface-container-highest": "#e0e3e6",
+                      "on-surface": "#191c1e",
+                      "surface-bright": "#f7f9fc",
+                      "surface-variant": "#e0e3e6",
+                      "surface-tint": "#436084",
+                      "on-tertiary-container": "#93a4bc",
+                      "on-error-container": "#93000a",
+                      "on-tertiary-fixed": "#0b1c30",
+                      "primary-container": "#1b3a5c",
+                      "outline-variant": "#c3c6cf",
+                      "tertiary-fixed": "#d3e4fe",
+                      "surface": "#f7f9fc",
+                      "error": "#ba1a1a",
+                      "inverse-surface": "#2d3133",
+                      "tertiary": "#142438",
+                      "secondary-fixed-dim": "#ffb59c",
+                      "tertiary-fixed-dim": "#b7c8e1",
+                      "tertiary-container": "#2a3a4e",
+                      "surface-container-lowest": "#ffffff"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "stack_gap_sm": "4px",
+                      "stack_gap_lg": "24px",
+                      "component_padding_y": "8px",
+                      "header_height": "56px",
+                      "container_gutter": "24px",
+                      "component_padding_x": "12px",
+                      "sidebar_width": "240px",
+                      "stack_gap_md": "12px"
+              },
+              "fontFamily": {
+                      "display-lg": ["IBM Plex Sans"],
+                      "headline-md": ["IBM Plex Sans"],
+                      "data-mono-sm": ["IBM Plex Mono"],
+                      "title-sm": ["IBM Plex Sans"],
+                      "data-mono": ["IBM Plex Mono"],
+                      "body-md": ["IBM Plex Sans"],
+                      "body-sm": ["IBM Plex Sans"],
+                      "label-caps": ["IBM Plex Sans"]
+              },
+              "fontSize": {
+                      "display-lg": ["30px", {"lineHeight": "38px", "letterSpacing": "-0.02em", "fontWeight": "600"}],
+                      "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                      "data-mono-sm": ["11px", {"lineHeight": "14px", "fontWeight": "450"}],
+                      "title-sm": ["18px", {"lineHeight": "24px", "fontWeight": "500"}],
+                      "data-mono": ["13px", {"lineHeight": "18px", "fontWeight": "450"}],
+                      "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                      "body-sm": ["13px", {"lineHeight": "18px", "fontWeight": "400"}],
+                      "label-caps": ["11px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "700"}]
+              }
+            },
+          },
+        }
+      </script>
+</head>
+<body class="bg-background font-body-md text-on-surface overflow-hidden h-screen flex">
+<!-- SideNavBar (Authority: JSON) -->
+<nav class="fixed left-0 top-0 h-full w-[240px] flex flex-col py-stack_gap_lg z-40 bg-primary dark:bg-tertiary-container">
+<div class="px-container_gutter mb-8">
+<h1 class="font-headline-md text-headline-md font-bold text-surface-container-lowest">LLMNetOps</h1>
+<p class="text-label-caps font-label-caps text-surface-container-lowest/60">Enterprise Console</p>
+</div>
+<div class="flex-1 space-y-1">
+<!-- Nav Item: Dashboard -->
+<a class="group flex items-center px-container_gutter py-2 text-surface-container-lowest/60 transition-all duration-150 ease-in-out hover:bg-white/5 hover:text-surface-container-lowest" href="#">
+<span class="material-symbols-outlined mr-3">dashboard</span>
+<span class="font-label-caps text-label-caps">Dashboard</span>
+</a>
+<!-- Nav Item: AI Chat (Active) -->
+<a class="group flex items-center px-container_gutter py-2 text-surface-container-lowest bg-white/10 border-l-[3px] border-secondary-container transition-all duration-150 ease-in-out" href="#">
+<span class="material-symbols-outlined mr-3">chat_bubble</span>
+<span class="font-label-caps text-label-caps">AI Chat</span>
+</a>
+<!-- Other Items (Truncated for layout) -->
+<a class="group flex items-center px-container_gutter py-2 text-surface-container-lowest/60 transition-all duration-150 ease-in-out hover:bg-white/5 hover:text-surface-container-lowest" href="#">
+<span class="material-symbols-outlined mr-3">hub</span>
+<span class="font-label-caps text-label-caps">Network</span>
+</a>
+<a class="group flex items-center px-container_gutter py-2 text-surface-container-lowest/60 transition-all duration-150 ease-in-out hover:bg-white/5 hover:text-surface-container-lowest" href="#">
+<span class="material-symbols-outlined mr-3">router</span>
+<span class="font-label-caps text-label-caps">DHCP</span>
+</a>
+<a class="group flex items-center px-container_gutter py-2 text-surface-container-lowest/60 transition-all duration-150 ease-in-out hover:bg-white/5 hover:text-surface-container-lowest" href="#">
+<span class="material-symbols-outlined mr-3">storage</span>
+<span class="font-label-caps text-label-caps">NetBox</span>
+</a>
+<a class="group flex items-center px-container_gutter py-2 text-surface-container-lowest/60 transition-all duration-150 ease-in-out hover:bg-white/5 hover:text-surface-container-lowest" href="#">
+<span class="material-symbols-outlined mr-3">psychology</span>
+<span class="font-label-caps text-label-caps">Skills</span>
+</a>
+</div>
+<div class="px-container_gutter pt-4 border-t border-white/10">
+<div class="flex items-center space-x-3">
+<div class="w-8 h-8 rounded-full bg-secondary-container flex items-center justify-center text-on-secondary-container font-bold text-xs">AD</div>
+<div class="overflow-hidden">
+<p class="text-surface-container-lowest text-xs font-bold truncate">Admin User</p>
+<p class="text-surface-container-lowest/60 text-[10px] truncate">admin@llmnetops.io</p>
+</div>
+</div>
+</div>
+</nav>
+<!-- Main Content Canvas -->
+<main class="flex-1 ml-[240px] flex flex-col h-full bg-surface">
+<!-- TopAppBar (Authority: JSON) -->
+<header class="fixed top-0 right-0 left-[240px] h-[56px] bg-surface-container-lowest flex justify-between items-center px-container_gutter z-50 border-b border-outline-variant">
+<div class="flex items-center space-x-4">
+<span class="material-symbols-outlined text-outline">search</span>
+<input class="bg-transparent border-none focus:ring-0 font-body-md text-on-surface-variant w-64" placeholder="Search network nodes..." type="text"/>
+</div>
+<div class="flex items-center space-x-4">
+<button class="material-symbols-outlined text-on-surface-variant hover:bg-surface-container p-2 rounded-full transition-colors">notifications</button>
+<button class="material-symbols-outlined text-on-surface-variant hover:bg-surface-container p-2 rounded-full transition-colors">account_circle</button>
+</div>
+</header>
+<!-- UI Layout Body -->
+<div class="flex-1 mt-[56px] flex overflow-hidden">
+<!-- Thread Selector Sidebar (LHS of Chat) -->
+<aside class="w-64 border-r border-outline-variant bg-surface-container-low flex flex-col">
+<div class="p-4 border-b border-outline-variant flex justify-between items-center">
+<span class="text-label-caps font-label-caps text-on-surface-variant">Active Threads</span>
+<button class="material-symbols-outlined text-sm text-primary">add_box</button>
+</div>
+<div class="flex-1 overflow-y-auto custom-scrollbar">
+<div class="p-3 space-y-1">
+<!-- Active Thread -->
+<div class="bg-white border border-outline-variant rounded p-3 cursor-pointer shadow-sm">
+<p class="font-bold text-xs text-primary truncate">Campus Core Troubleshooting</p>
+<p class="text-[10px] text-on-surface-variant mt-1">2m ago • Router-X7</p>
+</div>
+<!-- Inactive Threads -->
+<div class="hover:bg-surface-container p-3 rounded cursor-pointer transition-colors">
+<p class="font-medium text-xs text-on-surface-variant truncate">BGP Flap Analysis</p>
+<p class="text-[10px] text-outline mt-1">1h ago • BGP-Peer-01</p>
+</div>
+<div class="hover:bg-surface-container p-3 rounded cursor-pointer transition-colors">
+<p class="font-medium text-xs text-on-surface-variant truncate">New Subnet Provisioning</p>
+<p class="text-[10px] text-outline mt-1">4h ago • DHCP-Server</p>
+</div>
+<div class="hover:bg-surface-container p-3 rounded cursor-pointer transition-colors">
+<p class="font-medium text-xs text-on-surface-variant truncate">Security Audit Logs</p>
+<p class="text-[10px] text-outline mt-1">Yesterday • FW-Cluster</p>
+</div>
+</div>
+</div>
+</aside>
+<!-- Chat Area -->
+<section class="flex-1 flex flex-col relative min-w-0">
+<!-- Messages Container -->
+<div class="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-6 flex flex-col">
+<!-- User Message -->
+<div class="flex flex-col items-end max-w-[85%] self-end">
+<div class="flex items-center space-x-2 mb-1">
+<span class="text-[10px] text-outline">14:22:45</span>
+<span class="bg-primary text-white px-2 py-0.5 rounded text-[10px] font-bold tracking-wider">ANDA</span>
+</div>
+<div class="bg-primary-container text-white p-4 rounded-xl rounded-tr-none shadow-sm border border-primary">
+<p class="text-body-md">Analyze why interface GigabitEthernet0/1 on Core-Switch-01 is showing high error rates. Check the last 15 minutes of logs.</p>
+</div>
+</div>
+<!-- Agent Message with Stream -->
+<div class="flex flex-col items-start max-w-[90%] self-start">
+<div class="flex items-center space-x-2 mb-1">
+<span class="bg-secondary text-white px-2 py-0.5 rounded text-[10px] font-bold tracking-wider">AGENT</span>
+<span class="text-[10px] text-outline">14:22:48</span>
+</div>
+<!-- Main Agent Body -->
+<div class="bg-white p-4 rounded-xl rounded-tl-none border border-outline-variant shadow-sm w-full">
+<p class="text-body-md mb-4">Understood. Initiating diagnostic sequence for Core-Switch-01. Analyzing physical layer metrics and system logs.</p>
+<!-- Event Stream Rows (Terminal Style) -->
+<div class="bg-on-background rounded-lg p-3 font-data-mono text-data-mono space-y-2 mb-4">
+<!-- Routing -->
+<div class="flex items-start space-x-2">
+<span class="text-[#fcd34d] font-bold whitespace-nowrap">[ROUTING]</span>
+<span class="text-surface-variant">Redirecting task to Network_Diagnostic_Agent...</span>
+</div>
+<!-- Tool Call -->
+<div class="flex items-start space-x-2">
+<span class="text-primary-fixed-dim font-bold whitespace-nowrap">[TOOL_CALL]</span>
+<span class="text-surface-variant">get_device_logs(hostname="Core-Switch-01", interface="Gi1/0/1", duration="15m")</span>
+</div>
+<!-- Result -->
+<div class="flex items-start space-x-2">
+<span class="text-[#4ade80] font-bold whitespace-nowrap">[RESULT]</span>
+<span class="text-surface-variant">Fetched 42 relevant log entries. High CRC error count detected (4,291).</span>
+</div>
+<!-- Error (Placeholder for context) -->
+<div class="flex items-start space-x-2 opacity-50">
+<span class="text-[#f87171] font-bold whitespace-nowrap">[ERROR]</span>
+<span class="text-surface-variant">SNMP timeout on secondary poller. Retrying...</span>
+</div>
+</div>
+<p class="text-body-md">The logs indicate a possible physical layer issue or duplex mismatch. I'm checking the neighboring device status now.</p>
+<!-- Bouncing Dots (Streaming) -->
+<div class="flex items-center space-x-1 mt-4">
+<div class="w-2 h-2 bg-secondary rounded-full bouncing-dot"></div>
+<div class="w-2 h-2 bg-secondary rounded-full bouncing-dot"></div>
+<div class="w-2 h-2 bg-secondary rounded-full bouncing-dot"></div>
+</div>
+</div>
+</div>
+</div>
+<!-- Input Footer -->
+<div class="p-4 bg-white border-t border-outline-variant">
+<div class="max-w-4xl mx-auto">
+<div class="relative flex items-center">
+<input class="w-full bg-surface-container-low border border-outline-variant rounded-lg px-4 py-3 pr-24 focus:ring-2 focus:ring-primary focus:border-primary font-body-md transition-all" placeholder="Type a command or ask a question..." type="text"/>
+<div class="absolute right-2 flex items-center space-x-2">
+<span class="hidden md:block text-[10px] text-outline font-medium">CMD + ↵</span>
+<button class="bg-secondary text-white px-4 py-1.5 rounded font-bold text-sm hover:opacity-90 transition-opacity">Send</button>
+</div>
+</div>
+<div class="flex items-center space-x-4 mt-2 px-1">
+<span class="text-[10px] text-outline flex items-center">
+<span class="material-symbols-outlined text-xs mr-1">attach_file</span> Attach Config
+                            </span>
+<span class="text-[10px] text-outline flex items-center">
+<span class="material-symbols-outlined text-xs mr-1">code</span> Run Script
+                            </span>
+<span class="text-[10px] text-outline flex items-center">
+<span class="material-symbols-outlined text-xs mr-1">help</span> Help
+                            </span>
+</div>
+</div>
+</div>
+</section>
+<!-- Agent Status Panel (Right, 260px) -->
+<aside class="w-[260px] border-l border-outline-variant bg-white flex flex-col">
+<div class="p-4 border-b border-outline-variant">
+<h3 class="font-label-caps text-label-caps text-on-surface-variant">Active Network Agents</h3>
+</div>
+<div class="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-2">
+<!-- Agent Card 1 -->
+<div class="p-3 border border-outline-variant rounded-lg bg-surface-container-lowest hover:border-primary transition-colors cursor-default group">
+<div class="flex justify-between items-start mb-2">
+<div class="w-8 h-8 rounded bg-primary-container flex items-center justify-center">
+<span class="material-symbols-outlined text-white text-sm">terminal</span>
+</div>
+<span class="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-[#DCFCE7] text-[#166534]">RUNNING</span>
+</div>
+<p class="font-bold text-xs text-primary">SysLog_Watcher</p>
+<p class="text-[10px] text-on-surface-variant">Real-time log parser</p>
+</div>
+<!-- Agent Card 2 -->
+<div class="p-3 border border-outline-variant rounded-lg bg-surface-container-lowest">
+<div class="flex justify-between items-start mb-2">
+<div class="w-8 h-8 rounded bg-secondary-container flex items-center justify-center">
+<span class="material-symbols-outlined text-on-secondary-container text-sm">settings_input_component</span>
+</div>
+<span class="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-surface-container-highest text-outline">STANDBY</span>
+</div>
+<p class="font-bold text-xs text-primary">DHCP_Master</p>
+<p class="text-[10px] text-on-surface-variant">Subnet provisioning</p>
+</div>
+<!-- Agent Card 3 -->
+<div class="p-3 border border-outline-variant rounded-lg bg-surface-container-lowest">
+<div class="flex justify-between items-start mb-2">
+<div class="w-8 h-8 rounded bg-tertiary-container flex items-center justify-center">
+<span class="material-symbols-outlined text-white text-sm">shield</span>
+</div>
+<span class="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-[#FEF3C7] text-[#92400E]">BUSY</span>
+</div>
+<p class="font-bold text-xs text-primary">Security_Guard</p>
+<p class="text-[10px] text-on-surface-variant">ACL verification</p>
+</div>
+<!-- Agent Card 4 -->
+<div class="p-3 border border-outline-variant rounded-lg bg-surface-container-lowest">
+<div class="flex justify-between items-start mb-2">
+<div class="w-8 h-8 rounded bg-primary-container flex items-center justify-center">
+<span class="material-symbols-outlined text-white text-sm">monitoring</span>
+</div>
+<span class="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-[#DCFCE7] text-[#166534]">RUNNING</span>
+</div>
+<p class="font-bold text-xs text-primary">Traffic_Analyzer</p>
+<p class="text-[10px] text-on-surface-variant">NetFlow inspection</p>
+</div>
+<!-- Agent Card 5 -->
+<div class="p-3 border border-outline-variant rounded-lg bg-surface-container-lowest">
+<div class="flex justify-between items-start mb-2">
+<div class="w-8 h-8 rounded bg-outline-variant flex items-center justify-center">
+<span class="material-symbols-outlined text-white text-sm">cloud_off</span>
+</div>
+<span class="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-[#FEE2E2] text-[#991B1B]">OFFLINE</span>
+</div>
+<p class="font-bold text-xs text-primary">Backup_Agent_01</p>
+<p class="text-[10px] text-on-surface-variant">Config snapshotting</p>
+</div>
+<!-- Agent Card 6 -->
+<div class="p-3 border border-outline-variant rounded-lg bg-surface-container-lowest">
+<div class="flex justify-between items-start mb-2">
+<div class="w-8 h-8 rounded bg-secondary-container flex items-center justify-center">
+<span class="material-symbols-outlined text-on-secondary-container text-sm">speed</span>
+</div>
+<span class="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-[#DCFCE7] text-[#166534]">RUNNING</span>
+</div>
+<p class="font-bold text-xs text-primary">SNMP_Poller_HQ</p>
+<p class="text-[10px] text-on-surface-variant">State monitoring</p>
+</div>
+<!-- Agent Card 7 -->
+<div class="p-3 border border-outline-variant rounded-lg bg-surface-container-lowest">
+<div class="flex justify-between items-start mb-2">
+<div class="w-8 h-8 rounded bg-tertiary-container flex items-center justify-center">
+<span class="material-symbols-outlined text-white text-sm">bolt</span>
+</div>
+<span class="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-surface-container-highest text-outline">STANDBY</span>
+</div>
+<p class="font-bold text-xs text-primary">Fast_Path_AI</p>
+<p class="text-[10px] text-on-surface-variant">Route optimization</p>
+</div>
+<!-- Agent Card 8 -->
+<div class="p-3 border border-outline-variant rounded-lg bg-surface-container-lowest">
+<div class="flex justify-between items-start mb-2">
+<div class="w-8 h-8 rounded bg-primary-container flex items-center justify-center">
+<span class="material-symbols-outlined text-white text-sm">inventory</span>
+</div>
+<span class="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-[#DCFCE7] text-[#166534]">RUNNING</span>
+</div>
+<p class="font-bold text-xs text-primary">Asset_Discover</p>
+<p class="text-[10px] text-on-surface-variant">LLDP reconciliation</p>
+</div>
+</div>
+<div class="p-4 border-t border-outline-variant bg-surface-container-low">
+<button class="w-full py-2 border border-primary text-primary font-bold text-xs rounded hover:bg-primary/5 transition-colors">Manage Agents</button>
+</div>
+</aside>
+</div>
+</main>
+<!-- Micro-interaction JS -->
+<script>
+        // Simple UI Interaction: Auto-scroll to bottom of chat
+        const chatContainer = document.querySelector('section > div:first-child');
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+
+        // Simulate typing animation logic
+        document.querySelector('button.bg-secondary').addEventListener('click', () => {
+            const input = document.querySelector('input[type="text"]');
+            if (input.value.trim() !== "") {
+                console.log("Message sent:", input.value);
+                input.value = "";
+            }
+        });
+    </script>
+</body></html>

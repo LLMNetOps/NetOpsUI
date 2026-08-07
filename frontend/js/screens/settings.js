@@ -68,15 +68,23 @@ export async function screenSettings(c) {
           <div>
             <label class="text-body-md font-medium text-primary block mb-2">Base API URL</label>
             <input id="settings-ollama-url" class="w-full text-body-sm bg-surface-container-lowest border border-outline-variant rounded-md px-3 py-2 focus:ring-2 focus:ring-primary/10" type="text" value="http://localhost:11434"/>
-            <p class="text-[11px] text-on-surface-variant mt-1">Sumber: variabel lingkungan OLLAMA_BASE_URL.</p>
+            <p class="text-[11px] text-on-surface-variant mt-1">Disimpan di database (netops.db). Nilai awal diambil dari OLLAMA_BASE_URL di .env.</p>
           </div>
           <div>
             <label class="text-body-md font-medium text-primary block mb-2">Default Inference Model</label>
             <input id="settings-ollama-model" class="w-full text-body-sm bg-surface-container-lowest border border-outline-variant rounded-md px-3 py-2 focus:ring-2 focus:ring-primary/10" type="text" value=""/>
+            <p class="text-[11px] text-on-surface-variant mt-1">Dipakai sebagai fallback bila agent tidak menentukan model sendiri.</p>
           </div>
+          <div class="flex items-center gap-3">
+            <button id="settings-test-connection" class="px-4 py-2 bg-primary text-white font-medium text-body-sm rounded-md hover:bg-primary/90 transition-colors flex items-center gap-2">
+              <span class="material-symbols-outlined text-[18px]">wifi_tethering</span> Test Connection
+            </button>
+            <span id="settings-test-status" class="text-body-sm text-on-surface-variant"></span>
+          </div>
+          <div id="settings-test-result" class="hidden p-4 rounded-lg border flex items-start gap-3"></div>
           <div class="p-4 bg-surface-container-low rounded-lg border border-outline-variant flex items-start gap-3">
             <span class="material-symbols-outlined text-on-secondary-container">info</span>
-            <div class="text-body-sm text-on-surface-variant">Inference is currently set to <span class="font-bold">local-only</span>. Edit .env untuk mengubah konfigurasi.</div>
+            <div class="text-body-sm text-on-surface-variant">Perubahan berlaku langsung untuk agent baru setelah <span class="font-bold">Save changes</span> — tanpa restart server.</div>
           </div>
         </div>
       </div>
@@ -268,13 +276,96 @@ export async function screenSettings(c) {
 
   async function loadEnv() {
     try {
-      const st = await apiGet('/api/status');
+      const cfg = await apiGet('/api/config/llm');
       const u = $('settings-ollama-url');
       const m = $('settings-ollama-model');
-      if (u && st.ollama_url) u.value = st.ollama_url;
-      if (m && st.model) m.value = st.model;
+      if (u) u.value = cfg.base_url || '';
+      if (m) m.value = cfg.model || '';
     } catch (_) {}
   }
+
+  const testBtn = $('settings-test-connection');
+  if (testBtn) testBtn.onclick = async () => {
+    const urlInput = $('settings-ollama-url');
+    const modelInput = $('settings-ollama-model');
+    const statusEl = $('settings-test-status');
+    const resultEl = $('settings-test-result');
+    const base_url = urlInput ? urlInput.value.trim() : '';
+    const model = modelInput ? modelInput.value.trim() : '';
+
+    testBtn.disabled = true;
+    const origHtml = testBtn.innerHTML;
+    testBtn.innerHTML = `<span class="material-symbols-outlined text-[18px] animate-spin">progress_activity</span> Testing...`;
+    if (statusEl) statusEl.textContent = '';
+    if (resultEl) resultEl.classList.add('hidden');
+
+    try {
+      const r = await apiPost('/api/llm/test', { model: model || undefined, base_url: base_url || undefined });
+      if (resultEl) {
+        resultEl.classList.remove('hidden');
+        if (r.ok) {
+          resultEl.className = 'p-4 rounded-lg border flex items-start gap-3 bg-green-50 border-green-300 text-green-800';
+          resultEl.innerHTML = `<span class="material-symbols-outlined">check_circle</span>
+            <div class="text-body-sm">
+              <div class="font-semibold">Koneksi berhasil</div>
+              <div>Model <span class="font-data-mono">${esc(r.model)}</span> merespons dalam ${esc(String(r.latency_ms))} ms.</div>
+            </div>`;
+        } else {
+          resultEl.className = 'p-4 rounded-lg border flex items-start gap-3 bg-red-50 border-red-300 text-red-800';
+          resultEl.innerHTML = `<span class="material-symbols-outlined">error</span>
+            <div class="text-body-sm">
+              <div class="font-semibold">Koneksi gagal (${esc(String(r.latency_ms))} ms)</div>
+              <div class="font-data-mono break-all">${esc(r.error || 'Unknown error')}</div>
+            </div>`;
+        }
+      }
+    } catch (e) {
+      if (resultEl) {
+        resultEl.classList.remove('hidden');
+        resultEl.className = 'p-4 rounded-lg border flex items-start gap-3 bg-red-50 border-red-300 text-red-800';
+        resultEl.innerHTML = `<span class="material-symbols-outlined">error</span>
+          <div class="text-body-sm">
+            <div class="font-semibold">Gagal menghubungi backend</div>
+            <div>${esc(e.message)}</div>
+          </div>`;
+      }
+    } finally {
+      testBtn.disabled = false;
+      testBtn.innerHTML = origHtml;
+    }
+  };
+
+  const saveBtn = $('settings-save');
+  if (saveBtn) saveBtn.onclick = async () => {
+    const active = document.querySelector('.settings-pane:not(.hidden)');
+    if (!active || active.id !== 'settings-content-environment') return;
+    const urlInput = $('settings-ollama-url');
+    const modelInput = $('settings-ollama-model');
+    const orig = saveBtn.textContent;
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Saving...';
+    try {
+      await apiPut('/api/config/llm', {
+        base_url: urlInput ? urlInput.value.trim() : undefined,
+        model: modelInput ? modelInput.value.trim() : undefined,
+      });
+      await loadEnv();
+    } catch (e) {
+      alert('Gagal menyimpan konfigurasi LLM: ' + e.message);
+    } finally {
+      saveBtn.disabled = false;
+      saveBtn.textContent = orig;
+    }
+  };
+
+  const discardBtn = $('settings-discard');
+  if (discardBtn) discardBtn.onclick = () => {
+    const active = document.querySelector('.settings-pane:not(.hidden)');
+    if (!active || active.id !== 'settings-content-environment') return;
+    const resultEl = $('settings-test-result');
+    if (resultEl) resultEl.classList.add('hidden');
+    loadEnv();
+  };
 
   loadRouters();
   loadAgents();

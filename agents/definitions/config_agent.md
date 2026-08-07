@@ -4,7 +4,7 @@ alias: joko
 description: >
   Baca, verifikasi, dan ubah konfigurasi router. Backup config, diff perubahan,
   dan eksekusi operasi write dengan persetujuan operator.
-model: qwen3.5:9b
+model: qwen3.6:27b
 num_ctx: 32768
 num_predict: 4096
 context_window: 20

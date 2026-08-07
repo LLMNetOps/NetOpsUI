@@ -182,6 +182,11 @@ class SkillLibrary:
         with self._lock:
             return [s for s in self._skills.values() if s.enabled]
 
+    def list_all(self) -> list[Skill]:
+        """Return every loaded skill regardless of enabled state — for admin/CRUD views."""
+        with self._lock:
+            return list(self._skills.values())
+
     def inject_context(self, skills: list[Skill]) -> str:
         """Combine skill bodies into a single system-context block."""
         if not skills:

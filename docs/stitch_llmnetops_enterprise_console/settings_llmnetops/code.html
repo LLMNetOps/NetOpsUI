@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>LLMNetOps - Enterprise Settings</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@450&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-secondary-container": "#773218",
+                        "surface-container": "#eceef1",
+                        "secondary-container": "#fe9d7b",
+                        "on-background": "#191c1e",
+                        "outline": "#73777f",
+                        "on-primary-container": "#87a4cc",
+                        "on-secondary": "#ffffff",
+                        "on-primary-fixed-variant": "#2b486b",
+                        "secondary-fixed": "#ffdbcf",
+                        "on-secondary-fixed-variant": "#773218",
+                        "inverse-on-surface": "#eff1f4",
+                        "on-tertiary": "#ffffff",
+                        "primary-fixed": "#d2e4ff",
+                        "on-primary": "#ffffff",
+                        "on-tertiary-fixed-variant": "#38485d",
+                        "on-primary-fixed": "#001c38",
+                        "error-container": "#ffdad6",
+                        "surface-container-low": "#f2f4f7",
+                        "on-secondary-fixed": "#380c00",
+                        "on-surface-variant": "#43474e",
+                        "surface-dim": "#d8dadd",
+                        "secondary": "#94492d",
+                        "on-error": "#ffffff",
+                        "inverse-primary": "#abc9f2",
+                        "primary-fixed-dim": "#abc9f2",
+                        "surface-container-high": "#e6e8eb",
+                        "background": "#f7f9fc",
+                        "primary": "#002444",
+                        "surface-container-highest": "#e0e3e6",
+                        "on-surface": "#191c1e",
+                        "surface-bright": "#f7f9fc",
+                        "surface-variant": "#e0e3e6",
+                        "surface-tint": "#436084",
+                        "on-tertiary-container": "#93a4bc",
+                        "on-error-container": "#93000a",
+                        "on-tertiary-fixed": "#0b1c30",
+                        "primary-container": "#1b3a5c",
+                        "outline-variant": "#c3c6cf",
+                        "tertiary-fixed": "#d3e4fe",
+                        "surface": "#f7f9fc",
+                        "error": "#ba1a1a",
+                        "inverse-surface": "#2d3133",
+                        "tertiary": "#142438",
+                        "secondary-fixed-dim": "#ffb59c",
+                        "tertiary-fixed-dim": "#b7c8e1",
+                        "tertiary-container": "#2a3a4e",
+                        "surface-container-lowest": "#ffffff"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "stack_gap_sm": "4px",
+                        "stack_gap_lg": "24px",
+                        "component_padding_y": "8px",
+                        "header_height": "56px",
+                        "container_gutter": "24px",
+                        "component_padding_x": "12px",
+                        "sidebar_width": "240px",
+                        "stack_gap_md": "12px"
+                    },
+                    "fontFamily": {
+                        "display-lg": ["IBM Plex Sans"],
+                        "headline-md": ["IBM Plex Sans"],
+                        "data-mono-sm": ["IBM Plex Mono"],
+                        "title-sm": ["IBM Plex Sans"],
+                        "data-mono": ["IBM Plex Mono"],
+                        "body-md": ["IBM Plex Sans"],
+                        "body-sm": ["IBM Plex Sans"],
+                        "label-caps": ["IBM Plex Sans"]
+                    },
+                    "fontSize": {
+                        "display-lg": ["30px", {"lineHeight": "38px", "letterSpacing": "-0.02em", "fontWeight": "600"}],
+                        "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                        "data-mono-sm": ["11px", {"lineHeight": "14px", "fontWeight": "450"}],
+                        "title-sm": ["18px", {"lineHeight": "24px", "fontWeight": "500"}],
+                        "data-mono": ["13px", {"lineHeight": "18px", "fontWeight": "450"}],
+                        "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                        "body-sm": ["13px", {"lineHeight": "18px", "fontWeight": "400"}],
+                        "label-caps": ["11px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "700"}]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            display: inline-block;
+            vertical-align: middle;
+            line-height: 1;
+        }
+        body {
+            font-family: 'IBM Plex Sans', sans-serif;
+            background-color: #F5F7FA;
+        }
+        .sidebar-active {
+            color: #FFFFFF !important;
+            background-color: rgba(255, 255, 255, 0.1);
+            border-left: 3px solid #E88B6A;
+        }
+        .tab-active {
+            border-bottom: 2px solid #002444;
+            color: #002444;
+            font-weight: 600;
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #c3c6cf;
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-surface">
+<!-- TopNavBar -->
+<header class="fixed top-0 w-full h-[56px] bg-surface-container-lowest border-b border-outline-variant z-50 flex justify-between items-center px-container_gutter">
+<div class="flex items-center gap-4">
+<h1 class="font-display-lg text-display-lg font-bold text-primary">LLMNetOps</h1>
+<div class="hidden md:flex ml-8 gap-6 h-full items-center">
+<span class="text-primary font-bold font-body-md text-body-md cursor-pointer">Console</span>
+<span class="text-on-surface-variant font-body-md text-body-md hover:bg-surface-container transition-colors duration-200 p-2 rounded cursor-pointer">Documentation</span>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<div class="relative hidden sm:block">
+<span class="material-symbols-outlined absolute left-2 top-1/2 -translate-y-1/2 text-on-surface-variant text-[20px]">search</span>
+<input class="pl-9 pr-4 py-1.5 bg-surface-container-low border border-outline-variant rounded-full text-body-sm focus:outline-none focus:ring-2 focus:ring-primary/20 w-64" placeholder="Search parameters..." type="text"/>
+</div>
+<span class="material-symbols-outlined text-on-surface-variant cursor-pointer p-2 hover:bg-surface-container rounded-full" data-icon="notifications">notifications</span>
+<span class="material-symbols-outlined text-on-surface-variant cursor-pointer p-2 hover:bg-surface-container rounded-full" data-icon="account_circle">account_circle</span>
+</div>
+</header>
+<!-- SideNavBar -->
+<aside class="fixed left-0 top-0 h-full w-[240px] bg-primary flex flex-col py-stack_gap_lg z-40">
+<div class="px-6 mb-8 mt-[56px]">
+<h2 class="font-headline-md text-headline-md font-bold text-surface-container-lowest">LLMNetOps</h2>
+<p class="text-surface-container-lowest/60 font-label-caps text-label-caps">Enterprise Console</p>
+</div>
+<nav class="flex-1 space-y-1 overflow-y-auto custom-scrollbar">
+<!-- Sidebar Items mapping -->
+<a class="flex items-center px-6 py-3 text-surface-container-lowest/60 font-label-caps text-label-caps hover:bg-white/5 hover:text-surface-container-lowest transition-all duration-150" href="#">
+<span class="material-symbols-outlined mr-3" data-icon="dashboard">dashboard</span> Dashboard
+            </a>
+<a class="flex items-center px-6 py-3 text-surface-container-lowest/60 font-label-caps text-label-caps hover:bg-white/5 hover:text-surface-container-lowest transition-all duration-150" href="#">
+<span class="material-symbols-outlined mr-3" data-icon="chat_bubble">chat_bubble</span> AI Chat
+            </a>
+<a class="flex items-center px-6 py-3 text-surface-container-lowest/60 font-label-caps text-label-caps hover:bg-white/5 hover:text-surface-container-lowest transition-all duration-150" href="#">
+<span class="material-symbols-outlined mr-3" data-icon="hub">hub</span> Network
+            </a>
+<a class="flex items-center px-6 py-3 text-surface-container-lowest/60 font-label-caps text-label-caps hover:bg-white/5 hover:text-surface-container-lowest transition-all duration-150" href="#">
+<span class="material-symbols-outlined mr-3" data-icon="router">router</span> DHCP
+            </a>
+<a class="flex items-center px-6 py-3 text-surface-container-lowest/60 font-label-caps text-label-caps hover:bg-white/5 hover:text-surface-container-lowest transition-all duration-150" href="#">
+<span class="material-symbols-outlined mr-3" data-icon="storage">storage</span> NetBox
+            </a>
+<a class="flex items-center px-6 py-3 text-surface-container-lowest/60 font-label-caps text-label-caps hover:bg-white/5 hover:text-surface-container-lowest transition-all duration-150" href="#">
+<span class="material-symbols-outlined mr-3" data-icon="psychology">psychology</span> Skills
+            </a>
+<a class="flex items-center px-6 py-3 text-surface-container-lowest/60 font-label-caps text-label-caps hover:bg-white/5 hover:text-surface-container-lowest transition-all duration-150" href="#">
+<span class="material-symbols-outlined mr-3" data-icon="assessment">assessment</span> Reports
+            </a>
+<a class="flex items-center px-6 py-3 text-surface-container-lowest/60 font-label-caps text-label-caps hover:bg-white/5 hover:text-surface-container-lowest transition-all duration-150" href="#">
+<span class="material-symbols-outlined mr-3" data-icon="backup">backup</span> Backups
+            </a>
+<a class="flex items-center px-6 py-3 text-surface-container-lowest/60 font-label-caps text-label-caps hover:bg-white/5 hover:text-surface-container-lowest transition-all duration-150" href="#">
+<span class="material-symbols-outlined mr-3" data-icon="insights">insights</span> Metrics
+            </a>
+<a class="flex items-center px-6 py-3 sidebar-active text-surface-container-lowest font-label-caps text-label-caps transition-all duration-150" href="#">
+<span class="material-symbols-outlined mr-3" data-icon="settings">settings</span> Settings
+            </a>
+</nav>
+<div class="px-6 py-4 border-t border-white/10">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-full bg-secondary-container flex items-center justify-center text-primary font-bold text-[12px]">JD</div>
+<div class="flex-1 min-w-0">
+<p class="text-white text-body-sm font-medium truncate">Admin User</p>
+<p class="text-white/40 text-[10px] truncate">Enterprise Admin</p>
+</div>
+</div>
+</div>
+</aside>
+<!-- Main Content -->
+<main class="ml-[240px] pt-[56px] min-h-screen">
+<div class="p-container_gutter max-w-[1400px] mx-auto">
+<!-- Page Header -->
+<div class="flex justify-between items-end mb-8">
+<div>
+<h2 class="font-headline-md text-headline-md text-primary">System Settings</h2>
+<p class="text-on-surface-variant font-body-md text-body-md mt-1">Configure global parameters for autonomous network operations.</p>
+</div>
+<div class="flex gap-3">
+<button class="px-4 py-2 border border-primary text-primary font-medium text-body-md rounded-md hover:bg-surface-container transition-colors">Discard changes</button>
+<button class="px-4 py-2 bg-secondary text-white font-medium text-body-md rounded-md hover:bg-secondary/90 transition-colors">Save changes</button>
+</div>
+</div>
+<!-- Tabbed Navigation -->
+<div class="border-b border-outline-variant mb-stack_gap_lg flex gap-8">
+<button class="pb-3 px-1 text-body-md transition-all tab-active" id="tab-routers" onclick="switchTab('routers')">Routers</button>
+<button class="pb-3 px-1 text-on-surface-variant text-body-md transition-all hover:text-primary" id="tab-agents" onclick="switchTab('agents')">Agents</button>
+<button class="pb-3 px-1 text-on-surface-variant text-body-md transition-all hover:text-primary" id="tab-environment" onclick="switchTab('environment')">Environment</button>
+<button class="pb-3 px-1 text-on-surface-variant text-body-md transition-all hover:text-primary" id="tab-netbox" onclick="switchTab('netbox')">NetBox</button>
+<button class="pb-3 px-1 text-on-surface-variant text-body-md transition-all hover:text-primary" id="tab-memory" onclick="switchTab('memory')">Memory</button>
+</div>
+<!-- Tab Contents -->
+<div class="tab-pane" id="content-routers">
+<div class="bg-surface-container-lowest border border-outline-variant rounded-lg overflow-hidden">
+<div class="p-4 border-b border-outline-variant flex justify-between items-center bg-surface-container-low">
+<h3 class="font-title-sm text-title-sm text-primary">Managed Router Hosts</h3>
+<button class="text-secondary font-medium text-body-sm flex items-center gap-1">
+<span class="material-symbols-outlined text-[18px]" data-icon="add">add</span> Add Host
+                        </button>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead class="bg-surface-container-low">
+<tr>
+<th class="p-3 text-label-caps font-bold text-on-surface-variant border-b border-outline-variant">Hostname</th>
+<th class="p-3 text-label-caps font-bold text-on-surface-variant border-b border-outline-variant">Management IP</th>
+<th class="p-3 text-label-caps font-bold text-on-surface-variant border-b border-outline-variant">SSH User</th>
+<th class="p-3 text-label-caps font-bold text-on-surface-variant border-b border-outline-variant text-right">Actions</th>
+</tr>
+</thead>
+<tbody class="text-body-md">
+<tr class="even:bg-surface-container-low hover:bg-surface-container transition-colors">
+<td class="p-3 border-b border-outline-variant"><input class="bg-transparent border-none focus:ring-0 w-full p-0" type="text" value="Core-RT01"/></td>
+<td class="p-3 border-b border-outline-variant font-data-mono text-data-mono"><input class="bg-transparent border-none focus:ring-0 w-full p-0" type="text" value="10.0.0.1"/></td>
+<td class="p-3 border-b border-outline-variant"><input class="bg-transparent border-none focus:ring-0 w-full p-0" type="text" value="llm_admin"/></td>
+<td class="p-3 border-b border-outline-variant text-right">
+<button class="px-3 py-1 bg-primary-container text-on-primary-container text-body-sm rounded hover:bg-primary transition-colors">Test</button>
+</td>
+</tr>
+<tr class="even:bg-surface-container-low hover:bg-surface-container transition-colors">
+<td class="p-3 border-b border-outline-variant"><input class="bg-transparent border-none focus:ring-0 w-full p-0" type="text" value="Edge-GW04"/></td>
+<td class="p-3 border-b border-outline-variant font-data-mono text-data-mono"><input class="bg-transparent border-none focus:ring-0 w-full p-0" type="text" value="172.16.2.254"/></td>
+<td class="p-3 border-b border-outline-variant"><input class="bg-transparent border-none focus:ring-0 w-full p-0" type="text" value="llm_admin"/></td>
+<td class="p-3 border-b border-outline-variant text-right">
+<button class="px-3 py-1 bg-primary-container text-on-primary-container text-body-sm rounded hover:bg-primary transition-colors">Test</button>
+</td>
+</tr>
+<tr class="even:bg-surface-container-low hover:bg-surface-container transition-colors">
+<td class="p-3 border-b border-outline-variant"><input class="bg-transparent border-none focus:ring-0 w-full p-0" type="text" value="Dist-SW02"/></td>
+<td class="p-3 border-b border-outline-variant font-data-mono text-data-mono"><input class="bg-transparent border-none focus:ring-0 w-full p-0" type="text" value="10.5.10.2"/></td>
+<td class="p-3 border-b border-outline-variant"><input class="bg-transparent border-none focus:ring-0 w-full p-0" type="text" value="llm_operator"/></td>
+<td class="p-3 border-b border-outline-variant text-right">
+<button class="px-3 py-1 bg-primary-container text-on-primary-container text-body-sm rounded hover:bg-primary transition-colors">Test</button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+<div class="tab-pane hidden" id="content-agents">
+<div class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+<!-- Agent Card 1 -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-lg p-stack_gap_md flex flex-col shadow-sm">
+<div class="flex items-center justify-between mb-4">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 bg-primary/10 rounded flex items-center justify-center">
+<span class="material-symbols-outlined text-primary" data-icon="psychology">psychology</span>
+</div>
+<h4 class="font-title-sm text-title-sm text-primary">Llama-3-Network-Spec</h4>
+</div>
+<span class="bg-green-100 text-green-800 text-[10px] font-bold px-2 py-0.5 rounded uppercase">Active</span>
+</div>
+<div class="space-y-4 flex-1">
+<div>
+<label class="text-label-caps text-on-surface-variant block mb-1">Base Model</label>
+<input class="w-full text-body-sm bg-surface-container-low border border-outline-variant rounded p-2" type="text" value="llama3:70b-instruct"/>
+</div>
+<div class="grid grid-cols-2 gap-3">
+<div>
+<label class="text-label-caps text-on-surface-variant block mb-1">Context Length</label>
+<input class="w-full text-body-sm bg-surface-container-low border border-outline-variant rounded p-2" type="number" value="8192"/>
+</div>
+<div>
+<label class="text-label-caps text-on-surface-variant block mb-1">Timeout (s)</label>
+<input class="w-full text-body-sm bg-surface-container-low border border-outline-variant rounded p-2" type="number" value="60"/>
+</div>
+</div>
+<div>
+<label class="text-label-caps text-on-surface-variant block mb-1">Enabled Tools</label>
+<div class="flex flex-wrap gap-2 mt-1">
+<span class="px-2 py-1 bg-surface-container border border-outline-variant rounded text-[11px] font-medium">ssh_exec</span>
+<span class="px-2 py-1 bg-surface-container border border-outline-variant rounded text-[11px] font-medium">config_parse</span>
+<span class="px-2 py-1 bg-surface-container border border-outline-variant rounded text-[11px] font-medium">netbox_query</span>
+<button class="px-2 py-1 border border-dashed border-outline-variant rounded text-[11px] font-medium text-on-surface-variant hover:bg-surface-container">+ Add</button>
+</div>
+</div>
+</div>
+</div>
+<!-- Agent Card 2 -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-lg p-stack_gap_md flex flex-col shadow-sm">
+<div class="flex items-center justify-between mb-4">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 bg-primary/10 rounded flex items-center justify-center">
+<span class="material-symbols-outlined text-primary" data-icon="bug_report">bug_report</span>
+</div>
+<h4 class="font-title-sm text-title-sm text-primary">Triage-Agent-V2</h4>
+</div>
+<span class="bg-gray-100 text-gray-800 text-[10px] font-bold px-2 py-0.5 rounded uppercase">Standby</span>
+</div>
+<div class="space-y-4 flex-1">
+<div>
+<label class="text-label-caps text-on-surface-variant block mb-1">Base Model</label>
+<input class="w-full text-body-sm bg-surface-container-low border border-outline-variant rounded p-2" type="text" value="mistral:latest"/>
+</div>
+<div class="grid grid-cols-2 gap-3">
+<div>
+<label class="text-label-caps text-on-surface-variant block mb-1">Context Length</label>
+<input class="w-full text-body-sm bg-surface-container-low border border-outline-variant rounded p-2" type="number" value="4096"/>
+</div>
+<div>
+<label class="text-label-caps text-on-surface-variant block mb-1">Timeout (s)</label>
+<input class="w-full text-body-sm bg-surface-container-low border border-outline-variant rounded p-2" type="number" value="30"/>
+</div>
+</div>
+<div>
+<label class="text-label-caps text-on-surface-variant block mb-1">Enabled Tools</label>
+<div class="flex flex-wrap gap-2 mt-1">
+<span class="px-2 py-1 bg-surface-container border border-outline-variant rounded text-[11px] font-medium">snmp_get</span>
+<span class="px-2 py-1 bg-surface-container border border-outline-variant rounded text-[11px] font-medium">log_aggregator</span>
+<button class="px-2 py-1 border border-dashed border-outline-variant rounded text-[11px] font-medium text-on-surface-variant hover:bg-surface-container">+ Add</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="tab-pane hidden" id="content-environment">
+<div class="max-w-2xl bg-surface-container-lowest border border-outline-variant rounded-lg p-stack_gap_lg shadow-sm">
+<div class="flex items-center gap-4 mb-6">
+<div class="w-16 h-16 bg-cover bg-center rounded-lg border border-outline-variant" data-alt="A stylized minimalist illustration of a server rack glowing with neon blue lights, representing a local AI infrastructure. The aesthetic is clean, modern corporate with deep navy accents and soft ambient lighting, focusing on stability and technological power." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuAi-F9UWNCsDLvdzSxob75j61TStW-Uhdd8Di8hEAhzTHSB4aEWREaKj-PVyj-dAvP2_Q7Xl5yeRfIdetI7hAd-VitPppk3uhR2kFeMZCALsvvGnaKDAhRWh96C9QCKvEg_Li77qtqJCMkrY8naFG55Wveh-Qp0w7JibaoMo5jdY4GYA5OkRvIEeS2PGtITorxKbP61Y2IE7Xw8MSYGWXsHgOcSZYvyQbQWq6lnMQOWG-KFxACEBL1Dj6bQ0c6uhHOPxz-_3GEgpoE')"></div>
+<div>
+<h3 class="font-title-sm text-title-sm text-primary">Ollama Configuration</h3>
+<p class="text-body-sm text-on-surface-variant">Configure the local inference engine connection parameters.</p>
+</div>
+</div>
+<div class="space-y-6">
+<div>
+<label class="text-body-md font-medium text-primary block mb-2">Base API URL</label>
+<div class="flex gap-2">
+<input class="flex-1 text-body-sm bg-white border border-outline-variant rounded-md px-3 py-2 focus:ring-2 focus:ring-primary/10" type="text" value="http://localhost:11434"/>
+<button class="px-4 py-2 border border-primary text-primary font-medium text-body-sm rounded-md hover:bg-surface-container transition-colors whitespace-nowrap">Test Connection</button>
+</div>
+<p class="text-[11px] text-green-700 mt-1 flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">check_circle</span> Server reachable (v0.1.48)
+                            </p>
+</div>
+<div>
+<label class="text-body-md font-medium text-primary block mb-2">Default Inference Model</label>
+<select class="w-full text-body-sm bg-white border border-outline-variant rounded-md px-3 py-2 focus:ring-2 focus:ring-primary/10">
+<option>llama3:70b</option>
+<option>codellama:34b</option>
+<option selected="">llama3:latest</option>
+<option>phi3:mini</option>
+</select>
+</div>
+<div class="p-4 bg-surface-container-low rounded-lg border border-outline-variant flex items-start gap-3">
+<span class="material-symbols-outlined text-on-secondary-container" data-icon="info">info</span>
+<div class="text-body-sm text-on-surface-variant">
+                                Inference is currently set to <span class="font-bold">local-only</span>. To enable cloud fallback, configure the secondary environment in the advanced settings.
+                            </div>
+</div>
+</div>
+</div>
+</div>
+<div class="tab-pane hidden" id="content-netbox">
+<div class="max-w-2xl bg-surface-container-lowest border border-outline-variant rounded-lg p-stack_gap_lg shadow-sm">
+<div class="mb-6 border-b border-outline-variant pb-4">
+<h3 class="font-title-sm text-title-sm text-primary">Source of Truth (NetBox)</h3>
+<p class="text-body-sm text-on-surface-variant">Connect to your NetBox instance for topology discovery.</p>
+</div>
+<div class="space-y-6">
+<div>
+<label class="text-body-md font-medium text-primary block mb-1">Instance URL</label>
+<input class="w-full text-body-sm bg-white border border-outline-variant rounded-md px-3 py-2 focus:ring-2 focus:ring-primary/10" type="text" value="https://netbox.internal.corp"/>
+</div>
+<div>
+<label class="text-body-md font-medium text-primary block mb-1">API Token</label>
+<div class="relative">
+<input class="w-full text-body-sm bg-white border border-outline-variant rounded-md px-3 py-2 focus:ring-2 focus:ring-primary/10" type="password" value="****************************************"/>
+<button class="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant">
+<span class="material-symbols-outlined text-[20px]">visibility</span>
+</button>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<div class="flex-1">
+<label class="text-body-md font-medium text-primary block mb-1">Device Role Filtering</label>
+<input class="w-full text-body-sm bg-white border border-outline-variant rounded-md px-3 py-2 focus:ring-2 focus:ring-primary/10" placeholder="e.g. core-router, distribution-switch" type="text"/>
+</div>
+</div>
+<div class="pt-4 flex items-center justify-between border-t border-outline-variant">
+<div class="flex items-center gap-2">
+<div class="w-2 h-2 rounded-full bg-green-500"></div>
+<span class="text-body-sm text-on-surface-variant font-medium">Syncing active</span>
+</div>
+<button class="px-4 py-2 border border-outline-variant text-on-surface-variant font-medium text-body-sm rounded-md hover:bg-surface-container transition-colors">Sync Now</button>
+</div>
+</div>
+</div>
+</div>
+<div class="tab-pane hidden" id="content-memory">
+<div class="bg-surface-container-lowest border border-outline-variant rounded-lg overflow-hidden shadow-sm">
+<div class="p-4 border-b border-outline-variant flex justify-between items-center bg-surface-container-low">
+<div>
+<h3 class="font-title-sm text-title-sm text-primary">Router Context Facts</h3>
+<p class="text-[11px] text-on-surface-variant">Long-term semantic memory for network topology.</p>
+</div>
+<div class="flex gap-2">
+<button class="px-3 py-1 bg-white border border-error text-error text-body-sm font-medium rounded hover:bg-error-container transition-colors flex items-center gap-1">
+<span class="material-symbols-outlined text-[18px]">delete</span> Clear Selected
+                            </button>
+<button class="px-3 py-1 bg-primary text-white text-body-sm font-medium rounded hover:bg-primary/90 transition-colors">Export DB</button>
+</div>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="bg-surface-container-high">
+<th class="p-3 border-b border-outline-variant w-10">
+<input class="rounded border-outline-variant text-secondary focus:ring-secondary" type="checkbox"/>
+</th>
+<th class="p-3 text-label-caps font-bold text-on-surface-variant border-b border-outline-variant">Subject</th>
+<th class="p-3 text-label-caps font-bold text-on-surface-variant border-b border-outline-variant">Relationship</th>
+<th class="p-3 text-label-caps font-bold text-on-surface-variant border-b border-outline-variant">Fact String</th>
+<th class="p-3 text-label-caps font-bold text-on-surface-variant border-b border-outline-variant">Confidence</th>
+<th class="p-3 text-label-caps font-bold text-on-surface-variant border-b border-outline-variant">Last Seen</th>
+</tr>
+</thead>
+<tbody class="text-body-sm">
+<tr class="hover:bg-surface-container/50 transition-colors">
+<td class="p-3 border-b border-outline-variant">
+<input class="rounded border-outline-variant text-secondary focus:ring-secondary" type="checkbox"/>
+</td>
+<td class="p-3 border-b border-outline-variant font-medium">Core-RT01</td>
+<td class="p-3 border-b border-outline-variant"><span class="px-2 py-0.5 bg-tertiary-container text-on-tertiary-container rounded text-[10px] font-bold">OS_VERSION</span></td>
+<td class="p-3 border-b border-outline-variant italic">"Currently running IOS-XE 17.9.3 with critical CVE patched."</td>
+<td class="p-3 border-b border-outline-variant font-data-mono">0.98</td>
+<td class="p-3 border-b border-outline-variant text-on-surface-variant">2h ago</td>
+</tr>
+<tr class="hover:bg-surface-container/50 transition-colors">
+<td class="p-3 border-b border-outline-variant">
+<input checked="" class="rounded border-outline-variant text-secondary focus:ring-secondary" type="checkbox"/>
+</td>
+<td class="p-3 border-b border-outline-variant font-medium">VLAN-100</td>
+<td class="p-3 border-b border-outline-variant"><span class="px-2 py-0.5 bg-secondary-container text-on-secondary-container rounded text-[10px] font-bold">TOPOLOGY</span></td>
+<td class="p-3 border-b border-outline-variant italic">"VLAN 100 serves the 'Engineering' subnet on all Core switches."</td>
+<td class="p-3 border-b border-outline-variant font-data-mono">0.94</td>
+<td class="p-3 border-b border-outline-variant text-on-surface-variant">1d ago</td>
+</tr>
+<tr class="hover:bg-surface-container/50 transition-colors">
+<td class="p-3 border-b border-outline-variant">
+<input class="rounded border-outline-variant text-secondary focus:ring-secondary" type="checkbox"/>
+</td>
+<td class="p-3 border-b border-outline-variant font-medium">BGP-AS-65001</td>
+<td class="p-3 border-b border-outline-variant"><span class="px-2 py-0.5 bg-blue-100 text-blue-800 rounded text-[10px] font-bold uppercase">PEERING</span></td>
+<td class="p-3 border-b border-outline-variant italic">"Primary uplink peering occurs at G0/0/1 on Core-RT01."</td>
+<td class="p-3 border-b border-outline-variant font-data-mono">0.89</td>
+<td class="p-3 border-b border-outline-variant text-on-surface-variant">5m ago</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+</div>
+</main>
+<script>
+        function switchTab(tabId) {
+            // Hide all panes
+            document.querySelectorAll('.tab-pane').forEach(pane => {
+                pane.classList.add('hidden');
+            });
+            // Remove active style from all tabs
+            document.querySelectorAll('button[id^="tab-"]').forEach(tab => {
+                tab.classList.remove('tab-active');
+                tab.classList.add('text-on-surface-variant');
+            });
+            
+            // Show active pane
+            document.getElementById('content-' + tabId).classList.remove('hidden');
+            // Add active style to selected tab
+            const activeTab = document.getElementById('tab-' + tabId);
+            activeTab.classList.add('tab-active');
+            activeTab.classList.remove('text-on-surface-variant');
+        }
+
+        // Initialize tooltips or specific interactions here if needed
+        window.onload = () => {
+            console.log('LLMNetOps Settings Initialized');
+        }
+    </script>
+</body></html>

@@ -6,7 +6,7 @@ description: >
   Konfirmasi masalah masih ada, assessment dampak, dan delegasikan ke agent yang tepat.
   Gunakan ketika ada action items yang perlu dikonfirmasi, operator minta "validasi dulu",
   atau sebelum config_agent mengeksekusi perubahan berdasarkan temuan monitoring.
-model: qwen3.5:9b
+model: qwen3.6:27b
 num_ctx: 32768
 num_predict: 16384
 context_window: 20

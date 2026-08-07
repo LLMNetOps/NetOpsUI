@@ -4,7 +4,7 @@ alias: budi
 description: >
   Tulis dokumen laporan ke file, kelola template, dan kurasi hasil
   dari agent lain menjadi laporan operasional yang tersimpan.
-model: qwen3.5:9b
+model: qwen3.6:27b
 num_ctx: 32768
 num_predict: 16384
 context_window: 10

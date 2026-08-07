@@ -10,12 +10,13 @@ from datetime import datetime, timezone, timedelta
 from typing import TYPE_CHECKING, Any
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
-from langchain_ollama import ChatOllama
+from langchain_openai import ChatOpenAI
 
 from pathlib import Path
 
 from agents.loader import AgentLoader
 from agents.tools import TOOL_MAP
+from tools.db import db_get_llm_config
 
 # ── Pedoman agent — global conduct rules loaded from editable Markdown ─────────
 
@@ -39,8 +40,16 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-OLLAMA_MODEL    = os.getenv("OLLAMA_MODEL", "gemma4:e4b")
+OLLAMA_API_KEY  = os.getenv("OLLAMA_API_KEY", "sk-placeholder")
+
+
+def _ollama_defaults() -> tuple[str, str]:
+    """Base URL & model resolved live from Settings → Environment (DB), falling
+    back to .env when the DB row is blank (e.g. never saved via UI)."""
+    cfg = db_get_llm_config()
+    base_url = cfg.get("base_url") or os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+    model = cfg.get("model") or os.getenv("OLLAMA_MODEL", "qwen3.6:27b")
+    return base_url, model
 
 WIB = timezone(timedelta(hours=7))
 
@@ -72,22 +81,27 @@ def _make_llm(
     timeout: int = 300,
     agent_name: str | None = None,
     base_url: str | None = None,
-    reasoning: bool = False,
-) -> ChatOllama:
+    reasoning: bool = False,  # kept for API compat; ignored (OpenAI API doesn't support it)
+    max_retries: int = 2,
+) -> ChatOpenAI:
     from agents.metrics import TokenMetricsCallback  # noqa: PLC0415
-    kwargs: dict[str, Any] = dict(
-        base_url=base_url or OLLAMA_BASE_URL,
-        model=model or OLLAMA_MODEL,
+    default_base_url, default_model = _ollama_defaults()
+    model_kwargs: dict[str, Any] = {}
+    if json_mode:
+        model_kwargs["response_format"] = {"type": "json_object"}
+    return ChatOpenAI(
+        base_url=base_url or default_base_url,
+        api_key=OLLAMA_API_KEY,
+        model=model or default_model,
         temperature=temperature,
-        num_predict=num_predict,
-        num_ctx=num_ctx,
+        max_tokens=num_predict,
         timeout=timeout,
-        reasoning=reasoning,
+        max_retries=max_retries,
+        # extra_body lets Ollama pick up num_ctx without triggering openai client validation
+        extra_body={"options": {"num_ctx": num_ctx}},
+        model_kwargs=model_kwargs,
         callbacks=[TokenMetricsCallback(agent_name or "unknown", num_ctx, num_predict)],
     )
-    if json_mode:
-        kwargs["format"] = "json"
-    return ChatOllama(**kwargs)
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
