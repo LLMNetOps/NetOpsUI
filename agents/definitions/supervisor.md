@@ -6,7 +6,7 @@ description: >
   yang tepat, dan rumuskan task yang jelas (WHAT, bukan HOW).
 model: qwen3.6:27b
 num_ctx: 16384
-num_predict: 4096
+num_predict: 8192
 context_window: 10
 timeout: 120
 chat_prompt: >

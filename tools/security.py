@@ -9,7 +9,7 @@ from langchain_core.tools import tool
 
 from tools.base import (
     validate_router, get_router_entries, get_all_routers, get_router_names,
-    ssh_creds, ssh_creds_for, ssh_run_command,
+    ssh_creds, ssh_creds_for, ssh_run_command, get_progress_writer,
 )
 
 
@@ -66,15 +66,19 @@ def audit_security(router_name: str = "all") -> str:
         router_name = validate_router(router_name)
         entries = [get_router_entries(router_name)[0]]
 
+    emit = get_progress_writer("audit_security")
+    total = len(entries)
     results: list[dict[str, Any]] = []
     with ThreadPoolExecutor(max_workers=8) as executor:
         futures = {executor.submit(_audit_one, e): e for e in entries}
-        for future in as_completed(futures, timeout=120):
+        for i, future in enumerate(as_completed(futures, timeout=120), start=1):
+            entry = futures[future]
             try:
                 results.append(future.result())
+                emit(f"[{i}/{total}] {entry['name']}: audit selesai")
             except Exception as exc:
-                entry = futures[future]
                 results.append({"name": entry["name"], "host": entry["host"], "error": str(exc)})
+                emit(f"[{i}/{total}] {entry['name']}: gagal — {exc}")
 
     results.sort(key=lambda x: x["name"])
     lines = ["Security Audit\n" + "═" * 60]

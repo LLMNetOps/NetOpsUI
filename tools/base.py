@@ -259,3 +259,26 @@ def ssh_error_hint(err: str) -> str:
     if "Authentication failed" in err:
         return f"{err} — Kredensial SSH salah (username/password)."
     return err
+
+
+def get_progress_writer(source: str):
+    """Return a callable emit(content, event_type='tool_result') that pushes a
+    live progress line to the UI via LangGraph's custom stream writer, or a
+    no-op outside a streaming context.
+
+    For multi-router tools that fan out over ThreadPoolExecutor (audit_*,
+    get_*_all): a single tool call can take minutes with zero visibility to
+    the operator otherwise. Call this once in the calling thread (e.g. right
+    before/inside the as_completed() loop, which runs on the caller's thread)
+    so each per-router result can be surfaced as it lands.
+    """
+    try:
+        from langgraph.config import get_stream_writer
+        writer = get_stream_writer()
+    except Exception:
+        return lambda *_a, **_kw: None
+
+    def emit(content: str, event_type: str = "tool_result") -> None:
+        writer({"source": source, "event_type": event_type, "content": content})
+
+    return emit

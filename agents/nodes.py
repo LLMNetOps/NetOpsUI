@@ -43,13 +43,14 @@ logger = logging.getLogger(__name__)
 OLLAMA_API_KEY  = os.getenv("OLLAMA_API_KEY", "sk-placeholder")
 
 
-def _ollama_defaults() -> tuple[str, str]:
-    """Base URL & model resolved live from Settings → Environment (DB), falling
-    back to .env when the DB row is blank (e.g. never saved via UI)."""
+def _ollama_defaults() -> tuple[str, str, str]:
+    """Base URL, model & API key resolved live from Settings → Environment (DB),
+    falling back to .env when the DB row is blank (e.g. never saved via UI)."""
     cfg = db_get_llm_config()
     base_url = cfg.get("base_url") or os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
     model = cfg.get("model") or os.getenv("OLLAMA_MODEL", "qwen3.6:27b")
-    return base_url, model
+    api_key = cfg.get("api_key") or OLLAMA_API_KEY
+    return base_url, model, api_key
 
 WIB = timezone(timedelta(hours=7))
 
@@ -81,17 +82,18 @@ def _make_llm(
     timeout: int = 300,
     agent_name: str | None = None,
     base_url: str | None = None,
+    api_key: str | None = None,
     reasoning: bool = False,  # kept for API compat; ignored (OpenAI API doesn't support it)
     max_retries: int = 2,
 ) -> ChatOpenAI:
     from agents.metrics import TokenMetricsCallback  # noqa: PLC0415
-    default_base_url, default_model = _ollama_defaults()
+    default_base_url, default_model, default_api_key = _ollama_defaults()
     model_kwargs: dict[str, Any] = {}
     if json_mode:
         model_kwargs["response_format"] = {"type": "json_object"}
     return ChatOpenAI(
         base_url=base_url or default_base_url,
-        api_key=OLLAMA_API_KEY,
+        api_key=api_key or default_api_key,
         model=model or default_model,
         temperature=temperature,
         max_tokens=num_predict,
@@ -114,11 +116,36 @@ def _clean(text: str) -> str:
     return text.strip()
 
 
+def _visible_content(raw: str) -> str:
+    """What would actually be shown after <think>...</think> stripping
+    (mirrors the regex agent.py applies when streaming to the UI). Also
+    strips a dangling *unclosed* <think> block — e.g. a reasoning model that
+    hit num_predict mid-thought and never reached its answer — so callers can
+    detect a reply that is genuinely empty of visible content, not just one
+    that happens to be full of hidden reasoning."""
+    text = re.sub(r"<think>.*?</think>", "", raw or "", flags=re.DOTALL)
+    text = re.sub(r"<think>.*$", "", text, flags=re.DOTALL)
+    return text.strip()
+
+
 def _log(source: str, event_type: str, content: str) -> dict:
     """Build a log entry, resolving source to its display alias if defined."""
     display = AGENT_ALIAS.get(source, source)
     return {"timestamp": _now_str(), "source": display,
             "event_type": event_type, "content": content}
+
+
+def _get_writer():
+    """Return a LangGraph custom-stream writer, or a no-op if unavailable
+    (e.g. called outside a graph.stream(..., stream_mode='custom') context).
+    Lets nodes push tool_call/tool_result events to the UI the instant they
+    happen, instead of only after the whole node (which may loop over many
+    tool calls) returns."""
+    try:
+        from langgraph.config import get_stream_writer  # noqa: PLC0415
+        return get_stream_writer()
+    except Exception:
+        return lambda *_a, **_kw: None
 
 
 def _last_specialist_from_log(state: dict, valid_agent_names: set[str]) -> str | None:
@@ -146,7 +173,14 @@ def _react_loop(
     Run a ReAct tool-calling loop. Returns (updated_messages, log_entries).
     Stops when the LLM produces a response with no tool calls.
     """
+    writer = _get_writer()
     logs: list[dict] = []
+
+    def _emit(event_type: str, content: str) -> None:
+        entry = _log(agent_name, event_type, content)
+        logs.append(entry)
+        writer(entry)
+
     for _ in range(max_iters):
         response = llm_with_tools.invoke(messages)
         messages = messages + [response]
@@ -158,7 +192,7 @@ def _react_loop(
             name = tc["name"]
             args = tc.get("args", {})
             args_str = ", ".join(f"{k}={json.dumps(v)}" for k, v in args.items())
-            logs.append(_log(agent_name, "tool_call", f"{name}({args_str})"))
+            _emit("tool_call", f"{name}({args_str})")
 
             tool_fn = tool_map.get(name)
             if tool_fn is None:
@@ -172,7 +206,7 @@ def _react_loop(
             preview = str(result)[:120].replace("\n", " ")
             if len(str(result)) > 120:
                 preview += "…"
-            logs.append(_log(agent_name, "tool_result", preview))
+            _emit("tool_result", preview)
             messages.append(ToolMessage(content=str(result), tool_call_id=tc["id"]))
 
     return messages, logs
@@ -472,7 +506,7 @@ def supervisor_node(state: "NetworkOpsState") -> dict:
             temperature=0.5,
             model=_supervisor_defn_g.model if _supervisor_defn_g else None,
             num_ctx=_supervisor_defn_g.num_ctx if _supervisor_defn_g else 8192,
-            num_predict=512,
+            num_predict=1536,  # short reply expected, but a thinking model needs headroom to reason first
             timeout=_supervisor_defn_g.timeout if _supervisor_defn_g else 60,
             agent_name="supervisor",
             base_url=(_supervisor_defn_g.ollama_host if _supervisor_defn_g else "") or None,
@@ -485,9 +519,23 @@ def supervisor_node(state: "NetworkOpsState") -> dict:
         }
         try:
             _reply_g = _llm_g.invoke([SystemMessage(content=_chat_prompt_g)] + _recent_g)
+            if not _visible_content(_reply_g.content or ""):
+                raise ValueError(
+                    f"empty visible content (finish_reason={_reply_g.response_metadata.get('finish_reason')}, "
+                    f"usage={_reply_g.response_metadata.get('token_usage')})"
+                )
             _greeting_result["messages"] = [_reply_g]
-        except Exception:
-            pass
+        except Exception as exc:
+            # Jangan biarkan kegagalan LLM di fast-path ini membuat operator
+            # menerima balasan kosong — safety net yang sama seperti specialist node.
+            logger.warning("Greeting fast-path gagal (supervisor): %s", exc)
+            _greeting_result["messages"] = [AIMessage(
+                content="Halo! Saya Bambang, supervisor operasional jaringan kampus. "
+                        "Ada yang bisa saya bantu terkait jaringan kampus?"
+            )]
+            _greeting_result["agent_log"].append(
+                _log("supervisor", "tool_result", f"(fallback: balasan sapaan gagal — {exc})")
+            )
         return _greeting_result
 
     skill_list = "\n".join(
@@ -686,9 +734,21 @@ def supervisor_node(state: "NetworkOpsState") -> dict:
             chat_sys = SystemMessage(content=_chat_prompt)
             try:
                 reply = llm_chat.invoke([chat_sys] + recent)
+                if not _visible_content(reply.content or ""):
+                    raise ValueError(
+                        f"empty visible content (finish_reason={reply.response_metadata.get('finish_reason')}, "
+                        f"usage={reply.response_metadata.get('token_usage')})"
+                    )
                 base_result["messages"] = [reply]
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning("END fast-path gagal (supervisor): %s", exc)
+                base_result["messages"] = [AIMessage(
+                    content="Maaf, saya belum bisa menyusun jawaban untuk itu. Bisa dicoba lagi atau "
+                            "diperjelas maksudnya?"
+                )]
+                base_result["agent_log"].append(
+                    _log("supervisor", "tool_result", f"(fallback: balasan END gagal — {exc})")
+                )
 
     return base_result
 
@@ -762,6 +822,12 @@ def _make_specialist_node(agent_name: str):
             agent_name,
             max_iters=_max_iters,
         )
+        _writer = _get_writer()
+
+        def _emit(event_type: str, content: str) -> None:
+            entry = _log(agent_name, event_type, content)
+            logs.append(entry)
+            _writer(entry)
 
         final_msg = all_msgs[-1]
         need_summary = True
@@ -785,7 +851,7 @@ def _make_specialist_node(agent_name: str):
                 summary_content = _clean(summary.content or "")
                 if summary_content:
                     final_msg = AIMessage(content=summary_content)
-                    logs.append(_log(agent_name, "tool_result", "(forced summary generated)"))
+                    _emit("tool_result", "(forced summary generated)")
             except Exception as exc:
                 logger.warning("Forced summary failed for %s: %s", agent_name, exc)
 
@@ -800,7 +866,7 @@ def _make_specialist_node(agent_name: str):
             else:
                 raw = "(tidak ada data)"
             final_msg = AIMessage(content=f"Hasil:\n{raw}")
-            logs.append(_log(agent_name, "tool_result", "(safety net: paksa AIMessage dari tool result)"))
+            _emit("tool_result", "(safety net: paksa AIMessage dari tool result)")
 
         logs.append(_log(agent_name, "routing", "← kembali ke supervisor"))
 
@@ -856,8 +922,14 @@ def config_node(state: dict) -> dict:
     ).strip())
 
     messages = [sys_msg] + list(state["messages"])[-10:]
+    writer = _get_writer()
     logs: list[dict] = []
     _backed_up_routers: set[str] = set()
+
+    def _emit(event_type: str, content: str) -> None:
+        entry = _log("config_agent", event_type, content)
+        logs.append(entry)
+        writer(entry)
 
     def _auto_backup(router: str) -> bool:
         """Trigger backup approval + execution. Return True if approved and done."""
@@ -867,20 +939,18 @@ def config_node(state: dict) -> dict:
             "risk_level": "medium",
             "details": {"router_name": router},
         }
-        logs.append(_log("config_agent", "approval_required",
-                         f"Backup sebelum write: {router}"))
+        _emit("approval_required", f"Backup sebelum write: {router}")
         decision = interrupt(approval_req)
         if decision != "approved":
-            logs.append(_log("config_agent", "tool_result",
-                             f"Backup ditolak — write ke '{router}' dibatalkan."))
+            _emit("tool_result", f"Backup ditolak — write ke '{router}' dibatalkan.")
             return False
         backup_fn = _CONFIG_TOOLS_MAP.get("backup_router_config")
         if backup_fn:
             try:
                 res = backup_fn.invoke({"router_name": router})
-                logs.append(_log("config_agent", "tool_result", str(res)[:120]))
+                _emit("tool_result", str(res)[:120])
             except Exception as exc:
-                logs.append(_log("config_agent", "tool_result", f"Backup error: {exc}"))
+                _emit("tool_result", f"Backup error: {exc}")
         _backed_up_routers.add(router)
         return True
 
@@ -895,7 +965,7 @@ def config_node(state: dict) -> dict:
             name = tc["name"]
             args = tc.get("args", {})
             args_str = ", ".join(f"{k}={json.dumps(v)}" for k, v in args.items())
-            logs.append(_log("config_agent", "tool_call", f"{name}({args_str})"))
+            _emit("tool_call", f"{name}({args_str})")
 
             router = args.get("router_name", "router")
 
@@ -927,17 +997,16 @@ def config_node(state: dict) -> dict:
                     "risk_level": risk,
                     "details": args,
                 }
-                logs.append(_log("config_agent", "approval_required",
-                                  f"Menunggu approval: {approval_req['action']}"))
+                _emit("approval_required", f"Menunggu approval: {approval_req['action']}")
                 decision = interrupt(approval_req)
 
                 if decision != "approved":
                     result = f"Aksi dibatalkan oleh operator (keputusan: {decision})."
-                    logs.append(_log("config_agent", "tool_result", result))
+                    _emit("tool_result", result)
                     messages.append(ToolMessage(content=result, tool_call_id=tc["id"]))
                     continue
 
-                logs.append(_log("config_agent", "tool_result", f"Operator menyetujui — eksekusi {name}..."))
+                _emit("tool_result", f"Operator menyetujui — eksekusi {name}...")
 
             tool_fn = _CONFIG_TOOLS_MAP.get(name)
             if tool_fn is None:
@@ -951,7 +1020,7 @@ def config_node(state: dict) -> dict:
             preview = str(result)[:120].replace("\n", " ")
             if len(str(result)) > 120:
                 preview += "…"
-            logs.append(_log("config_agent", "tool_result", preview))
+            _emit("tool_result", preview)
             messages.append(ToolMessage(content=str(result), tool_call_id=tc["id"]))
 
     final_msg = messages[-1]

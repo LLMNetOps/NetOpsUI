@@ -1,9 +1,10 @@
 """Consolidated SQLite database for app-owned structured data.
 
 Tables:
-  routers    — router inventory (replaces config.yaml routers: section)
-  threads    — chat session metadata (persistent across server restarts)
-  llm_config — global Ollama base_url/model, editable from Settings → Environment
+  routers      — router inventory (replaces config.yaml routers: section)
+  threads      — chat session metadata (persistent across server restarts)
+  llm_config   — global Ollama base_url/model, editable from Settings → Environment
+  llm_profiles — saved LLM connection profiles; activating one syncs to llm_config
 
 DB file: data/netops.db
 Does NOT touch: data/checkpoints.db (LangGraph-owned) or data/memory.db (agent_memory.py).
@@ -68,9 +69,24 @@ def _init_db() -> None:
                 id          INTEGER PRIMARY KEY CHECK (id = 1),
                 base_url    TEXT NOT NULL DEFAULT '',
                 model       TEXT NOT NULL DEFAULT '',
+                api_key     TEXT NOT NULL DEFAULT '',
+                updated_at  TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS llm_profiles (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                name        TEXT NOT NULL UNIQUE,
+                base_url    TEXT NOT NULL DEFAULT '',
+                model       TEXT NOT NULL DEFAULT '',
+                api_key     TEXT NOT NULL DEFAULT '',
+                is_active   INTEGER NOT NULL DEFAULT 0,
+                created_at  TEXT NOT NULL,
                 updated_at  TEXT NOT NULL
             );
         """)
+        cols = {row[1] for row in c.execute("PRAGMA table_info(llm_config)")}
+        if "api_key" not in cols:
+            c.execute("ALTER TABLE llm_config ADD COLUMN api_key TEXT NOT NULL DEFAULT ''")
 
 
 def _migrate_routers_from_yaml_if_empty() -> None:
@@ -139,11 +155,12 @@ def _seed_llm_config_from_env_if_empty() -> None:
     now = _now()
     with _conn() as c:
         c.execute(
-            "INSERT OR IGNORE INTO llm_config (id, base_url, model, updated_at) "
-            "VALUES (1, ?, ?, ?)",
+            "INSERT OR IGNORE INTO llm_config (id, base_url, model, api_key, updated_at) "
+            "VALUES (1, ?, ?, ?, ?)",
             (
                 os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
                 os.getenv("OLLAMA_MODEL", "qwen3.6:27b"),
+                os.getenv("OLLAMA_API_KEY", ""),
                 now,
             ),
         )
@@ -267,24 +284,123 @@ def db_archive_thread(thread_id: str) -> None:
         )
 
 
+def db_delete_thread(thread_id: str) -> None:
+    """Permanently remove thread metadata. Does not touch checkpoints.db —
+    see agent.delete_thread() for purging the LangGraph conversation state."""
+    with _conn() as c:
+        c.execute("DELETE FROM threads WHERE thread_id=?", (thread_id,))
+
+
+def db_rename_thread(thread_id: str, title: str) -> None:
+    """Rename only — deliberately does not touch updated_at, since a manual
+    rename shouldn't bump the thread's recency ranking in the sidebar list."""
+    with _conn() as c:
+        c.execute("UPDATE threads SET title=? WHERE thread_id=?", (title, thread_id))
+
+
 # ── LLM config (Ollama base_url/model) CRUD ─────────────────────────────────────
 
 def db_get_llm_config() -> dict[str, Any]:
     with _conn() as c:
         row = c.execute(
-            "SELECT base_url, model, updated_at FROM llm_config WHERE id=1"
+            "SELECT base_url, model, api_key, updated_at FROM llm_config WHERE id=1"
         ).fetchone()
-    return dict(row) if row else {"base_url": "", "model": "", "updated_at": ""}
+    return dict(row) if row else {"base_url": "", "model": "", "api_key": "", "updated_at": ""}
 
 
-def db_set_llm_config(base_url: str | None = None, model: str | None = None) -> dict[str, Any]:
-    """Update base_url and/or model (only fields passed are changed). Returns the new row."""
+def db_set_llm_config(
+    base_url: str | None = None,
+    model: str | None = None,
+    api_key: str | None = None,
+) -> dict[str, Any]:
+    """Update base_url/model/api_key (only fields passed are changed). Returns the new row."""
     now = _now()
     with _conn() as c:
         if base_url is not None:
             c.execute("UPDATE llm_config SET base_url=?, updated_at=? WHERE id=1", (base_url, now))
         if model is not None:
             c.execute("UPDATE llm_config SET model=?, updated_at=? WHERE id=1", (model, now))
+        if api_key is not None:
+            c.execute("UPDATE llm_config SET api_key=?, updated_at=? WHERE id=1", (api_key, now))
+    return db_get_llm_config()
+
+
+# ── LLM profiles CRUD ────────────────────────────────────────────────────────
+
+def db_list_llm_profiles() -> list[dict[str, Any]]:
+    with _conn() as c:
+        rows = c.execute(
+            "SELECT id, name, base_url, model, api_key, is_active, updated_at "
+            "FROM llm_profiles ORDER BY name"
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def db_add_llm_profile(
+    name: str,
+    base_url: str,
+    model: str,
+    api_key: str = "",
+) -> dict[str, Any]:
+    now = _now()
+    with _conn() as c:
+        c.execute(
+            "INSERT INTO llm_profiles (name, base_url, model, api_key, is_active, created_at, updated_at) "
+            "VALUES (?,?,?,?,0,?,?)",
+            (name, base_url, model, api_key, now, now),
+        )
+        row = c.execute(
+            "SELECT id, name, base_url, model, api_key, is_active, updated_at "
+            "FROM llm_profiles WHERE name=?", (name,)
+        ).fetchone()
+    return dict(row)
+
+
+def db_update_llm_profile(
+    profile_id: int,
+    name: str | None = None,
+    base_url: str | None = None,
+    model: str | None = None,
+    api_key: str | None = None,
+) -> dict[str, Any] | None:
+    now = _now()
+    with _conn() as c:
+        if name is not None:
+            c.execute("UPDATE llm_profiles SET name=?, updated_at=? WHERE id=?", (name, now, profile_id))
+        if base_url is not None:
+            c.execute("UPDATE llm_profiles SET base_url=?, updated_at=? WHERE id=?", (base_url, now, profile_id))
+        if model is not None:
+            c.execute("UPDATE llm_profiles SET model=?, updated_at=? WHERE id=?", (model, now, profile_id))
+        if api_key is not None:
+            c.execute("UPDATE llm_profiles SET api_key=?, updated_at=? WHERE id=?", (api_key, now, profile_id))
+        row = c.execute(
+            "SELECT id, name, base_url, model, api_key, is_active, updated_at "
+            "FROM llm_profiles WHERE id=?", (profile_id,)
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def db_delete_llm_profile(profile_id: int) -> int:
+    with _conn() as c:
+        cur = c.execute("DELETE FROM llm_profiles WHERE id=?", (profile_id,))
+        return cur.rowcount
+
+
+def db_activate_llm_profile(profile_id: int) -> dict[str, Any] | None:
+    """Mark profile as active, sync its values to llm_config, and clear other active flags."""
+    with _conn() as c:
+        row = c.execute(
+            "SELECT base_url, model, api_key FROM llm_profiles WHERE id=?", (profile_id,)
+        ).fetchone()
+        if not row:
+            return None
+        now = _now()
+        c.execute("UPDATE llm_profiles SET is_active=0, updated_at=? WHERE is_active=1", (now,))
+        c.execute("UPDATE llm_profiles SET is_active=1, updated_at=? WHERE id=?", (now, profile_id))
+        c.execute(
+            "UPDATE llm_config SET base_url=?, model=?, api_key=?, updated_at=? WHERE id=1",
+            (row["base_url"], row["model"], row["api_key"], now),
+        )
     return db_get_llm_config()
 
 

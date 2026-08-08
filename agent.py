@@ -154,6 +154,64 @@ def cleanup_orphaned_checkpoints() -> int:
         vconn.close()
 
 
+def delete_thread(thread_id: str) -> None:
+    """Permanently purge a thread's LangGraph checkpoint state (messages,
+    agent_log, pending_approval, etc.) — see tools.db.db_delete_thread() for
+    the companion thread-metadata row."""
+    conn = sqlite3.connect(str(_DB_PATH), check_same_thread=False)
+    try:
+        conn.execute("DELETE FROM checkpoints WHERE thread_id = ?", (thread_id,))
+        conn.execute("DELETE FROM writes WHERE thread_id = ?", (thread_id,))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+# agent_log event types already streamed live via the custom writer inside
+# _react_loop/config_node (see agents/nodes.py _emit). Skip them when replaying
+# a node's batched agent_log from stream_mode="updates" so the UI doesn't see
+# each tool call twice — once live, once again when the node returns.
+_LIVE_STREAMED_TYPES = {"tool_call", "tool_result", "approval_required"}
+
+
+def _drain_graph_stream(graph: Any, config: RunnableConfig, stream_input: Any) -> Iterator[tuple[str, str]]:
+    """Shared consumer for stream_agent_response / resume_after_approval.
+
+    Consumes both "custom" (live per-tool-call events pushed via
+    get_stream_writer() from inside nodes) and "updates" (per-node batched
+    output, needed for interrupts and final AI messages) stream modes so the
+    UI sees each tool call as it happens instead of only after the whole node
+    (which may loop over many tool calls) returns.
+    """
+    for mode, chunk in graph.stream(stream_input, config=config, stream_mode=["updates", "custom"]):
+        if mode == "custom":
+            entry = chunk
+            yield entry["event_type"], f"[{entry['source']}] {entry['content']}"
+            continue
+
+        for node_name, node_output in chunk.items():
+            if node_name == "__interrupt__":
+                # Human-in-the-loop pause
+                payload = node_output[0].value if node_output else {}
+                yield "approval_required", json.dumps(payload)
+                return
+
+            # Emit agent_log entries not already streamed live (e.g. routing)
+            for entry in node_output.get("agent_log") or []:
+                if entry["event_type"] in _LIVE_STREAMED_TYPES:
+                    continue
+                yield entry["event_type"], f"[{entry['source']}] {entry['content']}"
+
+            # Emit new AI messages
+            for msg in node_output.get("messages") or []:
+                from langchain_core.messages import AIMessage  # noqa: PLC0415
+                if isinstance(msg, AIMessage) and msg.content:
+                    import re
+                    content = re.sub(r"<think>.*?</think>", "", msg.content, flags=re.DOTALL).strip()
+                    if content:
+                        yield "ai", content
+
+
 def stream_agent_response(
     graph: Any,
     config: RunnableConfig,
@@ -171,31 +229,9 @@ def stream_agent_response(
       "error"            — unrecoverable error
     """
     try:
-        for chunk in graph.stream(
-            {"messages": [HumanMessage(content=message)]},
-            config=config,
-            stream_mode="updates",
-        ):
-            for node_name, node_output in chunk.items():
-                if node_name == "__interrupt__":
-                    # Human-in-the-loop pause
-                    payload = node_output[0].value if node_output else {}
-                    yield "approval_required", json.dumps(payload)
-                    return
-
-                # Emit agent_log entries as streaming events
-                for entry in node_output.get("agent_log") or []:
-                    yield entry["event_type"], f"[{entry['source']}] {entry['content']}"
-
-                # Emit new AI messages
-                for msg in node_output.get("messages") or []:
-                    from langchain_core.messages import AIMessage  # noqa: PLC0415
-                    if isinstance(msg, AIMessage) and msg.content:
-                        import re
-                        content = re.sub(r"<think>.*?</think>", "", msg.content, flags=re.DOTALL).strip()
-                        if content:
-                            yield "ai", content
-
+        yield from _drain_graph_stream(
+            graph, config, {"messages": [HumanMessage(content=message)]},
+        )
     except Exception as exc:
         yield "error", str(exc)
 
@@ -220,29 +256,7 @@ def resume_after_approval(
     May yield another 'approval_required' if a subsequent tool also needs approval.
     """
     try:
-        for chunk in graph.stream(
-            Command(resume=decision),
-            config=config,
-            stream_mode="updates",
-        ):
-            for node_name, node_output in chunk.items():
-                if node_name == "__interrupt__":
-                    payload = node_output[0].value if node_output else {}
-                    yield "approval_required", json.dumps(payload)
-                    return
-
-                for entry in node_output.get("agent_log") or []:
-                    yield entry["event_type"], f"[{entry['source']}] {entry['content']}"
-
-                for msg in node_output.get("messages") or []:
-                    from langchain_core.messages import AIMessage  # noqa: PLC0415
-                    if isinstance(msg, AIMessage) and msg.content:
-                        import re
-                        content = re.sub(r"<think>.*?</think>", "", msg.content,
-                                         flags=re.DOTALL).strip()
-                        if content:
-                            yield "ai", content
-
+        yield from _drain_graph_stream(graph, config, Command(resume=decision))
     except Exception as exc:
         yield "error", str(exc)
 
@@ -281,7 +295,9 @@ def get_agent_status() -> dict:
     }
 
 
-def test_llm_connection(model: str | None = None, base_url: str | None = None) -> dict:
+def test_llm_connection(
+    model: str | None = None, base_url: str | None = None, api_key: str | None = None,
+) -> dict:
     """Kirim satu pesan ping ke LLM untuk verifikasi konektivitas dari halaman Settings.
 
     Menggunakan pabrik LLM yang sama dengan agent (_make_llm) agar hasil test
@@ -294,6 +310,7 @@ def test_llm_connection(model: str | None = None, base_url: str | None = None) -
     cfg = db_get_llm_config()
     model = model or cfg.get("model") or os.getenv("OLLAMA_MODEL", "")
     base_url = base_url or cfg.get("base_url") or os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+    api_key = api_key or cfg.get("api_key") or os.getenv("OLLAMA_API_KEY", "")
     started = time.monotonic()
     try:
         llm = _make_llm(
@@ -302,6 +319,7 @@ def test_llm_connection(model: str | None = None, base_url: str | None = None) -
             num_predict=8,
             timeout=10,
             base_url=base_url,
+            api_key=api_key,
             agent_name="connection_test",
             max_retries=0,
         )

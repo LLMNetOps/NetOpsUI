@@ -30,7 +30,10 @@ FRONTEND_DIR = Path(__file__).parent / "frontend"
 import agent as _agent
 from tools.db import (
     db_create_thread, db_list_threads, db_touch_thread, db_archive_thread,
+    db_delete_thread, db_rename_thread,
     db_get_llm_config, db_set_llm_config,
+    db_list_llm_profiles, db_add_llm_profile, db_update_llm_profile,
+    db_delete_llm_profile, db_activate_llm_profile,
 )
 
 app = FastAPI(title="NetOps AI", docs_url=None, redoc_url=None)
@@ -78,17 +81,32 @@ async def _stream_events(gen: Iterator[tuple[str, str]]) -> AsyncGenerator[str, 
             loop.call_soon_threadsafe(queue.put_nowait, None)
 
     future = loop.run_in_executor(None, _produce)
-    while True:
-        try:
-            item = await asyncio.wait_for(asyncio.shield(queue.get()), timeout=3.0)
-        except asyncio.TimeoutError:
-            yield ": ping\n\n"  # SSE comment — keeps connection alive, browser ignores
-            continue
-        if item is None:
-            break
-        event_type, content = item
-        payload = json.dumps({"type": event_type, "content": content})
-        yield f"data: {payload}\n\n"
+    # Keep ONE queue.get() task alive across timeout/heartbeat cycles. The
+    # previous implementation (asyncio.wait_for(asyncio.shield(queue.get()),
+    # timeout=3.0)) started a brand new queue.get() call on every retry;
+    # shield kept the timed-out call alive in the background instead of
+    # cancelling it, so after a few heartbeats several orphaned queue.get()
+    # calls were all waiting on the same queue. An item could land on one of
+    # those orphaned calls instead of the one actually being awaited and get
+    # silently dropped — more likely the longer a run takes (more heartbeat
+    # cycles), which is exactly why the final "ai" message tended to vanish
+    # on longer multi-tool-call runs.
+    get_task = asyncio.ensure_future(queue.get())
+    try:
+        while True:
+            done, _pending = await asyncio.wait({get_task}, timeout=3.0)
+            if not done:
+                yield ": ping\n\n"  # SSE comment — keeps connection alive, browser ignores
+                continue
+            item = get_task.result()
+            get_task = asyncio.ensure_future(queue.get())
+            if item is None:
+                break
+            event_type, content = item
+            payload = json.dumps({"type": event_type, "content": content})
+            yield f"data: {payload}\n\n"
+    finally:
+        get_task.cancel()
     await future
 
 
@@ -184,6 +202,41 @@ def thread_messages(thread_id: str) -> dict:
     return {"messages": messages}
 
 
+@app.get("/api/threads/{thread_id}/log")
+def thread_log(thread_id: str) -> dict:
+    """Full audit trail for a thread: every routing/tool_call/tool_result/
+    approval entry with its real timestamp, read straight from LangGraph's
+    checkpoint store (agent_log is an append-only state channel — see
+    NetworkOpsState in agent.py). This is the durable, server-side audit
+    source; the browser's live 'Process Console' is only a UI convenience
+    cache and is not suitable for audit (per-browser, user-clearable)."""
+    graph, config = _get_or_create_session(thread_id)
+    state = graph.get_state(config)
+    agent_log = state.values.get("agent_log", []) if state and state.values else []
+    return {"log": agent_log}
+
+
+class RenameThreadRequest(BaseModel):
+    title: str
+
+
+@app.put("/api/threads/{thread_id}")
+def api_rename_thread(thread_id: str, req: RenameThreadRequest) -> dict:
+    title = req.title.strip()[:120] or "New Chat"
+    db_rename_thread(thread_id, title)
+    return {"status": "renamed", "thread_id": thread_id, "title": title}
+
+
+@app.delete("/api/threads/{thread_id}")
+def api_delete_thread(thread_id: str) -> dict:
+    """Permanently delete a thread — its metadata row and its LangGraph
+    checkpoint state (messages, agent_log, everything). Not recoverable."""
+    _agent.delete_thread(thread_id)
+    db_delete_thread(thread_id)
+    _sessions.pop(thread_id, None)
+    return {"status": "deleted", "thread_id": thread_id}
+
+
 # ── Additional API endpoints ──────────────────────────────────────────────────
 
 from agents.tools import TOOL_MAP
@@ -208,12 +261,13 @@ def api_reset(req: ResetRequest) -> dict:
 class LLMTestRequest(BaseModel):
     model: str | None = None
     base_url: str | None = None
+    api_key: str | None = None
 
 
 @app.post("/api/llm/test")
 def api_llm_test(req: LLMTestRequest) -> dict:
     """Ping LLM endpoint (Ollama/OpenAI-compatible) untuk verifikasi konektivitas dari Settings."""
-    return _agent.test_llm_connection(model=req.model, base_url=req.base_url)
+    return _agent.test_llm_connection(model=req.model, base_url=req.base_url, api_key=req.api_key)
 
 
 # ── Tools: Direct invocation ─────────────────────────────────────────────────
@@ -484,19 +538,98 @@ def api_backups_diff(router: str, file_a: str, file_b: str):
 
 @app.get("/api/config/llm")
 def api_config_llm() -> dict:
-    return db_get_llm_config()
+    cfg = db_get_llm_config()
+    api_key = cfg.pop("api_key", "") or ""
+    cfg["api_key_set"] = bool(api_key)
+    cfg["api_key_preview"] = f"••••{api_key[-4:]}" if len(api_key) >= 4 else ("••••" if api_key else "")
+    return cfg
 
 
 class UpdateLLMConfigRequest(BaseModel):
     base_url: str | None = None
     model: str | None = None
+    api_key: str | None = None
 
 
 @app.put("/api/config/llm")
 def api_config_update_llm(req: UpdateLLMConfigRequest) -> dict:
-    if req.base_url is None and req.model is None:
-        raise HTTPException(400, "base_url atau model harus diisi")
-    return db_set_llm_config(base_url=req.base_url, model=req.model)
+    if req.base_url is None and req.model is None and req.api_key is None:
+        raise HTTPException(400, "base_url, model, atau api_key harus diisi")
+    # Blank api_key means "leave unchanged" — frontend never re-sends the real
+    # secret, only a masked preview, so an empty string here isn't intentional clearing.
+    api_key = req.api_key if req.api_key else None
+    cfg = db_set_llm_config(base_url=req.base_url, model=req.model, api_key=api_key)
+    stored_key = cfg.pop("api_key", "") or ""
+    cfg["api_key_set"] = bool(stored_key)
+    cfg["api_key_preview"] = f"••••{stored_key[-4:]}" if len(stored_key) >= 4 else ("••••" if stored_key else "")
+    return cfg
+
+
+@app.get("/api/config/llm/profiles")
+def api_list_llm_profiles() -> dict:
+    profiles = db_list_llm_profiles()
+    for p in profiles:
+        key = p.pop("api_key", "") or ""
+        p["api_key_set"] = bool(key)
+        p["api_key_preview"] = f"••••{key[-4:]}" if len(key) >= 4 else ("••••" if key else "")
+    return {"profiles": profiles}
+
+
+class LLMProfileRequest(BaseModel):
+    name: str
+    base_url: str
+    model: str
+    api_key: str = ""
+
+
+@app.post("/api/config/llm/profiles")
+def api_add_llm_profile(req: LLMProfileRequest) -> dict:
+    try:
+        profile = db_add_llm_profile(req.name, req.base_url, req.model, req.api_key)
+        key = profile.pop("api_key", "") or ""
+        profile["api_key_set"] = bool(key)
+        profile["api_key_preview"] = f"••••{key[-4:]}" if len(key) >= 4 else ("••••" if key else "")
+        return profile
+    except Exception as e:
+        raise HTTPException(400, str(e))
+
+
+class UpdateLLMProfileRequest(BaseModel):
+    name: str | None = None
+    base_url: str | None = None
+    model: str | None = None
+    api_key: str | None = None
+
+
+@app.put("/api/config/llm/profiles/{profile_id}")
+def api_update_llm_profile(profile_id: int, req: UpdateLLMProfileRequest) -> dict:
+    api_key = req.api_key if req.api_key else None
+    profile = db_update_llm_profile(profile_id, req.name, req.base_url, req.model, api_key)
+    if not profile:
+        raise HTTPException(404, "Profile tidak ditemukan")
+    key = profile.pop("api_key", "") or ""
+    profile["api_key_set"] = bool(key)
+    profile["api_key_preview"] = f"••••{key[-4:]}" if len(key) >= 4 else ("••••" if key else "")
+    return profile
+
+
+@app.delete("/api/config/llm/profiles/{profile_id}")
+def api_delete_llm_profile(profile_id: int) -> dict:
+    rows = db_delete_llm_profile(profile_id)
+    if not rows:
+        raise HTTPException(404, "Profile tidak ditemukan")
+    return {"ok": True}
+
+
+@app.post("/api/config/llm/profiles/{profile_id}/activate")
+def api_activate_llm_profile(profile_id: int) -> dict:
+    cfg = db_activate_llm_profile(profile_id)
+    if not cfg:
+        raise HTTPException(404, "Profile tidak ditemukan")
+    key = cfg.pop("api_key", "") or ""
+    cfg["api_key_set"] = bool(key)
+    cfg["api_key_preview"] = f"••••{key[-4:]}" if len(key) >= 4 else ("••••" if key else "")
+    return cfg
 
 
 @app.get("/api/config/routers")
