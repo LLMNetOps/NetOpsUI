@@ -16,7 +16,7 @@ import { screenSettings } from './screens/settings.js';
 
 let _currentUnmount = null;
 
-async function navigate(screenId) {
+async function navigate(screenId, param) {
   if (_currentUnmount) { _currentUnmount(); _currentUnmount = null; }
 
   S.screen = screenId;
@@ -36,7 +36,7 @@ async function navigate(screenId) {
   switch (screenId) {
     case 'dashboard': await screenDashboard(c); break;
     case 'chat':
-      await screenChat(c);
+      await screenChat(c, param);
       _currentUnmount = chatUnmount;
       break;
     case 'network':   await screenNetwork(c); break;
@@ -68,8 +68,9 @@ function placeholderScreen(c, id) {
 }
 
 function onHash() {
-  const id = location.hash.slice(1) || 'dashboard';
-  navigate(id);
+  const raw = location.hash.slice(1) || 'dashboard';
+  const [id, ...rest] = raw.split('/');
+  navigate(id, rest.length ? decodeURIComponent(rest.join('/')) : undefined);
 }
 
 renderShell();

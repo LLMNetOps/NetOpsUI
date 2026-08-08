@@ -1,5 +1,5 @@
 import { apiGet, apiPost, apiPut, apiDelete } from '../api.js';
-import { $, esc, badge, pageHeader, loadingHtml, errorHtml } from '../utils.js';
+import { $, esc, badge, pageHeader, loadingHtml, errorHtml, confirmDialog, alertDialog } from '../utils.js';
 
 const KNOWN_DOMAINS = ['monitoring', 'routing', 'config', 'security', 'dhcp', 'netbox', 'report', 'general'];
 const PAGE_SIZE = 10;
@@ -344,37 +344,46 @@ async function editSkillByName(name) {
     const skill = await apiGet(`/api/skills/${encodeURIComponent(name)}`);
     openSkillModal(skill);
   } catch (e) {
-    alert('Gagal memuat skill: ' + e.message);
+    await alertDialog('Gagal memuat skill: ' + e.message, 'Terjadi Kesalahan');
   }
 }
 
 async function deleteSkillByName(name) {
-  if (!confirm(`Hapus skill "${name}"? Tindakan ini tidak bisa dibatalkan.`)) return;
+  const ok = await confirmDialog({
+    title: 'Hapus skill?', message: `Skill "${name}" akan dihapus permanen. Tindakan ini tidak bisa dibatalkan.`,
+    confirmLabel: 'Hapus', danger: true,
+  });
+  if (!ok) return;
   try {
     await apiDelete(`/api/skills/${encodeURIComponent(name)}`);
     await skillsRefresh();
   } catch (e) {
-    alert('Gagal menghapus: ' + e.message);
+    await alertDialog('Gagal menghapus: ' + e.message, 'Terjadi Kesalahan');
   }
 }
 
 async function approvePendingSkill(name) {
-  if (!confirm(`Approve skill "${name}"?`)) return;
+  const ok = await confirmDialog({ title: 'Approve skill?', message: `Skill pending "${name}" akan diaktifkan.`, confirmLabel: 'Approve' });
+  if (!ok) return;
   try {
     await apiPost(`/api/skills/pending/${encodeURIComponent(name)}/approve`, {});
     await skillsRefresh();
   } catch (e) {
-    alert('Gagal approve: ' + e.message);
+    await alertDialog('Gagal approve: ' + e.message, 'Terjadi Kesalahan');
   }
 }
 
 async function rejectPendingSkill(name) {
-  if (!confirm(`Reject dan hapus skill pending "${name}"?`)) return;
+  const ok = await confirmDialog({
+    title: 'Reject skill?', message: `Skill pending "${name}" akan dihapus.`,
+    confirmLabel: 'Reject', danger: true,
+  });
+  if (!ok) return;
   try {
     await apiPost(`/api/skills/pending/${encodeURIComponent(name)}/reject`, {});
     await skillsRefresh();
   } catch (e) {
-    alert('Gagal reject: ' + e.message);
+    await alertDialog('Gagal reject: ' + e.message, 'Terjadi Kesalahan');
   }
 }
 

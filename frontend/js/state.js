@@ -18,4 +18,7 @@ export const S = {
   systemStatus: null,
   toolCount: 0,
   elapsed: 0,
+  console: [],          // persistent process log — survives across turns/threads
+  consoleOpen: true,
+  consoleHeight: 240,
 };
