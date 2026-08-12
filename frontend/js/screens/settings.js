@@ -1,6 +1,5 @@
 import { apiGet, apiPost, apiPut, apiDelete } from '../api.js';
 import { $, esc, pageHeader, loadingHtml, errorHtml, preHtml, confirmDialog, alertDialog } from '../utils.js';
-import { AGENTS } from '../config.js';
 
 export async function screenSettings(c) {
   const tab = (id, label, active) =>
@@ -12,7 +11,6 @@ export async function screenSettings(c) {
       <button id="settings-save" class="px-4 py-2 bg-secondary text-white font-medium text-body-md rounded-md hover:bg-secondary/90 transition-colors">Save changes</button>`)}
     <div class="border-b border-outline-variant mb-stack_gap_lg flex gap-8" id="settings-tabs">
       ${tab('routers', 'Routers', true)}
-      ${tab('agents', 'Agents', false)}
       ${tab('environment', 'Environment', false)}
       ${tab('netbox', 'NetBox', false)}
       ${tab('memory', 'Memory', false)}
@@ -42,13 +40,6 @@ export async function screenSettings(c) {
             </tbody>
           </table>
         </div>
-      </div>
-    </div>
-
-    <!-- Agents -->
-    <div class="settings-pane hidden" id="settings-content-agents">
-      <div id="settings-agents-grid" class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-        ${loadingHtml('Memuat agent...')}
       </div>
     </div>
 
@@ -279,48 +270,6 @@ export async function screenSettings(c) {
       await loadRouters();
     } catch (e) { await alertDialog('Gagal menambah router: ' + e.message, 'Terjadi Kesalahan'); }
   };
-
-  const AGENT_ICONS = {};
-  AGENTS.forEach(a => { AGENT_ICONS[a.name] = a.icon; });
-
-  async function loadAgents() {
-    const grid = $('settings-agents-grid');
-    if (!grid) return;
-    try {
-      const r = await apiGet('/api/agents');
-      const agents = r.agents || [];
-      if (!agents.length) {
-        grid.innerHTML = `<p class="text-body-sm text-on-surface-variant">Tidak ada agent terdaftar.</p>`;
-        return;
-      }
-      grid.innerHTML = agents.map(a => `<div class="bg-surface-container-lowest border border-outline-variant rounded-lg p-stack_gap_md flex flex-col shadow-sm">
-        <div class="flex items-center gap-3 mb-4">
-          <div class="w-10 h-10 bg-primary/10 rounded flex items-center justify-center">
-            <span class="material-symbols-outlined text-primary">${AGENT_ICONS[a.name] || 'smart_toy'}</span>
-          </div>
-          <h4 class="font-title-sm text-title-sm text-primary">${esc(a.name)}${a.alias ? ` <span class="text-on-surface-variant font-normal text-body-sm">(${esc(a.alias)})</span>` : ''}</h4>
-        </div>
-        <div class="space-y-4 flex-1">
-          <p class="text-body-sm text-on-surface-variant">${esc(a.description || '')}</p>
-          <div><label class="text-label-caps text-on-surface-variant block mb-1">Base Model</label>
-            <input class="w-full text-body-sm bg-surface-container-low border border-outline-variant rounded p-2" type="text" value="${esc(a.model || '')}" readonly/></div>
-          <div class="grid grid-cols-2 gap-3">
-            <div><label class="text-label-caps text-on-surface-variant block mb-1">Context Length</label>
-              <input class="w-full text-body-sm bg-surface-container-low border border-outline-variant rounded p-2" type="number" value="${a.num_ctx || 0}" readonly/></div>
-            <div><label class="text-label-caps text-on-surface-variant block mb-1">Timeout (s)</label>
-              <input class="w-full text-body-sm bg-surface-container-low border border-outline-variant rounded p-2" type="number" value="${a.timeout || 0}" readonly/></div>
-          </div>
-          <div><label class="text-label-caps text-on-surface-variant block mb-1">Tools (${(a.tools || []).length})</label>
-            <div class="flex flex-wrap gap-2 mt-1">${(a.tools || []).map(t => `<span class="px-2 py-1 bg-surface-container border border-outline-variant rounded text-[11px] font-medium">${esc(t)}</span>`).join('') || '<span class="text-[11px] text-on-surface-variant">—</span>'}</div>
-          </div>
-          ${(a.skills || []).length ? `<div><label class="text-label-caps text-on-surface-variant block mb-1">Skills</label>
-            <div class="flex flex-wrap gap-2 mt-1">${a.skills.map(s => `<span class="px-2 py-1 bg-primary-container/40 border border-outline-variant rounded text-[11px] font-medium">${esc(s)}</span>`).join('')}</div></div>` : ''}
-        </div>
-      </div>`).join('');
-    } catch (e) {
-      grid.innerHTML = errorHtml('Gagal memuat agent: ' + e.message);
-    }
-  }
 
   async function loadMemory() {
     const body = $('settings-memory-body');
@@ -577,7 +526,6 @@ export async function screenSettings(c) {
   };
 
   loadRouters();
-  loadAgents();
   loadMemory();
   loadProfiles();
   loadEnv();

@@ -47,9 +47,27 @@ export function renderShell() {
   renderNav();
 }
 
+let _collapsedGroups = new Set();
+let _lastActiveGroup; // group of the screen that was active on the previous renderNav() call
+
 export function renderNav() {
   const nav = $('sidebar-nav');
   if (!nav) return;
+
+  const activeItem = NAV_ITEMS.find(i => i.id === S.screen);
+  const activeGroup = activeItem?.group;
+
+  // Accordion: navigating into a different group auto-collapses every other
+  // named group and opens the active one. Re-renders triggered by manually
+  // clicking a group header (same screen, no navigation) skip this reset so
+  // the user can still peek into a group without leaving the current page.
+  if (activeGroup !== _lastActiveGroup) {
+    _collapsedGroups = new Set(NAV_ITEMS.map(i => i.group).filter(Boolean));
+    if (activeGroup) _collapsedGroups.delete(activeGroup);
+    _lastActiveGroup = activeGroup;
+  }
+
+  let lastGroup;
   nav.innerHTML = NAV_ITEMS.map(item => {
     const active = S.screen === item.id;
     const base = 'flex items-center gap-3 px-3 py-2.5 transition-all duration-150 ease-in-out font-label-caps text-label-caps cursor-pointer';
@@ -57,11 +75,38 @@ export function renderNav() {
       ? 'text-surface-container-lowest bg-white/10 border-l-[3px] border-secondary-container'
       : 'text-surface-container-lowest/60 hover:bg-white/5 hover:text-surface-container-lowest border-l-[3px] border-transparent';
     const fill = active ? "font-variation-settings:'FILL' 1;" : '';
-    return `<a class="${base} ${cls}" data-screen="${item.id}">
+
+    // Consecutive items sharing a group are visually clustered; a group
+    // boundary (entering or leaving one) gets a divider, and entering a
+    // named group additionally gets a clickable, collapsible label.
+    let separator = '';
+    if (item.group !== lastGroup) {
+      let label = '';
+      if (item.group) {
+        const collapsed = _collapsedGroups.has(item.group);
+        label = `<button data-group-toggle="${esc(item.group)}" class="w-full flex items-center justify-between px-3 py-2.5 text-[10px] font-bold uppercase tracking-wider text-surface-container-lowest/40 hover:text-surface-container-lowest/70 hover:bg-white/5 rounded transition-colors cursor-pointer">
+          <span>${esc(item.group)}</span>
+          <span class="material-symbols-outlined text-[16px] transition-transform ${collapsed ? '-rotate-90' : ''}">expand_more</span>
+        </button>`;
+      }
+      separator = `<div class="mt-3 pt-2 border-t border-white/10">${label}</div>`;
+    }
+    lastGroup = item.group;
+
+    const hiddenCls = item.group && _collapsedGroups.has(item.group) ? 'hidden' : '';
+    return `${separator}<a class="${base} ${cls} ${hiddenCls}" data-screen="${item.id}">
       <span class="material-symbols-outlined" style="${fill}">${item.icon}</span><span>${item.label}</span>
     </a>`;
   }).join('');
+
   nav.onclick = e => {
+    const toggle = e.target.closest('[data-group-toggle]');
+    if (toggle) {
+      const g = toggle.dataset.groupToggle;
+      if (_collapsedGroups.has(g)) _collapsedGroups.delete(g); else _collapsedGroups.add(g);
+      renderNav();
+      return;
+    }
     const a = e.target.closest('[data-screen]');
     if (a) location.hash = a.dataset.screen;
   };

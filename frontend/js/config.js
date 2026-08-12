@@ -9,16 +9,20 @@ export const AGENTS = [
   { name:'validasi_agent', alias:'wati',    role:'validasi',    icon:'verified' },
 ];
 
+// Consecutive items sharing the same `group` are rendered together under a
+// section header in the sidebar (see shell.js renderNav()); items without a
+// `group` render at the root with no header. Order here is display order.
 export const NAV_ITEMS = [
   { id:'dashboard', label:'Dashboard',  icon:'dashboard' },
   { id:'chat',      label:'AI Chat',    icon:'chat_bubble' },
-  { id:'network',   label:'Network',    icon:'hub' },
-  { id:'dhcp',      label:'DHCP',       icon:'router' },
-  { id:'netbox',    label:'NetBox',     icon:'storage' },
-  { id:'skills',    label:'Skills',     icon:'psychology' },
-  { id:'reports',   label:'Reports',    icon:'assessment' },
-  { id:'backups',   label:'Backups',    icon:'backup' },
-  { id:'metrics',   label:'Metrics',    icon:'insights' },
+  { id:'network',   label:'Network',    icon:'hub',        group:'Infrastructure' },
+  { id:'dhcp',      label:'DHCP',       icon:'router',     group:'Infrastructure' },
+  { id:'netbox',    label:'NetBox',     icon:'storage',    group:'Infrastructure' },
+  { id:'skills',    label:'Skills',     icon:'psychology', group:'Agent Platform' },
+  { id:'agents',    label:'Agents',     icon:'smart_toy',  group:'Agent Platform' },
+  { id:'reports',   label:'Reports',    icon:'assessment', group:'Insights' },
+  { id:'backups',   label:'Backups',    icon:'backup',     group:'Insights' },
+  { id:'metrics',   label:'Metrics',    icon:'insights',   group:'Insights' },
   { id:'settings',  label:'Settings',   icon:'settings' },
 ];
 

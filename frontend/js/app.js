@@ -9,6 +9,7 @@ import { screenNetwork } from './screens/network.js';
 import { screenDHCP } from './screens/dhcp.js';
 import { screenNetBox } from './screens/netbox.js';
 import { screenSkills } from './screens/skills.js';
+import { screenAgents } from './screens/agents.js';
 import { screenReports } from './screens/reports.js';
 import { screenReports as screenBackups } from './screens/reports.js';
 import { screenMetrics } from './screens/metrics.js';
@@ -43,6 +44,7 @@ async function navigate(screenId, param) {
     case 'dhcp':      await screenDHCP(c); break;
     case 'netbox':    await screenNetBox(c); break;
     case 'skills':    await screenSkills(c); break;
+    case 'agents':    await screenAgents(c, param); break;
     case 'reports':   await screenReports(c); break;
     case 'backups':   await screenBackups(c); break;
     case 'metrics':   await screenMetrics(c); break;

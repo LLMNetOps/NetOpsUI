@@ -16,6 +16,7 @@ import uuid
 from pathlib import Path
 from typing import Any, AsyncGenerator, Iterator
 
+import yaml
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
@@ -26,6 +27,14 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s  %(message)s")
 log = logging.getLogger(__name__)
 
 FRONTEND_DIR = Path(__file__).parent / "frontend"
+
+
+class _IndentedYamlDumper(yaml.Dumper):
+    """Indents list items under their parent key (PyYAML's default doesn't),
+    matching the style already used by every hand-authored .md frontmatter
+    in this repo — keeps round-tripped saves diff-clean against originals."""
+    def increase_indent(self, flow=False, indentless=False):
+        return super().increase_indent(flow, False)
 
 import agent as _agent
 from tools.db import (
@@ -281,6 +290,11 @@ class SearchRequest(BaseModel):
     query: str
 
 
+@app.get("/api/tool-names")
+def api_tool_names():
+    return {"tools": sorted(TOOL_MAP.keys())}
+
+
 @app.get("/api/tools/routers")
 def api_routers():
     return {"result": TOOL_MAP["list_routers"].invoke({})}
@@ -353,6 +367,23 @@ def api_router_log(req: RouterRequest):
 
 SKILLS_DIR = FRONTEND_DIR.parent / "skills"
 PENDING_DIR = SKILLS_DIR / ".pending"
+# Kept outside skills/ (which SkillLibrary rglobs recursively) so stashed
+# defaults are never mistaken for real skills or trigger watcher churn.
+SKILLS_DEFAULTS_DIR = FRONTEND_DIR.parent / "data" / "defaults" / "skills"
+
+
+def _stash_default(path: Path, defaults_dir: Path) -> None:
+    """Back up the pristine (repo-shipped) file the first time it's edited.
+
+    Subsequent edits are no-ops here so the original default is preserved
+    permanently, letting the UI offer a "restore to default" action.
+    """
+    if not path.exists():
+        return
+    defaults_dir.mkdir(parents=True, exist_ok=True)
+    stash = defaults_dir / path.name
+    if not stash.exists():
+        stash.write_text(path.read_text(encoding="utf-8"), encoding="utf-8")
 
 
 class SkillRequest(BaseModel):
@@ -366,7 +397,6 @@ class SkillRequest(BaseModel):
 
 
 def _skill_markdown(req: "SkillRequest") -> str:
-    import yaml
     fm = {
         "name": req.name,
         "domain": req.domain,
@@ -375,14 +405,17 @@ def _skill_markdown(req: "SkillRequest") -> str:
         "approval_required": req.approval_required,
         "enabled": req.enabled,
     }
-    fm_yaml = yaml.dump(fm, sort_keys=False, default_flow_style=False, allow_unicode=True)
+    fm_yaml = yaml.dump(fm, Dumper=_IndentedYamlDumper, sort_keys=False, default_flow_style=False, allow_unicode=True)
     return f"---\n{fm_yaml}---\n\n{req.body.strip()}\n"
 
 
 @app.get("/api/skills")
 def api_skills():
     from agent import _skill_lib
-    return {"skills": [s.summary() for s in _skill_lib.list_all()]}
+    return {"skills": [
+        {**s.summary(), "has_default": (SKILLS_DEFAULTS_DIR / f"{s.name}.md").exists()}
+        for s in _skill_lib.list_all()
+    ]}
 
 
 @app.get("/api/skills/pending")
@@ -401,7 +434,10 @@ def api_skill_detail(name: str):
     skill = _skill_lib.get_by_name(name)
     if not skill:
         raise HTTPException(404, f"Skill '{name}' tidak ditemukan.")
-    return {**skill.summary(), "body": skill.body, "path": str(skill.path)}
+    return {
+        **skill.summary(), "body": skill.body, "path": str(skill.path),
+        "has_default": (SKILLS_DEFAULTS_DIR / f"{name}.md").exists(),
+    }
 
 
 @app.post("/api/skills")
@@ -424,6 +460,7 @@ def api_update_skill(name: str, req: SkillRequest):
     if not skill:
         raise HTTPException(404, f"Skill '{name}' tidak ditemukan.")
     old_path = skill.path
+    _stash_default(old_path, SKILLS_DEFAULTS_DIR)
     target_dir = SKILLS_DIR / req.domain
     target_dir.mkdir(parents=True, exist_ok=True)
     new_path = target_dir / f"{req.name}.md"
@@ -433,6 +470,30 @@ def api_update_skill(name: str, req: SkillRequest):
         old_path.unlink(missing_ok=True)
         _skill_lib._reload_file(old_path)
     return {"status": "updated", "name": req.name, "path": str(new_path)}
+
+
+@app.post("/api/skills/{name}/restore")
+def api_restore_skill(name: str):
+    from agent import _skill_lib
+    stash = SKILLS_DEFAULTS_DIR / f"{name}.md"
+    if not stash.exists():
+        raise HTTPException(400, f"Skill '{name}' belum pernah diubah dari default.")
+    stash_text = stash.read_text(encoding="utf-8")
+    fm_end = stash_text.find("---", 3)
+    fm = yaml.safe_load(stash_text[3:fm_end]) or {} if fm_end != -1 else {}
+    domain = fm.get("domain", "general")
+    target_dir = SKILLS_DIR / domain
+    target_dir.mkdir(parents=True, exist_ok=True)
+    target = target_dir / f"{name}.md"
+
+    skill = _skill_lib.get_by_name(name)
+    if skill and skill.path != target:
+        skill.path.unlink(missing_ok=True)
+        _skill_lib._reload_file(skill.path)
+
+    target.write_text(stash_text, encoding="utf-8")
+    _skill_lib._reload_file(target)
+    return {"status": "restored", "name": name, "path": str(target)}
 
 
 @app.delete("/api/skills/{name}")
@@ -449,7 +510,6 @@ def api_delete_skill(name: str):
 
 @app.post("/api/skills/pending/{name}/approve")
 def api_approve_pending_skill(name: str):
-    import yaml
     from agent import _skill_lib
     matches = list(PENDING_DIR.rglob(f"{name}.md"))
     if not matches:
@@ -491,6 +551,12 @@ def api_reject_pending_skill(name: str):
 
 # ── Agents ───────────────────────────────────────────────────────────────────
 
+# Kept outside agents/definitions/ for consistency with SKILLS_DEFAULTS_DIR
+# (AgentLoader only globs top-level *.md non-recursively, so this isn't
+# strictly required for agents, but keeps both stash stores in one place).
+AGENTS_DEFAULTS_DIR = FRONTEND_DIR.parent / "data" / "defaults" / "agents"
+
+
 @app.get("/api/agents")
 def api_agents():
     from agents.nodes import _agent_loader
@@ -500,9 +566,91 @@ def api_agents():
             "model": d.model, "num_ctx": d.num_ctx, "num_predict": d.num_predict,
             "context_window": d.context_window, "timeout": d.timeout,
             "tools": d.tools, "skills": d.skills, "reasoning": d.reasoning,
+            "enabled": d.enabled,
+            "has_default": (AGENTS_DEFAULTS_DIR / f"{d.name}.md").exists(),
         }
-        for d in _agent_loader.all()
+        for d in _agent_loader.all(include_disabled=True)
     ]}
+
+
+@app.get("/api/agents/{name}")
+def api_agent_detail(name: str):
+    from agents.nodes import _agent_loader
+    defn = _agent_loader.get(name)
+    if not defn:
+        raise HTTPException(404, f"Agent '{name}' tidak ditemukan.")
+    return {
+        "name": defn.name, "alias": defn.alias, "description": defn.description,
+        "model": defn.model, "tools": defn.tools, "skills": defn.skills,
+        "handoff_to": defn.handoff_to, "approval_required_tools": defn.approval_required_tools,
+        "num_ctx": defn.num_ctx, "num_predict": defn.num_predict,
+        "context_window": defn.context_window, "timeout": defn.timeout,
+        "ollama_host": defn.ollama_host, "reasoning": defn.reasoning,
+        "max_iters": defn.max_iters, "enabled": defn.enabled,
+        "body": defn.body,
+        "has_default": (AGENTS_DEFAULTS_DIR / f"{name}.md").exists(),
+    }
+
+
+class AgentUpdateRequest(BaseModel):
+    description: str
+    model: str
+    tools: list[str] = []
+    skills: list[str] = []
+    num_ctx: int = 8192
+    num_predict: int = 2048
+    context_window: int = 10
+    timeout: int = 300
+    ollama_host: str = ""
+    reasoning: bool = False
+    max_iters: int = 20
+    enabled: bool = True
+    body: str = ""
+
+
+@app.put("/api/agents/{name}")
+def api_update_agent(name: str, req: AgentUpdateRequest):
+    from agents.nodes import _agent_loader
+    defn = _agent_loader.get(name)
+    if not defn:
+        raise HTTPException(404, f"Agent '{name}' tidak ditemukan.")
+    path = defn.path
+    _stash_default(path, AGENTS_DEFAULTS_DIR)
+    text = path.read_text(encoding="utf-8")
+    end = text.find("---", 3)
+    fm = yaml.safe_load(text[3:end].strip()) or {}
+    fm.update({
+        "description": req.description,
+        "model": req.model,
+        "tools": req.tools,
+        "skills": req.skills,
+        "num_ctx": req.num_ctx,
+        "num_predict": req.num_predict,
+        "context_window": req.context_window,
+        "timeout": req.timeout,
+        "ollama_host": req.ollama_host,
+        "reasoning": req.reasoning,
+        "max_iters": req.max_iters,
+        "enabled": req.enabled,
+    })
+    fm_yaml = yaml.dump(fm, Dumper=_IndentedYamlDumper, sort_keys=False, default_flow_style=False, allow_unicode=True)
+    path.write_text(f"---\n{fm_yaml}---\n\n{req.body.strip()}\n", encoding="utf-8")
+    _agent_loader.reload()
+    return {"status": "updated", "name": name, "restart_required": True}
+
+
+@app.post("/api/agents/{name}/restore")
+def api_restore_agent(name: str):
+    from agents.nodes import _agent_loader
+    defn = _agent_loader.get(name)
+    if not defn:
+        raise HTTPException(404, f"Agent '{name}' tidak ditemukan.")
+    stash = AGENTS_DEFAULTS_DIR / f"{name}.md"
+    if not stash.exists():
+        raise HTTPException(400, f"Agent '{name}' belum pernah diubah dari default.")
+    defn.path.write_text(stash.read_text(encoding="utf-8"), encoding="utf-8")
+    _agent_loader.reload()
+    return {"status": "restored", "name": name, "restart_required": True}
 
 
 # ── Reports & Backups ────────────────────────────────────────────────────────
