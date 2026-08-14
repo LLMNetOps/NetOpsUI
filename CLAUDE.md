@@ -35,7 +35,7 @@ tui.py  →  agent.py (public API)  →  agents/nodes.py  →  tools/*.py  →  
 
 - **`agent.py`** — hanya public API: `create_agent()`, `stream_agent_response()`, `resume_after_approval()`. Zero LLM logic.
 - **`agents/nodes.py`** — semua node LangGraph: `supervisor_node`, `_make_specialist_node()` factory, `config_node`.
-- **`agents/loader.py`** — baca `agents/definitions/*.md`, parse frontmatter YAML jadi `AgentDefinition`.
+- **`agents/loader.py`** — baca agent definitions dari `data/netops.db` (tabel `agent_definitions`), bangun `AgentDefinition`. `agents/definitions/*.md` hanya seed satu-kali (lihat `tools/db.py::_migrate_agents_from_md_if_empty`) — tidak pernah dibaca lagi setelah baris pertama masuk DB.
 - **`agents/tools.py`** — `TOOL_MAP: dict[str, tool]` — registry semua tools per domain.
 - **`tools/*.py`** — 31+ atomic `@tool` functions, semua SSH ke MikroTik.
 - **`skills/library.py`** — `SkillLibrary` dengan hot reload via `watchfiles`.
@@ -46,7 +46,9 @@ tui.py  →  agent.py (public API)  →  agents/nodes.py  →  tools/*.py  →  
 
 ## Agent Definitions (`agents/definitions/*.md`)
 
-Setiap file Markdown mendefinisikan satu specialist agent. Frontmatter YAML:
+Setiap file Markdown mendefinisikan satu specialist agent — tapi ini hanya **seed awal**. Saat `data/netops.db` pertama kali dibuat, isi file-file ini di-migrasi satu kali ke tabel `agent_definitions`; setelah itu runtime (`AgentLoader`) selalu baca dari DB, dan edit lewat UI (`PUT /api/agents/{name}`) menulis ke DB, **bukan** ke file ini. File `.md` di repo tidak pernah berubah lagi secara otomatis — aman di-commit tanpa noise dari hasil edit operator. `POST /api/agents/{name}/restore` mengembalikan field yang bisa diedit ke isi asli file seed (disimpan verbatim di kolom `default_raw` saat migrasi).
+
+Frontmatter YAML (referensi format seed):
 
 ```yaml
 ---

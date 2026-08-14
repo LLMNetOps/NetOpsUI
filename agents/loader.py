@@ -1,17 +1,19 @@
-"""AgentLoader: load dan validasi agent definitions dari file Markdown."""
+"""AgentLoader: load dan validasi agent definitions dari data/netops.db.
+
+agents/definitions/*.md tetap ada di repo sebagai seed satu-kali (lihat
+tools.db._migrate_agents_from_md_if_empty) — setelah baris pertama masuk ke
+tabel agent_definitions, file-file itu tidak pernah dibaca lagi saat runtime.
+Edit via UI (PUT /api/agents/{name}) menulis ke DB, bukan ke file repo.
+"""
 
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
-import yaml
-
 logger = logging.getLogger(__name__)
-
-DEFINITIONS_DIR = Path(__file__).parent / "definitions"
 
 
 @dataclass
@@ -25,8 +27,8 @@ class AgentDefinition:
     handoff_to: list[str]
     approval_required_tools: list[str]
     body: str
-    path: Path
-    # LLM tuning params (per-agent, from frontmatter)
+    path: Optional[Path] = None
+    # LLM tuning params (per-agent, dari DB)
     num_ctx: int = 8192
     num_predict: int = 2048
     context_window: int = 10
@@ -39,90 +41,49 @@ class AgentDefinition:
     reasoning: bool = False
     # Max ReAct iterations (tool calls) before forced summary
     max_iters: int = 20
-    # Set False di frontmatter untuk nonaktifkan agent tanpa hapus file
+    # Set False untuk nonaktifkan agent tanpa hapus row
     enabled: bool = True
 
 
-def _parse_definition_file(path: Path) -> Optional[AgentDefinition]:
-    """Parse a single agent definition Markdown file. Returns None on error."""
-    try:
-        text = path.read_text(encoding="utf-8")
-    except OSError as e:
-        logger.warning("Cannot read agent definition %s: %s", path, e)
-        return None
-
-    if not text.startswith("---"):
-        logger.warning("Agent definition %s missing frontmatter, skipping", path.name)
-        return None
-
-    end = text.find("---", 3)
-    if end == -1:
-        logger.warning("Agent definition %s has unclosed frontmatter, skipping", path.name)
-        return None
-
-    frontmatter_raw = text[3:end].strip()
-    body = text[end + 3:].strip()
-
-    try:
-        fm = yaml.safe_load(frontmatter_raw) or {}
-    except yaml.YAMLError as e:
-        logger.warning("Agent definition %s YAML parse error: %s", path.name, e)
-        return None
-
-    name = fm.get("name", path.stem)
-    if not isinstance(name, str) or not name:
-        name = path.stem
-
-    return AgentDefinition(
-        name=name,
-        alias=str(fm.get("alias", name)),
-        description=str(fm.get("description", "")),
-        model=str(fm.get("model", "")),
-        tools=[str(t) for t in (fm.get("tools") or [])],
-        skills=[str(s) for s in (fm.get("skills") or [])],
-        handoff_to=[str(a) for a in (fm.get("handoff_to") or [])],
-        approval_required_tools=[str(t) for t in (fm.get("approval_required_tools") or [])],
-        body=body,
-        path=path,
-        num_ctx=int(fm.get("num_ctx", 8192)),
-        num_predict=int(fm.get("num_predict", 2048)),
-        context_window=int(fm.get("context_window", 10)),
-        timeout=int(fm.get("timeout", 300)),
-        chat_prompt=str(fm.get("chat_prompt", "")),
-        ollama_host=str(fm.get("ollama_host", "")),
-        reasoning=bool(fm.get("reasoning", False)),
-        max_iters=int(fm.get("max_iters", 20)),
-        enabled=bool(fm.get("enabled", True)),
-    )
-
-
 class AgentLoader:
-    """Registry of agent definitions loaded from Markdown files."""
+    """Registry of agent definitions loaded from data/netops.db."""
 
-    def __init__(self, definitions_dir: Path = DEFINITIONS_DIR) -> None:
-        self._dir = definitions_dir
+    def __init__(self) -> None:
         self._agents: dict[str, AgentDefinition] = {}
         self._load_all()
 
     # ── Loading ────────────────────────────────────────────────────────────
 
     def _load_all(self) -> None:
+        from tools.db import db_list_agents  # noqa: PLC0415
+
         loaded: dict[str, AgentDefinition] = {}
-        for md_file in sorted(self._dir.glob("*.md")):
-            defn = _parse_definition_file(md_file)
-            if defn:
-                if defn.name in loaded:
-                    logger.warning(
-                        "Duplicate agent name '%s' in %s (already from %s) — skipping",
-                        defn.name, md_file.name, loaded[defn.name].path.name,
-                    )
-                else:
-                    loaded[defn.name] = defn
+        for row in db_list_agents():
+            loaded[row["name"]] = AgentDefinition(
+                name=row["name"],
+                alias=row["alias"] or row["name"],
+                description=row["description"],
+                model=row["model"],
+                tools=row["tools"],
+                skills=row["skills"],
+                handoff_to=row["handoff_to"],
+                approval_required_tools=row["approval_required_tools"],
+                body=row["body"],
+                num_ctx=row["num_ctx"],
+                num_predict=row["num_predict"],
+                context_window=row["context_window"],
+                timeout=row["timeout"],
+                chat_prompt=row["chat_prompt"],
+                ollama_host=row["ollama_host"],
+                reasoning=row["reasoning"],
+                max_iters=row["max_iters"],
+                enabled=row["enabled"],
+            )
         self._agents = loaded
-        logger.info("AgentLoader: loaded %d agent definitions from %s", len(loaded), self._dir)
+        logger.info("AgentLoader: loaded %d agent definitions from DB", len(loaded))
 
     def reload(self) -> None:
-        """Re-read all definition files from disk."""
+        """Re-read all definitions from the DB."""
         self._load_all()
 
     # ── Validation ─────────────────────────────────────────────────────────
@@ -195,7 +156,7 @@ class AgentLoader:
         return defn.skills if defn else []
 
     def system_prompt(self, agent_name: str) -> str:
-        """Return the body (system prompt) from the definition file."""
+        """Return the body (system prompt) from the definition."""
         defn = self._agents.get(agent_name)
         return defn.body if defn else ""
 
@@ -203,4 +164,4 @@ class AgentLoader:
         return len(self._agents)
 
     def __repr__(self) -> str:
-        return f"AgentLoader(agents={len(self)}, dir={self._dir})"
+        return f"AgentLoader(agents={len(self)})"

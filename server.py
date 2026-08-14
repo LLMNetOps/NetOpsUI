@@ -551,46 +551,31 @@ def api_reject_pending_skill(name: str):
 
 
 # ── Agents ───────────────────────────────────────────────────────────────────
-
-# Kept outside agents/definitions/ for consistency with SKILLS_DEFAULTS_DIR
-# (AgentLoader only globs top-level *.md non-recursively, so this isn't
-# strictly required for agents, but keeps both stash stores in one place).
-AGENTS_DEFAULTS_DIR = FRONTEND_DIR.parent / "data" / "defaults" / "agents"
-
+# Live-edited via data/netops.db (tools.db.db_update_agent) — agents/definitions/*.md
+# is only the one-time seed and is never written back to. See tools/db.py docstring.
 
 @app.get("/api/agents")
 def api_agents():
-    from agents.nodes import _agent_loader
+    from tools.db import db_list_agents
     return {"agents": [
         {
-            "name": d.name, "alias": d.alias, "description": d.description,
-            "model": d.model, "num_ctx": d.num_ctx, "num_predict": d.num_predict,
-            "context_window": d.context_window, "timeout": d.timeout,
-            "tools": d.tools, "skills": d.skills, "reasoning": d.reasoning,
-            "enabled": d.enabled,
-            "has_default": (AGENTS_DEFAULTS_DIR / f"{d.name}.md").exists(),
+            "name": d["name"], "alias": d["alias"], "description": d["description"],
+            "model": d["model"], "num_ctx": d["num_ctx"], "num_predict": d["num_predict"],
+            "context_window": d["context_window"], "timeout": d["timeout"],
+            "tools": d["tools"], "skills": d["skills"], "reasoning": d["reasoning"],
+            "enabled": d["enabled"], "has_default": d["has_default"],
         }
-        for d in _agent_loader.all(include_disabled=True)
+        for d in db_list_agents()
     ]}
 
 
 @app.get("/api/agents/{name}")
 def api_agent_detail(name: str):
-    from agents.nodes import _agent_loader
-    defn = _agent_loader.get(name)
+    from tools.db import db_get_agent
+    defn = db_get_agent(name)
     if not defn:
         raise HTTPException(404, f"Agent '{name}' tidak ditemukan.")
-    return {
-        "name": defn.name, "alias": defn.alias, "description": defn.description,
-        "model": defn.model, "tools": defn.tools, "skills": defn.skills,
-        "handoff_to": defn.handoff_to, "approval_required_tools": defn.approval_required_tools,
-        "num_ctx": defn.num_ctx, "num_predict": defn.num_predict,
-        "context_window": defn.context_window, "timeout": defn.timeout,
-        "ollama_host": defn.ollama_host, "reasoning": defn.reasoning,
-        "max_iters": defn.max_iters, "enabled": defn.enabled,
-        "body": defn.body,
-        "has_default": (AGENTS_DEFAULTS_DIR / f"{name}.md").exists(),
-    }
+    return defn
 
 
 class AgentUpdateRequest(BaseModel):
@@ -611,45 +596,31 @@ class AgentUpdateRequest(BaseModel):
 
 @app.put("/api/agents/{name}")
 def api_update_agent(name: str, req: AgentUpdateRequest):
+    from tools.db import db_get_agent, db_update_agent
     from agents.nodes import _agent_loader
-    defn = _agent_loader.get(name)
-    if not defn:
+    if not db_get_agent(name):
         raise HTTPException(404, f"Agent '{name}' tidak ditemukan.")
-    path = defn.path
-    _stash_default(path, AGENTS_DEFAULTS_DIR)
-    text = path.read_text(encoding="utf-8")
-    end = text.find("---", 3)
-    fm = yaml.safe_load(text[3:end].strip()) or {}
-    fm.update({
-        "description": req.description,
-        "model": req.model,
-        "tools": req.tools,
-        "skills": req.skills,
-        "num_ctx": req.num_ctx,
-        "num_predict": req.num_predict,
-        "context_window": req.context_window,
-        "timeout": req.timeout,
-        "ollama_host": req.ollama_host,
-        "reasoning": req.reasoning,
-        "max_iters": req.max_iters,
-        "enabled": req.enabled,
-    })
-    fm_yaml = yaml.dump(fm, Dumper=_IndentedYamlDumper, sort_keys=False, default_flow_style=False, allow_unicode=True)
-    path.write_text(f"---\n{fm_yaml}---\n\n{req.body.strip()}\n", encoding="utf-8")
+    db_update_agent(
+        name,
+        description=req.description, model=req.model, tools=req.tools, skills=req.skills,
+        num_ctx=req.num_ctx, num_predict=req.num_predict, context_window=req.context_window,
+        timeout=req.timeout, ollama_host=req.ollama_host, reasoning=req.reasoning,
+        max_iters=req.max_iters, enabled=req.enabled, body=req.body.strip(),
+    )
     _agent_loader.reload()
     return {"status": "updated", "name": name, "restart_required": True}
 
 
 @app.post("/api/agents/{name}/restore")
 def api_restore_agent(name: str):
+    from tools.db import db_get_agent, db_restore_agent_default
     from agents.nodes import _agent_loader
-    defn = _agent_loader.get(name)
+    defn = db_get_agent(name)
     if not defn:
         raise HTTPException(404, f"Agent '{name}' tidak ditemukan.")
-    stash = AGENTS_DEFAULTS_DIR / f"{name}.md"
-    if not stash.exists():
+    if not defn["has_default"]:
         raise HTTPException(400, f"Agent '{name}' belum pernah diubah dari default.")
-    defn.path.write_text(stash.read_text(encoding="utf-8"), encoding="utf-8")
+    db_restore_agent_default(name)
     _agent_loader.reload()
     return {"status": "restored", "name": name, "restart_required": True}
 

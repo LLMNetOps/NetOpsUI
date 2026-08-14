@@ -1,12 +1,15 @@
 """Consolidated SQLite database for app-owned structured data.
 
 Tables:
-  routers      — router inventory (replaces config.yaml routers: section);
-                 also carries an optional per-node SSH username/password override
-  ssh_config   — global default SSH credentials (replaces config.yaml ssh: section)
-  threads      — chat session metadata (persistent across server restarts)
-  llm_config   — global Ollama base_url/model, editable from Settings → Environment
-  llm_profiles — saved LLM connection profiles; activating one syncs to llm_config
+  routers            — router inventory (replaces config.yaml routers: section);
+                        also carries an optional per-node SSH username/password override
+  ssh_config         — global default SSH credentials (replaces config.yaml ssh: section)
+  threads            — chat session metadata (persistent across server restarts)
+  llm_config         — global Ollama base_url/model, editable from Settings → Environment
+  llm_profiles       — saved LLM connection profiles; activating one syncs to llm_config
+  agent_definitions  — specialist agent config (replaces live reads of agents/definitions/*.md);
+                        those .md files are only the one-time seed — editing an agent via the
+                        UI writes here, never back to the repo-tracked files
 
 DB file: data/netops.db
 Does NOT touch: data/checkpoints.db (LangGraph-owned) or data/memory.db (agent_memory.py).
@@ -27,6 +30,7 @@ logger = logging.getLogger(__name__)
 _WORKDIR = Path(__file__).parent.parent
 _DB_PATH = _WORKDIR / "data" / "netops.db"
 _CONFIG_FILE = _WORKDIR / "config.yaml"   # read-only reference for one-time migration
+_AGENTS_DIR = _WORKDIR / "agents" / "definitions"   # read-only reference for one-time seed
 _WIB = timezone(timedelta(hours=7))
 
 
@@ -95,6 +99,30 @@ def _init_db() -> None:
                 is_active   INTEGER NOT NULL DEFAULT 0,
                 created_at  TEXT NOT NULL,
                 updated_at  TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS agent_definitions (
+                name                     TEXT PRIMARY KEY,
+                alias                    TEXT NOT NULL DEFAULT '',
+                description              TEXT NOT NULL DEFAULT '',
+                model                    TEXT NOT NULL DEFAULT '',
+                tools                    TEXT NOT NULL DEFAULT '[]',
+                skills                   TEXT NOT NULL DEFAULT '[]',
+                handoff_to               TEXT NOT NULL DEFAULT '[]',
+                approval_required_tools  TEXT NOT NULL DEFAULT '[]',
+                body                     TEXT NOT NULL DEFAULT '',
+                num_ctx                  INTEGER NOT NULL DEFAULT 8192,
+                num_predict              INTEGER NOT NULL DEFAULT 2048,
+                context_window           INTEGER NOT NULL DEFAULT 10,
+                timeout                  INTEGER NOT NULL DEFAULT 300,
+                chat_prompt              TEXT NOT NULL DEFAULT '',
+                ollama_host              TEXT NOT NULL DEFAULT '',
+                reasoning                INTEGER NOT NULL DEFAULT 0,
+                max_iters                INTEGER NOT NULL DEFAULT 20,
+                enabled                  INTEGER NOT NULL DEFAULT 1,
+                default_raw              TEXT NOT NULL DEFAULT '',
+                created_at               TEXT NOT NULL,
+                updated_at               TEXT NOT NULL
             );
         """)
         cols = {row[1] for row in c.execute("PRAGMA table_info(llm_config)")}
@@ -215,6 +243,91 @@ def _migrate_ssh_from_yaml_if_empty() -> None:
                         (override["username"], override["password"], now, row["name"]),
                     )
     logger.info("[db] Migrated SSH config from config.yaml → netops.db")
+
+
+def _parse_agent_md(raw: str, fallback_name: str) -> dict[str, Any] | None:
+    """Parse an agent definition Markdown file's frontmatter + body. Returns
+    None if malformed. Shared by the one-time seed and the restore-to-default
+    action (both need to turn a pristine .md blob into row fields).
+    """
+    if not raw.startswith("---"):
+        return None
+    end = raw.find("---", 3)
+    if end == -1:
+        return None
+    try:
+        import yaml
+        fm = yaml.safe_load(raw[3:end].strip()) or {}
+    except Exception:
+        return None
+    name = str(fm.get("name") or fallback_name)
+    return {
+        "name": name,
+        "alias": str(fm.get("alias", name)),
+        "description": str(fm.get("description", "")),
+        "model": str(fm.get("model", "")),
+        "tools": [str(t) for t in (fm.get("tools") or [])],
+        "skills": [str(s) for s in (fm.get("skills") or [])],
+        "handoff_to": [str(a) for a in (fm.get("handoff_to") or [])],
+        "approval_required_tools": [str(t) for t in (fm.get("approval_required_tools") or [])],
+        "body": raw[end + 3:].strip(),
+        "num_ctx": int(fm.get("num_ctx", 8192)),
+        "num_predict": int(fm.get("num_predict", 2048)),
+        "context_window": int(fm.get("context_window", 10)),
+        "timeout": int(fm.get("timeout", 300)),
+        "chat_prompt": str(fm.get("chat_prompt", "")),
+        "ollama_host": str(fm.get("ollama_host", "")),
+        "reasoning": bool(fm.get("reasoning", False)),
+        "max_iters": int(fm.get("max_iters", 20)),
+        "enabled": bool(fm.get("enabled", True)),
+    }
+
+
+def _migrate_agents_from_md_if_empty() -> None:
+    """One-time non-destructive import from agents/definitions/*.md.
+    Only runs when the agent_definitions table is empty. Never modifies the
+    .md files — they remain in the repo purely as the pristine seed, captured
+    verbatim into default_raw so 'restore to default' has something to revert to.
+    """
+    with _conn() as c:
+        if c.execute("SELECT COUNT(*) FROM agent_definitions").fetchone()[0] > 0:
+            return
+
+    if not _AGENTS_DIR.exists():
+        return
+
+    now = _now()
+    count = 0
+    with _conn() as c:
+        for md_file in sorted(_AGENTS_DIR.glob("*.md")):
+            try:
+                raw = md_file.read_text(encoding="utf-8")
+            except OSError as exc:
+                logger.warning("[db] Could not read %s for agent migration: %s", md_file, exc)
+                continue
+            parsed = _parse_agent_md(raw, md_file.stem)
+            if not parsed:
+                logger.warning("[db] Skipping malformed agent definition %s", md_file.name)
+                continue
+            c.execute(
+                "INSERT OR IGNORE INTO agent_definitions "
+                "(name, alias, description, model, tools, skills, handoff_to, "
+                "approval_required_tools, body, num_ctx, num_predict, context_window, "
+                "timeout, chat_prompt, ollama_host, reasoning, max_iters, enabled, "
+                "default_raw, created_at, updated_at) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (
+                    parsed["name"], parsed["alias"], parsed["description"], parsed["model"],
+                    json.dumps(parsed["tools"]), json.dumps(parsed["skills"]),
+                    json.dumps(parsed["handoff_to"]), json.dumps(parsed["approval_required_tools"]),
+                    parsed["body"], parsed["num_ctx"], parsed["num_predict"],
+                    parsed["context_window"], parsed["timeout"], parsed["chat_prompt"],
+                    parsed["ollama_host"], int(parsed["reasoning"]), parsed["max_iters"],
+                    int(parsed["enabled"]), raw, now, now,
+                ),
+            )
+            count += 1
+    logger.info("[db] Migrated %d agent definitions from agents/definitions/*.md → netops.db", count)
 
 
 def _seed_llm_config_from_env_if_empty() -> None:
@@ -525,9 +638,135 @@ def db_deactivate_llm_profile(profile_id: int) -> dict[str, Any] | None:
     return dict(row)
 
 
+# ── Agent definitions CRUD ───────────────────────────────────────────────────
+
+_AGENT_LIST_FIELDS = (
+    "name", "alias", "description", "model", "tools", "skills", "handoff_to",
+    "approval_required_tools", "body", "num_ctx", "num_predict", "context_window",
+    "timeout", "chat_prompt", "ollama_host", "reasoning", "max_iters", "enabled",
+    "default_raw", "updated_at",
+)
+
+
+def _agent_row_to_dict(row: sqlite3.Row) -> dict[str, Any]:
+    d = dict(row)
+    for field in ("tools", "skills", "handoff_to", "approval_required_tools"):
+        d[field] = json.loads(d[field] or "[]")
+    d["reasoning"] = bool(d["reasoning"])
+    d["enabled"] = bool(d["enabled"])
+    default_raw = d.pop("default_raw", "")
+    default = _parse_agent_md(default_raw, d["name"]) if default_raw else None
+    d["has_default"] = bool(default) and any(
+        d.get(k) != default.get(k) for k in (
+            "description", "model", "tools", "skills", "num_ctx", "num_predict",
+            "context_window", "timeout", "ollama_host", "reasoning", "max_iters",
+            "enabled", "body",
+        )
+    )
+    return d
+
+
+def db_list_agents() -> list[dict[str, Any]]:
+    with _conn() as c:
+        rows = c.execute(
+            f"SELECT {', '.join(_AGENT_LIST_FIELDS)} FROM agent_definitions ORDER BY name"
+        ).fetchall()
+    return [_agent_row_to_dict(row) for row in rows]
+
+
+def db_get_agent(name: str) -> dict[str, Any] | None:
+    with _conn() as c:
+        row = c.execute(
+            f"SELECT {', '.join(_AGENT_LIST_FIELDS)} FROM agent_definitions WHERE name=?", (name,)
+        ).fetchone()
+    return _agent_row_to_dict(row) if row else None
+
+
+def db_update_agent(
+    name: str,
+    description: str | None = None,
+    model: str | None = None,
+    tools: list[str] | None = None,
+    skills: list[str] | None = None,
+    num_ctx: int | None = None,
+    num_predict: int | None = None,
+    context_window: int | None = None,
+    timeout: int | None = None,
+    ollama_host: str | None = None,
+    reasoning: bool | None = None,
+    max_iters: int | None = None,
+    enabled: bool | None = None,
+    body: str | None = None,
+) -> dict[str, Any] | None:
+    """Update editable fields on an agent (only fields passed are changed).
+    Mirrors what the Agents editor UI exposes — handoff_to and
+    approval_required_tools aren't user-editable, so they're never touched here.
+    """
+    fields: dict[str, Any] = {
+        "description": description, "model": model, "num_ctx": num_ctx,
+        "num_predict": num_predict, "context_window": context_window,
+        "timeout": timeout, "ollama_host": ollama_host, "max_iters": max_iters,
+    }
+    if tools is not None:
+        fields["tools"] = json.dumps(tools)
+    if skills is not None:
+        fields["skills"] = json.dumps(skills)
+    if reasoning is not None:
+        fields["reasoning"] = int(reasoning)
+    if enabled is not None:
+        fields["enabled"] = int(enabled)
+    fields["body"] = body
+    fields = {k: v for k, v in fields.items() if v is not None}
+    if not fields:
+        return db_get_agent(name)
+
+    now = _now()
+    set_clause = ", ".join(f"{k}=?" for k in fields)
+    with _conn() as c:
+        cur = c.execute(
+            f"UPDATE agent_definitions SET {set_clause}, updated_at=? WHERE name=?",
+            (*fields.values(), now, name),
+        )
+        if not cur.rowcount:
+            return None
+    return db_get_agent(name)
+
+
+def db_restore_agent_default(name: str) -> dict[str, Any] | None:
+    """Reset an agent's editable fields back to the pristine default_raw captured
+    at seed time. Returns None if the agent doesn't exist or has no seed to revert to.
+    """
+    with _conn() as c:
+        row = c.execute(
+            "SELECT default_raw FROM agent_definitions WHERE name=?", (name,)
+        ).fetchone()
+    if not row or not row["default_raw"]:
+        return None
+    default = _parse_agent_md(row["default_raw"], name)
+    if not default:
+        return None
+
+    now = _now()
+    with _conn() as c:
+        c.execute(
+            "UPDATE agent_definitions SET description=?, model=?, tools=?, skills=?, "
+            "num_ctx=?, num_predict=?, context_window=?, timeout=?, ollama_host=?, "
+            "reasoning=?, max_iters=?, enabled=?, body=?, updated_at=? WHERE name=?",
+            (
+                default["description"], default["model"], json.dumps(default["tools"]),
+                json.dumps(default["skills"]), default["num_ctx"], default["num_predict"],
+                default["context_window"], default["timeout"], default["ollama_host"],
+                int(default["reasoning"]), default["max_iters"], int(default["enabled"]),
+                default["body"], now, name,
+            ),
+        )
+    return db_get_agent(name)
+
+
 # ── Module init ───────────────────────────────────────────────────────────────
 
 _init_db()
 _migrate_routers_from_yaml_if_empty()
 _migrate_ssh_from_yaml_if_empty()
 _seed_llm_config_from_env_if_empty()
+_migrate_agents_from_md_if_empty()
