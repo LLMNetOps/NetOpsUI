@@ -16,7 +16,7 @@ from pathlib import Path
 
 from agents.loader import AgentLoader
 from agents.tools import TOOL_MAP
-from tools.db import db_get_llm_config
+from tools.db import db_get_llm_config, db_list_llm_profiles
 
 # ── Pedoman agent — global conduct rules loaded from editable Markdown ─────────
 
@@ -41,6 +41,24 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 OLLAMA_API_KEY  = os.getenv("OLLAMA_API_KEY", "sk-placeholder")
+
+
+def _llm_overrides(ollama_host: str) -> dict[str, str | None]:
+    """Resolve base_url + matching api_key for a per-agent Ollama Host override.
+
+    Agent definitions only store the host URL (agents/loader.py::ollama_host),
+    not a credential. Passing base_url alone to _make_llm() left api_key falling
+    through to the globally active profile's key — wrong whenever an agent's
+    host differs from the currently active global profile. Look up the saved
+    llm_profiles row with a matching base_url and use its key instead.
+    """
+    if not ollama_host:
+        return {"base_url": None, "api_key": None}
+    api_key = next(
+        (p.get("api_key") for p in db_list_llm_profiles() if p.get("base_url") == ollama_host),
+        None,
+    )
+    return {"base_url": ollama_host, "api_key": api_key or None}
 
 
 def _ollama_defaults() -> tuple[str, str, str]:
@@ -509,7 +527,7 @@ def supervisor_node(state: "NetworkOpsState") -> dict:
             num_predict=1536,  # short reply expected, but a thinking model needs headroom to reason first
             timeout=_supervisor_defn_g.timeout if _supervisor_defn_g else 60,
             agent_name="supervisor",
-            base_url=(_supervisor_defn_g.ollama_host if _supervisor_defn_g else "") or None,
+            **_llm_overrides(_supervisor_defn_g.ollama_host if _supervisor_defn_g else ""),
             reasoning=False,
         )
         _greeting_result: dict = {
@@ -585,7 +603,7 @@ def supervisor_node(state: "NetworkOpsState") -> dict:
         num_predict=_supervisor_defn.num_predict if _supervisor_defn else 256,
         timeout=_supervisor_defn.timeout if _supervisor_defn else 60,
         agent_name="supervisor",
-        base_url=(_supervisor_defn.ollama_host if _supervisor_defn else "") or None,
+        **_llm_overrides(_supervisor_defn.ollama_host if _supervisor_defn else ""),
         reasoning=False,
     )
     try:
@@ -728,7 +746,7 @@ def supervisor_node(state: "NetworkOpsState") -> dict:
                 num_predict=_supervisor_defn.num_predict if _supervisor_defn else 2048,
                 timeout=_supervisor_defn.timeout if _supervisor_defn else 60,
                 agent_name="supervisor",
-                base_url=(_supervisor_defn.ollama_host if _supervisor_defn else "") or None,
+                **_llm_overrides(_supervisor_defn.ollama_host if _supervisor_defn else ""),
                 reasoning=False,
             )
             chat_sys = SystemMessage(content=_chat_prompt)
@@ -782,6 +800,7 @@ def _make_specialist_node(agent_name: str):
     _num_predict = defn.num_predict if defn else 2048
     _timeout = defn.timeout if defn else 300
     _ollama_host = defn.ollama_host if defn else ""
+    _llm_kwargs = _llm_overrides(_ollama_host)
     _reasoning = defn.reasoning if defn else False
     _max_iters = defn.max_iters if defn else 20
     llm_with_tools = _make_llm(
@@ -791,7 +810,7 @@ def _make_specialist_node(agent_name: str):
         num_predict=_num_predict,
         timeout=_timeout,
         agent_name=agent_name,
-        base_url=_ollama_host or None,
+        **_llm_kwargs,
         reasoning=_reasoning,
     ).bind_tools(tools)
 
@@ -844,7 +863,7 @@ def _make_specialist_node(agent_name: str):
                     temperature=0.3, model=_model,
                     num_ctx=_num_ctx, num_predict=_num_predict, timeout=_timeout,
                     agent_name=agent_name,
-                    base_url=_ollama_host or None,
+                    **_llm_kwargs,
                     reasoning=False,
                 )
                 summary = llm_plain.invoke(all_msgs)
@@ -893,7 +912,7 @@ _CONFIG_LLM = _make_llm(
     num_predict=_config_defn.num_predict if _config_defn else 2048,
     timeout=_config_defn.timeout if _config_defn else 180,
     agent_name="config_agent",
-    base_url=(_config_defn.ollama_host if _config_defn else "") or None,
+    **_llm_overrides(_config_defn.ollama_host if _config_defn else ""),
     reasoning=_config_defn.reasoning if _config_defn else False,
 ).bind_tools(_CONFIG_TOOLS)
 _APPROVAL_REQUIRED_TOOLS = set(
