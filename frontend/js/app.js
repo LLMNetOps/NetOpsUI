@@ -5,6 +5,7 @@ import { NAV_ITEMS } from './config.js';
 
 import { screenDashboard } from './screens/dashboard.js';
 import { screenChat, chatUnmount } from './screens/chat.js';
+import { screenNodes } from './screens/nodes.js';
 import { screenNetwork } from './screens/network.js';
 import { screenDHCP } from './screens/dhcp.js';
 import { screenNetBox } from './screens/netbox.js';
@@ -40,6 +41,7 @@ async function navigate(screenId, param) {
       await screenChat(c, param);
       _currentUnmount = chatUnmount;
       break;
+    case 'nodes':     await screenNodes(c); break;
     case 'network':   await screenNetwork(c); break;
     case 'dhcp':      await screenDHCP(c); break;
     case 'netbox':    await screenNetBox(c); break;

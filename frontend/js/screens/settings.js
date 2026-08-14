@@ -10,41 +10,13 @@ export async function screenSettings(c) {
       <button id="settings-discard" class="px-4 py-2 border border-primary text-primary font-medium text-body-md rounded-md hover:bg-surface-container transition-colors">Discard changes</button>
       <button id="settings-save" class="px-4 py-2 bg-secondary text-white font-medium text-body-md rounded-md hover:bg-secondary/90 transition-colors">Save changes</button>`)}
     <div class="border-b border-outline-variant mb-stack_gap_lg flex gap-8" id="settings-tabs">
-      ${tab('routers', 'Routers', true)}
-      ${tab('environment', 'Environment', false)}
+      ${tab('environment', 'LLM Setting', true)}
       ${tab('netbox', 'NetBox', false)}
       ${tab('memory', 'Memory', false)}
     </div>
 
-    <!-- Routers -->
-    <div class="settings-pane" id="settings-content-routers">
-      <div class="bg-surface-container-lowest border border-outline-variant rounded-lg overflow-hidden">
-        <div class="p-4 border-b border-outline-variant flex justify-between items-center bg-surface-container-low">
-          <h3 class="font-title-sm text-title-sm text-primary">Managed Router Hosts</h3>
-          <button id="settings-add-router" class="text-secondary font-medium text-body-sm flex items-center gap-1">
-            <span class="material-symbols-outlined text-[18px]">add</span> Add Host
-          </button>
-        </div>
-        <div class="overflow-x-auto">
-          <table class="w-full text-left border-collapse">
-            <thead class="bg-surface-container-low">
-              <tr class="text-label-caps font-label-caps text-on-surface-variant border-b border-outline-variant">
-                <th class="p-3">Hostname</th>
-                <th class="p-3">Management IP</th>
-                <th class="p-3">SSH User</th>
-                <th class="p-3 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody id="settings-router-body" class="text-body-md">
-              <tr><td colspan="4" class="py-6">${loadingHtml('Memuat router...')}</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-
-    <!-- Environment -->
-    <div class="settings-pane hidden" id="settings-content-environment">
+    <!-- LLM Setting -->
+    <div class="settings-pane" id="settings-content-environment">
       <div class="max-w-2xl space-y-6">
 
         <!-- Saved profiles -->
@@ -193,84 +165,6 @@ export async function screenSettings(c) {
     if (btn) settingsTab(btn.dataset.stab);
   };
 
-  async function loadRouters() {
-    const body = $('settings-router-body');
-    if (body) body.innerHTML = `<tr><td colspan="4" class="py-6">${loadingHtml('Memuat router...')}</td></tr>`;
-    try {
-      const r = await apiGet('/api/config/routers');
-      const routers = r.routers || [];
-      const user = r.ssh_username || '';
-      if (!routers.length) {
-        if (body) body.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-on-surface-variant text-body-sm">Belum ada router. Klik "Add Host".</td></tr>`;
-        return;
-      }
-      if (body) body.innerHTML = routers.map(rt => `<tr class="even:bg-surface-container-low hover:bg-surface-container transition-colors" data-router="${esc(rt.name)}">
-        <td class="p-3 border-b border-outline-variant font-medium text-primary">${esc(rt.name)}</td>
-        <td class="p-3 border-b border-outline-variant font-data-mono text-data-mono">
-          <input data-field="host" class="bg-transparent border-none focus:ring-0 w-full p-0" type="text" value="${esc(rt.host || '')}"/>
-        </td>
-        <td class="p-3 border-b border-outline-variant text-on-surface-variant">${esc(user)}</td>
-        <td class="p-3 border-b border-outline-variant text-right whitespace-nowrap">
-          <button data-act="test" class="px-3 py-1 bg-primary-container text-on-primary-container text-body-sm rounded hover:bg-primary hover:text-white transition-colors">Test</button>
-          <button data-act="save" class="px-3 py-1 ml-1 bg-secondary text-white text-body-sm rounded hover:opacity-90 transition-colors">Save</button>
-          <button data-act="delete" class="px-3 py-1 ml-1 border border-red-400 text-red-600 text-body-sm rounded hover:bg-red-50 transition-colors">Delete</button>
-        </td>
-      </tr>`).join('');
-    } catch (e) {
-      if (body) body.innerHTML = `<tr><td colspan="4" class="p-4">${errorHtml('Gagal memuat router: ' + e.message)}</td></tr>`;
-    }
-  }
-
-  const routerBody = $('settings-router-body');
-  if (routerBody) routerBody.onclick = async ev => {
-    const btn = ev.target.closest('button[data-act]');
-    if (!btn) return;
-    const tr = btn.closest('tr[data-router]');
-    if (!tr) return;
-    const name = tr.dataset.router;
-    const hostInput = tr.querySelector('input[data-field="host"]');
-    const act = btn.dataset.act;
-    btn.disabled = true;
-    const orig = btn.textContent;
-    btn.textContent = '...';
-    try {
-      if (act === 'test') {
-        const r = await apiPost('/api/tools/reachability', { router_name: name });
-        await alertDialog(r.result || 'no result', name);
-      } else if (act === 'save') {
-        await apiPut('/api/config/routers/' + encodeURIComponent(name), { field: 'host', value: hostInput.value });
-        await alertDialog(`Router ${name} diperbarui.`, 'Berhasil');
-      } else if (act === 'delete') {
-        const ok = await confirmDialog({
-          title: 'Hapus router?', message: `Router "${name}" akan dihapus dari config.yaml.`,
-          confirmLabel: 'Hapus', danger: true,
-        });
-        if (ok) {
-          await apiDelete('/api/config/routers/' + encodeURIComponent(name));
-          await loadRouters();
-          return;
-        }
-      }
-    } catch (e) {
-      await alertDialog('Gagal: ' + e.message, 'Terjadi Kesalahan');
-    } finally {
-      btn.disabled = false;
-      btn.textContent = orig;
-    }
-  };
-
-  const addBtn = $('settings-add-router');
-  if (addBtn) addBtn.onclick = async () => {
-    const name = prompt('Nama router:');
-    if (!name) return;
-    const host = prompt('Host / IP:');
-    if (!host) return;
-    try {
-      await apiPost('/api/config/routers', { name, host, ros_version: 7, dhcp_servers: [] });
-      await loadRouters();
-    } catch (e) { await alertDialog('Gagal menambah router: ' + e.message, 'Terjadi Kesalahan'); }
-  };
-
   async function loadMemory() {
     const body = $('settings-memory-body');
     if (body) body.innerHTML = loadingHtml('Memuat memori...');
@@ -330,7 +224,9 @@ export async function screenSettings(c) {
             <div class="text-[11px] text-on-surface-variant font-data-mono truncate">${esc(p.base_url)}&nbsp;·&nbsp;${esc(p.model)}</div>
           </div>
           <div class="flex gap-1 flex-shrink-0">
-            ${!p.is_active ? `<button data-pact="activate" class="px-2 py-1 bg-primary text-white text-body-sm rounded hover:bg-primary/90 transition-colors">Activate</button>` : ''}
+            ${p.is_active
+              ? `<button data-pact="deactivate" class="px-2 py-1 border border-outline-variant text-on-surface-variant text-body-sm rounded hover:bg-surface-container-low transition-colors">Deactivate</button>`
+              : `<button data-pact="activate" class="px-2 py-1 bg-primary text-white text-body-sm rounded hover:bg-primary/90 transition-colors">Activate</button>`}
             <button data-pact="edit" class="px-2 py-1 bg-primary-container text-on-primary-container text-body-sm rounded hover:opacity-90 transition-colors">Edit</button>
             <button data-pact="delete" class="px-2 py-1 border border-red-400 text-red-600 text-body-sm rounded hover:bg-red-50 transition-colors">Del</button>
           </div>
@@ -361,6 +257,9 @@ export async function screenSettings(c) {
         await apiPost(`/api/config/llm/profiles/${id}/activate`, {});
         await loadProfiles();
         await loadEnv();
+      } else if (act === 'deactivate') {
+        await apiPost(`/api/config/llm/profiles/${id}/deactivate`, {});
+        await loadProfiles();
       } else if (act === 'delete') {
         const ok = await confirmDialog({
           title: 'Hapus profile?', message: 'Profile LLM ini akan dihapus permanen.',
@@ -525,7 +424,6 @@ export async function screenSettings(c) {
     loadEnv();
   };
 
-  loadRouters();
   loadMemory();
   loadProfiles();
   loadEnv();

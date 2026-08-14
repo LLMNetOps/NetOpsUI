@@ -7,6 +7,7 @@ let _selectedName = null;
 let _detailCache = {}; // name -> full detail payload, invalidated on save/restore
 let _toolNamesCache = null;
 let _skillNamesCache = null;
+let _llmProfilesCache = null;
 
 async function getToolNames() {
   if (!_toolNamesCache) {
@@ -22,6 +23,16 @@ async function getSkillNames() {
     _skillNamesCache = (r.skills || []).map(s => s.name);
   }
   return _skillNamesCache;
+}
+
+// Active LLM connection profiles, configured in #settings. Multiple profiles can be
+// active at once so different agents can each be wired to a different backend.
+async function getActiveLlmProfiles() {
+  if (!_llmProfilesCache) {
+    const r = await apiGet('/api/config/llm/profiles');
+    _llmProfilesCache = (r.profiles || []).filter(p => p.is_active);
+  }
+  return _llmProfilesCache;
 }
 
 export async function screenAgents(c, param) {
@@ -152,7 +163,10 @@ function editFormHtml(agent) {
       </div>
       <div>
         <label class="block text-label-caps font-label-caps text-on-surface-variant mb-1">Ollama Host (opsional)</label>
-        <input id="af-ollama-host" type="text" value="${esc(agent.ollama_host || '')}" placeholder="override OLLAMA_BASE_URL" class="w-full px-3 py-2 border border-outline-variant rounded text-body-sm bg-surface-container-lowest focus:outline-none focus:ring-1 focus:ring-primary">
+        <select id="af-ollama-host" class="w-full px-3 py-2 border border-outline-variant rounded text-body-sm bg-surface-container-lowest focus:outline-none focus:ring-1 focus:ring-primary">
+          <option value="">Memuat profile...</option>
+        </select>
+        <p class="text-[11px] text-on-surface-variant mt-1">Dari LLM Connection Profiles yang aktif di Settings. Kosongkan untuk pakai default global.</p>
       </div>
     </div>
     <div class="grid grid-cols-2 gap-4">
@@ -222,9 +236,17 @@ async function wireEditForm(agent) {
   // Set textarea value directly — bypasses HTML parsing of potentially large text
   $('af-body').value = agent.body || '';
 
-  const [toolNames, skillNames] = await Promise.all([getToolNames(), getSkillNames()]);
+  const [toolNames, skillNames, llmProfiles] = await Promise.all([getToolNames(), getSkillNames(), getActiveLlmProfiles()]);
   const toolsWidget = mountTagInput($('af-tools'), { initial: agent.tools || [], options: toolNames, placeholder: 'Cari tool...' });
   const skillsWidget = mountTagInput($('af-skills'), { initial: agent.skills || [], options: skillNames, placeholder: 'Cari skill...' });
+
+  const hostSelect = $('af-ollama-host');
+  const current = agent.ollama_host || '';
+  const knownUrls = new Set(llmProfiles.map(p => p.base_url));
+  const customOpt = current && !knownUrls.has(current)
+    ? `<option value="${esc(current)}" selected>${esc(current)} (custom)</option>` : '';
+  hostSelect.innerHTML = `<option value="">(pakai default global)</option>${customOpt}`
+    + llmProfiles.map(p => `<option value="${esc(p.base_url)}" ${p.base_url === current ? 'selected' : ''}>${esc(p.name)} — ${esc(p.base_url)}</option>`).join('');
 
   $('af-close').onclick = () => {
     _selectedName = null;

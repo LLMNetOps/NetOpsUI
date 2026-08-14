@@ -15,6 +15,7 @@ export const AGENTS = [
 export const NAV_ITEMS = [
   { id:'dashboard', label:'Dashboard',  icon:'dashboard' },
   { id:'chat',      label:'AI Chat',    icon:'chat_bubble' },
+  { id:'nodes',     label:'Nodes',      icon:'dns',        group:'Infrastructure' },
   { id:'network',   label:'Network',    icon:'hub',        group:'Infrastructure' },
   { id:'dhcp',      label:'DHCP',       icon:'router',     group:'Infrastructure' },
   { id:'netbox',    label:'NetBox',     icon:'storage',    group:'Infrastructure' },
