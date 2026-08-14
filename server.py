@@ -42,7 +42,8 @@ from tools.db import (
     db_delete_thread, db_rename_thread,
     db_get_llm_config, db_set_llm_config,
     db_list_llm_profiles, db_add_llm_profile, db_update_llm_profile,
-    db_delete_llm_profile, db_activate_llm_profile,
+    db_delete_llm_profile, db_activate_llm_profile, db_deactivate_llm_profile,
+    db_get_ssh_config, db_set_ssh_config, db_get_router,
 )
 
 app = FastAPI(title="NetOps AI", docs_url=None, redoc_url=None)
@@ -780,14 +781,31 @@ def api_activate_llm_profile(profile_id: int) -> dict:
     return cfg
 
 
+@app.post("/api/config/llm/profiles/{profile_id}/deactivate")
+def api_deactivate_llm_profile(profile_id: int) -> dict:
+    profile = db_deactivate_llm_profile(profile_id)
+    if not profile:
+        raise HTTPException(404, "Profile tidak ditemukan")
+    key = profile.pop("api_key", "") or ""
+    profile["api_key_set"] = bool(key)
+    profile["api_key_preview"] = f"••••{key[-4:]}" if len(key) >= 4 else ("••••" if key else "")
+    return profile
+
+
 @app.get("/api/config/routers")
 def api_config_routers():
     from tools.base import get_unique_router_entries, ssh_creds
     try:
         entries = get_unique_router_entries()
         creds = ssh_creds()
+        routers = []
+        for e in entries:
+            r = dict(e)
+            password = r.pop("ssh_password", "") or ""
+            r["ssh_password_set"] = bool(password)
+            routers.append(r)
         return {
-            "routers": entries,
+            "routers": routers,
             "ssh_username": creds.get("username", ""),
         }
     except Exception as e:
@@ -800,6 +818,8 @@ class AddRouterRequest(BaseModel):
     ros_version: int = 7
     role: str = "backbone"
     network: str = "kampus"
+    ssh_username: str = ""
+    ssh_password: str = ""
 
 
 @app.post("/api/config/routers")
@@ -808,31 +828,84 @@ def api_config_add_router(req: AddRouterRequest):
         "name": req.name, "host": req.host, "ros_version": req.ros_version,
         "role": req.role, "network": req.network,
     })
+    if req.ssh_username and req.ssh_password:
+        from tools.db import db_update_router_field
+        from tools.base import reload_config
+        db_update_router_field(req.name, "ssh_username", req.ssh_username)
+        db_update_router_field(req.name, "ssh_password", req.ssh_password)
+        reload_config()
     return {"result": result}
 
 
 class UpdateRouterRequest(BaseModel):
-    field: str
-    value: str
+    host: str | None = None
+    role: str | None = None
+    network: str | None = None
+    ros_version: int | None = None
+    ssh_username: str | None = None
+    ssh_password: str | None = None
 
 
 @app.put("/api/config/routers/{name}")
 def api_config_update_router(name: str, req: UpdateRouterRequest):
-    if req.field == "host":
-        result = TOOL_MAP["patch_router_host"].invoke({
-            "router_name": name, "host": req.value,
-        })
-    else:
-        result = TOOL_MAP["patch_router_field"].invoke({
-            "router_name": name, "field": req.field, "value": req.value,
-        })
-    return {"result": result}
+    from tools.db import db_update_router_field
+    from tools.base import reload_config
+
+    existing = db_get_router(name)
+    if not existing:
+        raise HTTPException(404, "Router tidak ditemukan")
+
+    fields = req.model_dump(exclude_unset=True)
+    # Blank password means "leave unchanged" — the edit form never re-sends the
+    # real stored password, only a masked preview, so an empty string here
+    # isn't intentional clearing (unlike ssh_username, which is shown in full
+    # and can legitimately be cleared to fall back to the global default).
+    if "ssh_password" in fields and not fields["ssh_password"]:
+        fields.pop("ssh_password")
+    if not fields:
+        raise HTTPException(400, "Tidak ada field untuk diupdate")
+
+    for field, value in fields.items():
+        db_update_router_field(name, field, value)
+    reload_config()
+    return {"result": f"Router '{name}' diperbarui."}
 
 
 @app.delete("/api/config/routers/{name}")
 def api_config_remove_router(name: str):
     result = TOOL_MAP["remove_router_from_config"].invoke({"router_name": name})
     return {"result": result}
+
+
+@app.get("/api/config/ssh")
+def api_config_ssh() -> dict:
+    cfg = db_get_ssh_config()
+    password = cfg.pop("password", "") or ""
+    cfg["password_set"] = bool(password)
+    cfg["password_preview"] = f"••••{password[-2:]}" if len(password) >= 2 else ("••••" if password else "")
+    return cfg
+
+
+class UpdateSSHConfigRequest(BaseModel):
+    username: str | None = None
+    password: str | None = None
+    port: int | None = None
+    timeout: int | None = None
+
+
+@app.put("/api/config/ssh")
+def api_config_update_ssh(req: UpdateSSHConfigRequest) -> dict:
+    if req.username is None and req.password is None and req.port is None and req.timeout is None:
+        raise HTTPException(400, "Minimal satu field harus diisi")
+    # Blank password means "leave unchanged", same convention as the LLM api_key field.
+    password = req.password if req.password else None
+    cfg = db_set_ssh_config(username=req.username, password=password, port=req.port, timeout=req.timeout)
+    from tools.base import reload_config
+    reload_config()
+    stored = cfg.pop("password", "") or ""
+    cfg["password_set"] = bool(stored)
+    cfg["password_preview"] = f"••••{stored[-2:]}" if len(stored) >= 2 else ("••••" if stored else "")
+    return cfg
 
 
 # ── NetBox ───────────────────────────────────────────────────────────────────

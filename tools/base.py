@@ -11,8 +11,6 @@ import sys
 from pathlib import Path
 from typing import Any
 
-import yaml
-
 # ── Path constants ────────────────────────────────────────────────────────────
 
 WORKDIR = Path(__file__).parent.parent        # project root
@@ -101,35 +99,26 @@ def ssh_get_dhcp_leases(*a: Any, **kw: Any) -> tuple[bool, str, str]:
 # ── Config ────────────────────────────────────────────────────────────────────
 
 _SSH_CONFIG: dict[str, Any] = {}
-_SSH_NETWORK_CREDS: dict[str, dict[str, str]] = {}   # network → {username, password}
 _ROUTERS: list[dict[str, Any]] = []
 VALID_ROUTER_NAMES: frozenset[str] = frozenset()
 _NAME_TO_ENTRIES: dict[str, list[dict[str, Any]]] = {}
 
 
 def load_config() -> None:
-    """Muat SSH/NetBox dari config.yaml + router registry dari data/netops.db."""
-    global _SSH_CONFIG, _SSH_NETWORK_CREDS, _ROUTERS, VALID_ROUTER_NAMES, _NAME_TO_ENTRIES
-    # ── SSH + NetBox dari config.yaml ─────────────────────────────────────────
+    """Muat SSH default + router registry (termasuk override SSH per-node) dari data/netops.db."""
+    global _SSH_CONFIG, _ROUTERS, VALID_ROUTER_NAMES, _NAME_TO_ENTRIES
+    # ── SSH default dari data/netops.db ───────────────────────────────────────
     try:
-        with open(CONFIG_FILE, encoding="utf-8") as f:
-            cfg = yaml.safe_load(f) or {}
-        ssh_cfg = cfg.get("ssh", {})
+        from tools.db import db_get_ssh_config  # noqa: PLC0415
+        ssh_cfg = db_get_ssh_config()
         _SSH_CONFIG = {
             "username": ssh_cfg.get("username", ""),
             "password": ssh_cfg.get("password", ""),
             "timeout": int(ssh_cfg.get("timeout", 15)),
             "port": int(ssh_cfg.get("port", 22)),
         }
-        _SSH_NETWORK_CREDS = {
-            net: {"username": v["username"], "password": v["password"]}
-            for net, v in ssh_cfg.get("networks", {}).items()
-            if "username" in v and "password" in v
-        }
-    except FileNotFoundError:
-        print(f"[base] config.yaml tidak ditemukan: {CONFIG_FILE}", file=sys.stderr)
     except Exception as exc:
-        print(f"[base] config.yaml load error: {exc}", file=sys.stderr)
+        print(f"[base] SSH config DB load error: {exc}", file=sys.stderr)
 
     # ── Router registry dari data/netops.db ───────────────────────────────────
     try:
@@ -148,6 +137,8 @@ def load_config() -> None:
             "ros_version": int(row["ros_version"]),
             "role": str(row["role"]),
             "network": str(row["network"]),
+            "ssh_username": str(row.get("ssh_username") or ""),
+            "ssh_password": str(row.get("ssh_password") or ""),
         }
         servers = row.get("dhcp_servers") or []
         if servers:
@@ -196,15 +187,16 @@ def ssh_creds() -> dict[str, Any]:
 
 def ssh_creds_for(entry: dict[str, Any]) -> dict[str, Any]:
     """Return SSH credentials untuk satu router entry.
-    Override username+password dari ssh.networks jika network cocok,
-    port+timeout selalu dari global ssh config.
+    Override username+password dari kredensial per-node (kolom ssh_username/
+    ssh_password di tabel routers) jika keduanya diisi, port+timeout selalu
+    dari SSH config global.
     """
     base = ssh_creds()
-    network = entry.get("network", "kampus")
-    override = _SSH_NETWORK_CREDS.get(network, {})
-    if override:
-        base["username"] = override["username"]
-        base["password"] = override["password"]
+    username = entry.get("ssh_username", "")
+    password = entry.get("ssh_password", "")
+    if username and password:
+        base["username"] = username
+        base["password"] = password
     return base
 
 

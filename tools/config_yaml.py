@@ -71,6 +71,8 @@ def patch_router_field(router_name: str, field: str, value: str) -> str:
                 role=existing["role"],
                 network=existing["network"],
                 dhcp_servers=existing["dhcp_servers"],
+                ssh_username=existing["ssh_username"],
+                ssh_password=existing["ssh_password"],
             )
             db_delete_router(router_name)
         else:

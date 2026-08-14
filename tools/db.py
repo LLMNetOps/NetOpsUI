@@ -1,7 +1,9 @@
 """Consolidated SQLite database for app-owned structured data.
 
 Tables:
-  routers      — router inventory (replaces config.yaml routers: section)
+  routers      — router inventory (replaces config.yaml routers: section);
+                 also carries an optional per-node SSH username/password override
+  ssh_config   — global default SSH credentials (replaces config.yaml ssh: section)
   threads      — chat session metadata (persistent across server restarts)
   llm_config   — global Ollama base_url/model, editable from Settings → Environment
   llm_profiles — saved LLM connection profiles; activating one syncs to llm_config
@@ -49,8 +51,19 @@ def _init_db() -> None:
                 role          TEXT NOT NULL DEFAULT 'backbone',
                 network       TEXT NOT NULL DEFAULT 'kampus',
                 dhcp_servers  TEXT NOT NULL DEFAULT '[]',
+                ssh_username  TEXT NOT NULL DEFAULT '',
+                ssh_password  TEXT NOT NULL DEFAULT '',
                 created_at    TEXT NOT NULL,
                 updated_at    TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS ssh_config (
+                id          INTEGER PRIMARY KEY CHECK (id = 1),
+                username    TEXT NOT NULL DEFAULT '',
+                password    TEXT NOT NULL DEFAULT '',
+                port        INTEGER NOT NULL DEFAULT 22,
+                timeout     INTEGER NOT NULL DEFAULT 15,
+                updated_at  TEXT NOT NULL
             );
 
             CREATE TABLE IF NOT EXISTS threads (
@@ -87,6 +100,12 @@ def _init_db() -> None:
         cols = {row[1] for row in c.execute("PRAGMA table_info(llm_config)")}
         if "api_key" not in cols:
             c.execute("ALTER TABLE llm_config ADD COLUMN api_key TEXT NOT NULL DEFAULT ''")
+
+        router_cols = {row[1] for row in c.execute("PRAGMA table_info(routers)")}
+        if "ssh_username" not in router_cols:
+            c.execute("ALTER TABLE routers ADD COLUMN ssh_username TEXT NOT NULL DEFAULT ''")
+        if "ssh_password" not in router_cols:
+            c.execute("ALTER TABLE routers ADD COLUMN ssh_password TEXT NOT NULL DEFAULT ''")
 
 
 def _migrate_routers_from_yaml_if_empty() -> None:
@@ -148,6 +167,56 @@ def _migrate_routers_from_yaml_if_empty() -> None:
     logger.info("[db] Migrated %d routers from config.yaml → netops.db", len(by_name))
 
 
+def _migrate_ssh_from_yaml_if_empty() -> None:
+    """One-time non-destructive import of config.yaml's ssh: block into ssh_config.
+    Only runs when ssh_config has no row yet. Never modifies config.yaml.
+
+    Also backfills per-router ssh_username/ssh_password from ssh.networks overrides
+    (matched by each router's `network` column), for rows that don't already have
+    an override set — preserves the old per-network override behavior as a one-time
+    per-node seed, after which per-node credentials are managed independently.
+    """
+    with _conn() as c:
+        if c.execute("SELECT COUNT(*) FROM ssh_config").fetchone()[0] > 0:
+            return
+
+    ssh_cfg: dict[str, Any] = {}
+    if _CONFIG_FILE.exists():
+        try:
+            import yaml
+            with open(_CONFIG_FILE, encoding="utf-8") as f:
+                cfg = yaml.safe_load(f) or {}
+            ssh_cfg = cfg.get("ssh", {}) or {}
+        except Exception as exc:
+            logger.warning("[db] Could not read config.yaml for SSH migration: %s", exc)
+
+    now = _now()
+    with _conn() as c:
+        c.execute(
+            "INSERT OR IGNORE INTO ssh_config (id, username, password, port, timeout, updated_at) "
+            "VALUES (1,?,?,?,?,?)",
+            (
+                ssh_cfg.get("username", ""), ssh_cfg.get("password", ""),
+                int(ssh_cfg.get("port", 22)), int(ssh_cfg.get("timeout", 15)),
+                now,
+            ),
+        )
+
+        networks = ssh_cfg.get("networks", {}) or {}
+        if networks:
+            rows = c.execute("SELECT name, network, ssh_username FROM routers").fetchall()
+            for row in rows:
+                if row["ssh_username"]:
+                    continue
+                override = networks.get(row["network"])
+                if override and override.get("username") and override.get("password"):
+                    c.execute(
+                        "UPDATE routers SET ssh_username=?, ssh_password=?, updated_at=? WHERE name=?",
+                        (override["username"], override["password"], now, row["name"]),
+                    )
+    logger.info("[db] Migrated SSH config from config.yaml → netops.db")
+
+
 def _seed_llm_config_from_env_if_empty() -> None:
     """One-time seed of llm_config from OLLAMA_BASE_URL/OLLAMA_MODEL env vars.
     Only runs when the row doesn't exist yet. Never touches .env.
@@ -172,7 +241,8 @@ def db_list_routers() -> list[dict[str, Any]]:
     """Return all routers as dicts with dhcp_servers as Python list."""
     with _conn() as c:
         rows = c.execute(
-            "SELECT name, host, ros_version, role, network, dhcp_servers "
+            "SELECT name, host, ros_version, role, network, dhcp_servers, "
+            "ssh_username, ssh_password "
             "FROM routers ORDER BY name"
         ).fetchall()
     result = []
@@ -186,7 +256,8 @@ def db_list_routers() -> list[dict[str, Any]]:
 def db_get_router(name: str) -> dict[str, Any] | None:
     with _conn() as c:
         row = c.execute(
-            "SELECT name, host, ros_version, role, network, dhcp_servers "
+            "SELECT name, host, ros_version, role, network, dhcp_servers, "
+            "ssh_username, ssh_password "
             "FROM routers WHERE name=?", (name,)
         ).fetchone()
     if not row:
@@ -203,21 +274,24 @@ def db_add_router(
     role: str = "backbone",
     network: str = "kampus",
     dhcp_servers: list[str] | None = None,
+    ssh_username: str = "",
+    ssh_password: str = "",
 ) -> None:
     now = _now()
     with _conn() as c:
         c.execute(
             "INSERT INTO routers "
-            "(name, host, ros_version, role, network, dhcp_servers, created_at, updated_at) "
-            "VALUES (?,?,?,?,?,?,?,?)",
+            "(name, host, ros_version, role, network, dhcp_servers, "
+            "ssh_username, ssh_password, created_at, updated_at) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?)",
             (name, host, ros_version, role, network,
-             json.dumps(dhcp_servers or []), now, now),
+             json.dumps(dhcp_servers or []), ssh_username, ssh_password, now, now),
         )
 
 
 def db_update_router_field(name: str, field: str, value: Any) -> int:
     """Update a single field on a router row. Returns rows affected."""
-    allowed = {"host", "ros_version", "role", "network", "dhcp_servers"}
+    allowed = {"host", "ros_version", "role", "network", "dhcp_servers", "ssh_username", "ssh_password"}
     if field not in allowed:
         raise ValueError(f"Field '{field}' tidak diizinkan di tabel routers.")
     if field == "dhcp_servers" and isinstance(value, list):
@@ -235,6 +309,36 @@ def db_delete_router(name: str) -> int:
     with _conn() as c:
         cur = c.execute("DELETE FROM routers WHERE name=?", (name,))
         return cur.rowcount
+
+
+# ── SSH config (global default) CRUD ────────────────────────────────────────
+
+def db_get_ssh_config() -> dict[str, Any]:
+    with _conn() as c:
+        row = c.execute(
+            "SELECT username, password, port, timeout, updated_at FROM ssh_config WHERE id=1"
+        ).fetchone()
+    return dict(row) if row else {"username": "", "password": "", "port": 22, "timeout": 15, "updated_at": ""}
+
+
+def db_set_ssh_config(
+    username: str | None = None,
+    password: str | None = None,
+    port: int | None = None,
+    timeout: int | None = None,
+) -> dict[str, Any]:
+    """Update username/password/port/timeout (only fields passed are changed). Returns the new row."""
+    now = _now()
+    with _conn() as c:
+        if username is not None:
+            c.execute("UPDATE ssh_config SET username=?, updated_at=? WHERE id=1", (username, now))
+        if password is not None:
+            c.execute("UPDATE ssh_config SET password=?, updated_at=? WHERE id=1", (password, now))
+        if port is not None:
+            c.execute("UPDATE ssh_config SET port=?, updated_at=? WHERE id=1", (port, now))
+        if timeout is not None:
+            c.execute("UPDATE ssh_config SET timeout=?, updated_at=? WHERE id=1", (timeout, now))
+    return db_get_ssh_config()
 
 
 # ── Thread CRUD ───────────────────────────────────────────────────────────────
@@ -387,7 +491,11 @@ def db_delete_llm_profile(profile_id: int) -> int:
 
 
 def db_activate_llm_profile(profile_id: int) -> dict[str, Any] | None:
-    """Mark profile as active, sync its values to llm_config, and clear other active flags."""
+    """Mark profile as active and sync its values to llm_config (the global fallback).
+
+    Multiple profiles may be active at once — activating one does not deactivate
+    others, since different agents can each be wired to a different active profile.
+    """
     with _conn() as c:
         row = c.execute(
             "SELECT base_url, model, api_key FROM llm_profiles WHERE id=?", (profile_id,)
@@ -395,7 +503,6 @@ def db_activate_llm_profile(profile_id: int) -> dict[str, Any] | None:
         if not row:
             return None
         now = _now()
-        c.execute("UPDATE llm_profiles SET is_active=0, updated_at=? WHERE is_active=1", (now,))
         c.execute("UPDATE llm_profiles SET is_active=1, updated_at=? WHERE id=?", (now, profile_id))
         c.execute(
             "UPDATE llm_config SET base_url=?, model=?, api_key=?, updated_at=? WHERE id=1",
@@ -404,8 +511,23 @@ def db_activate_llm_profile(profile_id: int) -> dict[str, Any] | None:
     return db_get_llm_config()
 
 
+def db_deactivate_llm_profile(profile_id: int) -> dict[str, Any] | None:
+    """Unmark profile as active. Does not touch llm_config (the last-activated fallback stays)."""
+    with _conn() as c:
+        now = _now()
+        cur = c.execute("UPDATE llm_profiles SET is_active=0, updated_at=? WHERE id=?", (now, profile_id))
+        if not cur.rowcount:
+            return None
+        row = c.execute(
+            "SELECT id, name, base_url, model, api_key, is_active, updated_at "
+            "FROM llm_profiles WHERE id=?", (profile_id,)
+        ).fetchone()
+    return dict(row)
+
+
 # ── Module init ───────────────────────────────────────────────────────────────
 
 _init_db()
 _migrate_routers_from_yaml_if_empty()
+_migrate_ssh_from_yaml_if_empty()
 _seed_llm_config_from_env_if_empty()
