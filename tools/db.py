@@ -54,6 +54,7 @@ def _init_db() -> None:
                 ros_version   INTEGER NOT NULL DEFAULT 7,
                 role          TEXT NOT NULL DEFAULT 'backbone',
                 network       TEXT NOT NULL DEFAULT 'kampus',
+                node_type     TEXT NOT NULL DEFAULT 'router',
                 dhcp_servers  TEXT NOT NULL DEFAULT '[]',
                 ssh_username  TEXT NOT NULL DEFAULT '',
                 ssh_password  TEXT NOT NULL DEFAULT '',
@@ -134,6 +135,8 @@ def _init_db() -> None:
             c.execute("ALTER TABLE routers ADD COLUMN ssh_username TEXT NOT NULL DEFAULT ''")
         if "ssh_password" not in router_cols:
             c.execute("ALTER TABLE routers ADD COLUMN ssh_password TEXT NOT NULL DEFAULT ''")
+        if "node_type" not in router_cols:
+            c.execute("ALTER TABLE routers ADD COLUMN node_type TEXT NOT NULL DEFAULT 'router'")
 
 
 def _migrate_routers_from_yaml_if_empty() -> None:
@@ -354,7 +357,7 @@ def db_list_routers() -> list[dict[str, Any]]:
     """Return all routers as dicts with dhcp_servers as Python list."""
     with _conn() as c:
         rows = c.execute(
-            "SELECT name, host, ros_version, role, network, dhcp_servers, "
+            "SELECT name, host, ros_version, role, network, node_type, dhcp_servers, "
             "ssh_username, ssh_password "
             "FROM routers ORDER BY name"
         ).fetchall()
@@ -369,7 +372,7 @@ def db_list_routers() -> list[dict[str, Any]]:
 def db_get_router(name: str) -> dict[str, Any] | None:
     with _conn() as c:
         row = c.execute(
-            "SELECT name, host, ros_version, role, network, dhcp_servers, "
+            "SELECT name, host, ros_version, role, network, node_type, dhcp_servers, "
             "ssh_username, ssh_password "
             "FROM routers WHERE name=?", (name,)
         ).fetchone()
@@ -386,6 +389,7 @@ def db_add_router(
     ros_version: int = 7,
     role: str = "backbone",
     network: str = "kampus",
+    node_type: str = "router",
     dhcp_servers: list[str] | None = None,
     ssh_username: str = "",
     ssh_password: str = "",
@@ -394,17 +398,17 @@ def db_add_router(
     with _conn() as c:
         c.execute(
             "INSERT INTO routers "
-            "(name, host, ros_version, role, network, dhcp_servers, "
+            "(name, host, ros_version, role, network, node_type, dhcp_servers, "
             "ssh_username, ssh_password, created_at, updated_at) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?)",
-            (name, host, ros_version, role, network,
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            (name, host, ros_version, role, network, node_type,
              json.dumps(dhcp_servers or []), ssh_username, ssh_password, now, now),
         )
 
 
 def db_update_router_field(name: str, field: str, value: Any) -> int:
     """Update a single field on a router row. Returns rows affected."""
-    allowed = {"host", "ros_version", "role", "network", "dhcp_servers", "ssh_username", "ssh_password"}
+    allowed = {"host", "ros_version", "role", "network", "node_type", "dhcp_servers", "ssh_username", "ssh_password"}
     if field not in allowed:
         raise ValueError(f"Field '{field}' tidak diizinkan di tabel routers.")
     if field == "dhcp_servers" and isinstance(value, list):

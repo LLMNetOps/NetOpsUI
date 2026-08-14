@@ -6,9 +6,7 @@ export async function screenSettings(c) {
     `<button data-stab="${id}" class="pb-3 px-1 text-body-md transition-all ${active ? 'border-b-2 border-primary text-primary font-semibold' : 'text-on-surface-variant hover:text-primary'}">${label}</button>`;
 
   c.innerHTML = `<div class="p-container_gutter max-w-[1400px] mx-auto">
-    ${pageHeader('System Settings', 'Configure global parameters for autonomous network operations.', `
-      <button id="settings-discard" class="px-4 py-2 border border-primary text-primary font-medium text-body-md rounded-md hover:bg-surface-container transition-colors">Discard changes</button>
-      <button id="settings-save" class="px-4 py-2 bg-secondary text-white font-medium text-body-md rounded-md hover:bg-secondary/90 transition-colors">Save changes</button>`)}
+    ${pageHeader('System Settings', 'Configure global parameters for autonomous network operations.')}
     <div class="border-b border-outline-variant mb-stack_gap_lg flex gap-8" id="settings-tabs">
       ${tab('environment', 'LLM Setting', true)}
       ${tab('memory', 'Memory', false)}
@@ -46,12 +44,20 @@ export async function screenSettings(c) {
               </div>
               <div>
                 <label class="text-[11px] text-on-surface-variant block mb-1">Model</label>
-                <input id="pf-model" class="w-full text-body-sm bg-surface-container-lowest border border-outline-variant rounded-md px-3 py-2" type="text" placeholder="qwen3:8b"/>
+                <select id="pf-model" class="w-full text-body-sm bg-surface-container-lowest border border-outline-variant rounded-md px-3 py-2">
+                  <option value="">Klik Check Connection untuk melihat model tersedia</option>
+                </select>
               </div>
               <div>
                 <label class="text-[11px] text-on-surface-variant block mb-1">API Key <span class="text-on-surface-variant font-normal">(opsional)</span></label>
                 <input id="pf-apikey" class="w-full text-body-sm bg-surface-container-lowest border border-outline-variant rounded-md px-3 py-2 font-data-mono" type="password" placeholder="Kosongkan jika tidak ada" autocomplete="off"/>
               </div>
+            </div>
+            <div class="flex items-center gap-3 mb-3">
+              <button id="pf-check-connection" type="button" class="px-3 py-1.5 border border-outline-variant text-primary font-medium text-body-sm rounded-md hover:bg-surface-container transition-colors flex items-center gap-1">
+                <span class="material-symbols-outlined text-[16px]">wifi_tethering</span> Check Connection
+              </button>
+              <span id="pf-check-status" class="text-body-sm text-on-surface-variant"></span>
             </div>
             <div class="flex gap-2">
               <button id="pf-save" class="px-4 py-2 bg-secondary text-white font-medium text-body-sm rounded-md hover:bg-secondary/90 transition-colors">Simpan</button>
@@ -60,54 +66,7 @@ export async function screenSettings(c) {
             </div>
           </div>
         </div>
-
-        <!-- Active / manual config -->
-        <div class="bg-surface-container-lowest border border-outline-variant rounded-lg p-stack_gap_lg shadow-sm">
-          <div class="flex items-center gap-4 mb-6">
-            <div class="w-16 h-16 bg-primary/10 rounded-lg border border-outline-variant flex items-center justify-center">
-              <span class="material-symbols-outlined text-primary text-3xl">dns</span>
-            </div>
-            <div>
-              <h3 class="font-title-sm text-title-sm text-primary">Active Configuration</h3>
-              <p class="text-body-sm text-on-surface-variant">Nilai aktif saat ini. Mengaktifkan profile akan mengisi form ini otomatis.</p>
-            </div>
-          </div>
-        <div class="space-y-6">
-          <div>
-            <label class="text-body-md font-medium text-primary block mb-2">Base API URL</label>
-            <input id="settings-ollama-url" class="w-full text-body-sm bg-surface-container-lowest border border-outline-variant rounded-md px-3 py-2 focus:ring-2 focus:ring-primary/10" type="text" value="http://localhost:11434"/>
-            <p class="text-[11px] text-on-surface-variant mt-1">Disimpan di database (netops.db). Nilai awal diambil dari OLLAMA_BASE_URL di .env.</p>
-          </div>
-          <div>
-            <label class="text-body-md font-medium text-primary block mb-2">Default Inference Model</label>
-            <input id="settings-ollama-model" class="w-full text-body-sm bg-surface-container-lowest border border-outline-variant rounded-md px-3 py-2 focus:ring-2 focus:ring-primary/10" type="text" value=""/>
-            <p class="text-[11px] text-on-surface-variant mt-1">Dipakai sebagai fallback bila agent tidak menentukan model sendiri.</p>
-          </div>
-          <div>
-            <label class="text-body-md font-medium text-primary block mb-2">API Key</label>
-            <div class="relative">
-              <input id="settings-ollama-apikey" class="w-full text-body-sm bg-surface-container-lowest border border-outline-variant rounded-md px-3 py-2 pr-10 font-data-mono" type="password" placeholder="Belum diatur" autocomplete="off"/>
-              <button type="button" onclick="document.getElementById('settings-ollama-apikey').type=document.getElementById('settings-ollama-apikey').type==='password'?'text':'password'" class="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant">
-                <span class="material-symbols-outlined text-[20px]">visibility</span>
-              </button>
-            </div>
-            <p id="settings-ollama-apikey-hint" class="text-[11px] text-on-surface-variant mt-1">Dikirim sebagai header Authorization (Bearer) ke endpoint OpenAI-compatible. Kosongkan untuk mempertahankan nilai tersimpan.</p>
-          </div>
-          <div class="flex items-center gap-3">
-            <button id="settings-test-connection" class="px-4 py-2 bg-primary text-white font-medium text-body-sm rounded-md hover:bg-primary/90 transition-colors flex items-center gap-2">
-              <span class="material-symbols-outlined text-[18px]">wifi_tethering</span> Test Connection
-            </button>
-            <span id="settings-test-status" class="text-body-sm text-on-surface-variant"></span>
-          </div>
-          <div id="settings-test-result" class="hidden p-4 rounded-lg border flex items-start gap-3"></div>
-          <div class="p-4 bg-surface-container-low rounded-lg border border-outline-variant flex items-start gap-3">
-            <span class="material-symbols-outlined text-on-secondary-container">info</span>
-            <div class="text-body-sm text-on-surface-variant">Perubahan berlaku langsung untuk agent baru setelah <span class="font-bold">Save changes</span> — tanpa restart server.</div>
-          </div>
-        </div>
       </div>
-      </div>
-    </div>
     </div>
 
     <!-- Memory -->
@@ -159,13 +118,15 @@ export async function screenSettings(c) {
     if (!form) return;
     $('pf-name').value = profile ? profile.name : '';
     $('pf-url').value = profile ? profile.base_url : '';
-    $('pf-model').value = profile ? profile.model : '';
+    setModelSelect($('pf-model'), [], profile ? profile.model : '');
     $('pf-apikey').value = '';
     $('pf-apikey').placeholder = profile ? (profile.api_key_set ? 'Kosongkan untuk tidak mengubah' : 'Kosongkan jika tidak ada') : 'Kosongkan jika tidak ada';
     $('pf-error').textContent = '';
+    $('pf-check-status').textContent = '';
     if (title) title.textContent = profile ? 'Edit Profile' : 'Tambah Profile';
     form.classList.remove('hidden');
     $('pf-name').focus();
+    if (profile) autoPopulateProfileModels(profile.id, profile.model);
   }
 
   function hideProfileForm() {
@@ -224,7 +185,6 @@ export async function screenSettings(c) {
       if (act === 'activate') {
         await apiPost(`/api/config/llm/profiles/${id}/activate`, {});
         await loadProfiles();
-        await loadEnv();
       } else if (act === 'deactivate') {
         await apiPost(`/api/config/llm/profiles/${id}/deactivate`, {});
         await loadProfiles();
@@ -281,120 +241,80 @@ export async function screenSettings(c) {
   const pfCancelBtn = $('pf-cancel');
   if (pfCancelBtn) pfCancelBtn.onclick = hideProfileForm;
 
+  const pfCheckBtn = $('pf-check-connection');
+  if (pfCheckBtn) pfCheckBtn.onclick = async () => {
+    const urlInput = $('pf-url');
+    const modelInput = $('pf-model');
+    const apiKeyInput = $('pf-apikey');
+    const statusEl = $('pf-check-status');
+    const base_url = urlInput ? urlInput.value.trim() : '';
+    const api_key = apiKeyInput ? apiKeyInput.value.trim() : '';
+    const currentModel = modelInput ? modelInput.value.trim() : '';
+
+    pfCheckBtn.disabled = true;
+    const origHtml = pfCheckBtn.innerHTML;
+    pfCheckBtn.innerHTML = `<span class="material-symbols-outlined text-[16px] animate-spin">progress_activity</span> Checking...`;
+    if (statusEl) { statusEl.textContent = ''; statusEl.className = 'text-body-sm text-on-surface-variant'; }
+
+    try {
+      const r = await apiPost('/api/llm/models', { base_url: base_url || undefined, api_key: api_key || undefined });
+      if (r.ok) {
+        setModelSelect(modelInput, r.models, currentModel || r.models[0] || '');
+        if (statusEl) {
+          statusEl.className = 'text-body-sm text-green-700';
+          statusEl.textContent = `${r.models.length} model ditemukan (${r.latency_ms} ms). Pilih dari dropdown Model.`;
+        }
+      } else if (statusEl) {
+        statusEl.className = 'text-body-sm text-red-600';
+        statusEl.textContent = `Koneksi gagal: ${r.error || 'Unknown error'}`;
+      }
+    } catch (e) {
+      if (statusEl) {
+        statusEl.className = 'text-body-sm text-red-600';
+        statusEl.textContent = 'Gagal menghubungi backend: ' + e.message;
+      }
+    } finally {
+      pfCheckBtn.disabled = false;
+      pfCheckBtn.innerHTML = origHtml;
+    }
+  };
+
   // ── end LLM Profiles ──────────────────────────────────────────────────────
 
-  async function loadEnv() {
-    try {
-      const cfg = await apiGet('/api/config/llm');
-      const u = $('settings-ollama-url');
-      const m = $('settings-ollama-model');
-      const k = $('settings-ollama-apikey');
-      const hint = $('settings-ollama-apikey-hint');
-      if (u) u.value = cfg.base_url || '';
-      if (m) m.value = cfg.model || '';
-      if (k) {
-        k.value = '';
-        k.placeholder = cfg.api_key_set ? cfg.api_key_preview : 'Belum diatur';
-      }
-      if (hint) {
-        hint.textContent = cfg.api_key_set
-          ? 'Kosongkan untuk mempertahankan key tersimpan saat ini.'
-          : 'Dikirim sebagai header Authorization (Bearer) ke endpoint OpenAI-compatible.';
-      }
-    } catch (_) {}
+  function setModelSelect(selectEl, models, currentValue) {
+    if (!selectEl) return;
+    const values = [...models];
+    if (currentValue && !values.includes(currentValue)) values.unshift(currentValue);
+    selectEl.innerHTML = values.length
+      ? values.map(m => `<option value="${esc(m)}">${esc(m)}</option>`).join('')
+      : `<option value="">Klik Check Connection untuk melihat model tersedia</option>`;
+    if (currentValue) selectEl.value = currentValue;
   }
 
-  const testBtn = $('settings-test-connection');
-  if (testBtn) testBtn.onclick = async () => {
-    const urlInput = $('settings-ollama-url');
-    const modelInput = $('settings-ollama-model');
-    const apiKeyInput = $('settings-ollama-apikey');
-    const statusEl = $('settings-test-status');
-    const resultEl = $('settings-test-result');
-    const base_url = urlInput ? urlInput.value.trim() : '';
-    const model = modelInput ? modelInput.value.trim() : '';
-    const api_key = apiKeyInput ? apiKeyInput.value.trim() : '';
-
-    testBtn.disabled = true;
-    const origHtml = testBtn.innerHTML;
-    testBtn.innerHTML = `<span class="material-symbols-outlined text-[18px] animate-spin">progress_activity</span> Testing...`;
-    if (statusEl) statusEl.textContent = '';
-    if (resultEl) resultEl.classList.add('hidden');
-
+  // Profile sudah tersimpan → langsung fetch daftar model pakai kredensial
+  // tersimpan di server, operator tidak perlu klik Check Connection manual.
+  async function autoPopulateProfileModels(profileId, currentModel) {
+    const statusEl = $('pf-check-status');
+    if (statusEl) { statusEl.className = 'text-body-sm text-on-surface-variant'; statusEl.textContent = 'Memuat model tersedia...'; }
     try {
-      const r = await apiPost('/api/llm/test', { model: model || undefined, base_url: base_url || undefined, api_key: api_key || undefined });
-      if (resultEl) {
-        resultEl.classList.remove('hidden');
-        if (r.ok) {
-          resultEl.className = 'p-4 rounded-lg border flex items-start gap-3 bg-green-50 border-green-300 text-green-800';
-          resultEl.innerHTML = `<span class="material-symbols-outlined">check_circle</span>
-            <div class="text-body-sm">
-              <div class="font-semibold">Koneksi berhasil</div>
-              <div>Model <span class="font-data-mono">${esc(r.model)}</span> merespons dalam ${esc(String(r.latency_ms))} ms.</div>
-            </div>`;
-        } else {
-          resultEl.className = 'p-4 rounded-lg border flex items-start gap-3 bg-red-50 border-red-300 text-red-800';
-          resultEl.innerHTML = `<span class="material-symbols-outlined">error</span>
-            <div class="text-body-sm">
-              <div class="font-semibold">Koneksi gagal (${esc(String(r.latency_ms))} ms)</div>
-              <div class="font-data-mono break-all">${esc(r.error || 'Unknown error')}</div>
-            </div>`;
+      const r = await apiPost(`/api/config/llm/profiles/${profileId}/models`, {});
+      if (r.ok) {
+        setModelSelect($('pf-model'), r.models, currentModel || r.models[0] || '');
+        if (statusEl) {
+          statusEl.className = 'text-body-sm text-green-700';
+          statusEl.textContent = `${r.models.length} model ditemukan (${r.latency_ms} ms).`;
         }
+      } else if (statusEl) {
+        statusEl.className = 'text-body-sm text-red-600';
+        statusEl.textContent = `Koneksi gagal: ${r.error || 'Unknown error'}`;
       }
     } catch (e) {
-      if (resultEl) {
-        resultEl.classList.remove('hidden');
-        resultEl.className = 'p-4 rounded-lg border flex items-start gap-3 bg-red-50 border-red-300 text-red-800';
-        resultEl.innerHTML = `<span class="material-symbols-outlined">error</span>
-          <div class="text-body-sm">
-            <div class="font-semibold">Gagal menghubungi backend</div>
-            <div>${esc(e.message)}</div>
-          </div>`;
-      }
-    } finally {
-      testBtn.disabled = false;
-      testBtn.innerHTML = origHtml;
+      if (statusEl) { statusEl.className = 'text-body-sm text-red-600'; statusEl.textContent = 'Gagal menghubungi backend: ' + e.message; }
     }
-  };
-
-  const saveBtn = $('settings-save');
-  if (saveBtn) saveBtn.onclick = async () => {
-    const active = document.querySelector('.settings-pane:not(.hidden)');
-    if (!active || active.id !== 'settings-content-environment') return;
-    const urlInput = $('settings-ollama-url');
-    const modelInput = $('settings-ollama-model');
-    const apiKeyInput = $('settings-ollama-apikey');
-    const orig = saveBtn.textContent;
-    saveBtn.disabled = true;
-    saveBtn.textContent = 'Saving...';
-    try {
-      const api_key = apiKeyInput ? apiKeyInput.value.trim() : '';
-      await apiPut('/api/config/llm', {
-        base_url: urlInput ? urlInput.value.trim() : undefined,
-        model: modelInput ? modelInput.value.trim() : undefined,
-        api_key: api_key || undefined,
-      });
-      await loadEnv();
-    } catch (e) {
-      await alertDialog('Gagal menyimpan konfigurasi LLM: ' + e.message, 'Terjadi Kesalahan');
-    } finally {
-      saveBtn.disabled = false;
-      saveBtn.textContent = orig;
-    }
-  };
-
-  const discardBtn = $('settings-discard');
-  if (discardBtn) discardBtn.onclick = () => {
-    const active = document.querySelector('.settings-pane:not(.hidden)');
-    if (!active || active.id !== 'settings-content-environment') return;
-    const resultEl = $('settings-test-result');
-    if (resultEl) resultEl.classList.add('hidden');
-    loadEnv();
-  };
+  }
 
   loadMemory();
   loadProfiles();
-  loadEnv();
 }
 
 export function settingsTab(tabId) {

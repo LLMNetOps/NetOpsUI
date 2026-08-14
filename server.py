@@ -280,6 +280,18 @@ def api_llm_test(req: LLMTestRequest) -> dict:
     return _agent.test_llm_connection(model=req.model, base_url=req.base_url, api_key=req.api_key)
 
 
+class LLMModelsRequest(BaseModel):
+    base_url: str | None = None
+    api_key: str | None = None
+
+
+@app.post("/api/llm/models")
+def api_llm_models(req: LLMModelsRequest) -> dict:
+    """List model tersedia dari endpoint OpenAI-compatible — isi dropdown model di Settings
+    tanpa operator perlu tahu nama model persis lebih dulu."""
+    return _agent.list_llm_models(base_url=req.base_url, api_key=req.api_key)
+
+
 # ── Tools: Direct invocation ─────────────────────────────────────────────────
 
 
@@ -695,6 +707,17 @@ def api_list_llm_profiles() -> dict:
     return {"profiles": profiles}
 
 
+@app.post("/api/config/llm/profiles/{profile_id}/models")
+def api_profile_models(profile_id: int) -> dict:
+    """List model tersedia untuk satu saved profile, pakai kredensial tersimpan di
+    DB (bukan yang dikirim browser) — dipakai Settings untuk auto-populate dropdown
+    model saat membuka form Edit Profile, tanpa operator perlu klik Check Connection."""
+    profile = next((p for p in db_list_llm_profiles() if p["id"] == profile_id), None)
+    if not profile:
+        raise HTTPException(404, "Profile tidak ditemukan")
+    return _agent.list_llm_models(base_url=profile["base_url"], api_key=profile.get("api_key") or None)
+
+
 class LLMProfileRequest(BaseModel):
     name: str
     base_url: str
@@ -789,6 +812,7 @@ class AddRouterRequest(BaseModel):
     ros_version: int = 7
     role: str = "backbone"
     network: str = "kampus"
+    node_type: str = "router"
     ssh_username: str = ""
     ssh_password: str = ""
 
@@ -797,7 +821,7 @@ class AddRouterRequest(BaseModel):
 def api_config_add_router(req: AddRouterRequest):
     result = TOOL_MAP["add_router_to_config"].invoke({
         "name": req.name, "host": req.host, "ros_version": req.ros_version,
-        "role": req.role, "network": req.network,
+        "role": req.role, "network": req.network, "node_type": req.node_type,
     })
     if req.ssh_username and req.ssh_password:
         from tools.db import db_update_router_field
@@ -812,6 +836,7 @@ class UpdateRouterRequest(BaseModel):
     host: str | None = None
     role: str | None = None
     network: str | None = None
+    node_type: str | None = None
     ros_version: int | None = None
     ssh_username: str | None = None
     ssh_password: str | None = None

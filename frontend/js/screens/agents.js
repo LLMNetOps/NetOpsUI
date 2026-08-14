@@ -37,7 +37,7 @@ async function getActiveLlmProfiles() {
 
 export async function screenAgents(c, param) {
   c.innerHTML = `<div class="p-container_gutter max-w-[1600px] mx-auto">
-    ${pageHeader('Agents', 'Kelola konfigurasi specialist agent. Pilih agent di kiri untuk edit. Perubahan disimpan ke file definisi dan baru berlaku setelah server di-restart.')}
+    ${pageHeader('Agents', 'Kelola konfigurasi specialist agent. Pilih agent di kiri untuk edit. Perubahan disimpan ke database dan baru berlaku setelah server di-restart.')}
     <div class="grid grid-cols-12 gap-stack_gap_lg items-start">
       <div class="col-span-12 xl:col-span-5">
         <div class="bg-surface-container-lowest border border-outline-variant rounded-lg overflow-hidden">
@@ -54,7 +54,7 @@ export async function screenAgents(c, param) {
         </div>
       </div>
       <div class="col-span-12 xl:col-span-7">
-        <div id="agent-detail-panel" class="bg-surface-container-lowest border border-outline-variant rounded-lg overflow-hidden">
+        <div id="agent-detail-panel" class="bg-surface-container-lowest border border-outline-variant rounded-lg overflow-hidden flex flex-col max-h-[calc(100vh_-_104px)] sticky top-[88px]">
           ${emptyPanelHtml()}
         </div>
       </div>
@@ -146,11 +146,11 @@ async function renderDetailPanel(name) {
 }
 
 function editFormHtml(agent) {
-  return `<div class="flex justify-between items-center px-6 py-4 border-b border-outline-variant">
+  return `<div class="flex justify-between items-center px-6 py-4 border-b border-outline-variant flex-shrink-0">
     <h3 class="font-title-sm text-title-sm text-primary font-bold">${esc(agent.name)}${agent.alias ? ` <span class="text-on-surface-variant font-normal text-body-sm">(${esc(agent.alias)})</span>` : ''}</h3>
     <button id="af-close" class="text-on-surface-variant hover:text-primary transition-colors p-1 rounded" title="Tutup"><span class="material-symbols-outlined text-[20px]">close</span></button>
   </div>
-  <div class="p-6 space-y-4 max-h-[75vh] overflow-y-auto">
+  <div class="p-6 space-y-4 flex-1 min-h-0 overflow-y-auto">
     <div id="af-error" class="hidden"></div>
     <div>
       <label class="block text-label-caps font-label-caps text-on-surface-variant mb-1">Description (dipakai supervisor untuk routing)</label>
@@ -159,7 +159,10 @@ function editFormHtml(agent) {
     <div class="grid grid-cols-2 gap-4">
       <div>
         <label class="block text-label-caps font-label-caps text-on-surface-variant mb-1">Model</label>
-        <input id="af-model" type="text" value="${esc(agent.model || '')}" class="w-full px-3 py-2 border border-outline-variant rounded text-body-sm bg-surface-container-lowest focus:outline-none focus:ring-1 focus:ring-primary">
+        <select id="af-model" class="w-full px-3 py-2 border border-outline-variant rounded text-body-sm bg-surface-container-lowest focus:outline-none focus:ring-1 focus:ring-primary">
+          <option value="${esc(agent.model || '')}">${esc(agent.model || '(pilih model)')}</option>
+        </select>
+        <p id="af-model-hint" class="text-[11px] text-on-surface-variant mt-1">Daftar model dimuat dari Ollama Host di sebelah kanan.</p>
       </div>
       <div>
         <label class="block text-label-caps font-label-caps text-on-surface-variant mb-1">Ollama Host (opsional)</label>
@@ -216,7 +219,7 @@ function editFormHtml(agent) {
       <textarea id="af-body" rows="14" class="w-full px-3 py-2 border border-outline-variant rounded text-body-sm font-data-mono-sm bg-surface-container-lowest focus:outline-none focus:ring-1 focus:ring-primary resize-y"></textarea>
     </div>
   </div>
-  <div class="flex justify-between items-center px-6 py-4 border-t border-outline-variant">
+  <div class="flex justify-between items-center px-6 py-4 border-t border-outline-variant flex-shrink-0">
     ${agent.has_default
       ? `<button id="af-restore" class="px-4 py-2 border border-amber-200 text-amber-700 rounded text-body-sm hover:bg-amber-50 transition-colors flex items-center gap-2">
            <span class="material-symbols-outlined text-sm">restart_alt</span>Restore Default
@@ -247,6 +250,44 @@ async function wireEditForm(agent) {
     ? `<option value="${esc(current)}" selected>${esc(current)} (custom)</option>` : '';
   hostSelect.innerHTML = `<option value="">(pakai default global)</option>${customOpt}`
     + llmProfiles.map(p => `<option value="${esc(p.base_url)}" ${p.base_url === current ? 'selected' : ''}>${esc(p.name)} — ${esc(p.base_url)}</option>`).join('');
+
+  // Model dropdown depends on which host is selected — fetch the model list for
+  // that connection so the operator picks from what's actually available instead
+  // of typing a name that might not exist (typos silently break the agent).
+  function setModelOptions(models, currentValue) {
+    const sel = $('af-model');
+    if (!sel) return;
+    const values = [...models];
+    if (currentValue && !values.includes(currentValue)) values.unshift(currentValue);
+    sel.innerHTML = values.length
+      ? values.map(m => `<option value="${esc(m)}">${esc(m)}</option>`).join('')
+      : `<option value="${esc(currentValue)}">${esc(currentValue || '(tidak ada model ditemukan)')}</option>`;
+    if (currentValue) sel.value = currentValue;
+  }
+
+  async function refreshModelOptions() {
+    const hint = $('af-model-hint');
+    const currentModel = ($('af-model').value || '').trim() || agent.model || '';
+    const hostUrl = hostSelect.value;
+    const matchedProfile = llmProfiles.find(p => p.base_url === hostUrl);
+    if (hint) hint.textContent = 'Memuat model tersedia...';
+    try {
+      const r = matchedProfile
+        ? await apiPost(`/api/config/llm/profiles/${matchedProfile.id}/models`, {})
+        : await apiPost('/api/llm/models', hostUrl ? { base_url: hostUrl } : {});
+      if (r.ok) {
+        setModelOptions(r.models, currentModel);
+        if (hint) hint.textContent = `${r.models.length} model ditemukan dari ${matchedProfile ? matchedProfile.name : (hostUrl || 'default global')} (${r.latency_ms} ms).`;
+      } else if (hint) {
+        hint.textContent = `Gagal memuat model dari host ini: ${r.error || 'Unknown error'}. Model saat ini (${esc(currentModel)}) tetap dipakai.`;
+      }
+    } catch (e) {
+      if (hint) hint.textContent = 'Gagal menghubungi backend: ' + e.message;
+    }
+  }
+
+  hostSelect.onchange = refreshModelOptions;
+  refreshModelOptions();
 
   $('af-close').onclick = () => {
     _selectedName = null;

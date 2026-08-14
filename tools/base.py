@@ -137,6 +137,7 @@ def load_config() -> None:
             "ros_version": int(row["ros_version"]),
             "role": str(row["role"]),
             "network": str(row["network"]),
+            "node_type": str(row.get("node_type") or "router"),
             "ssh_username": str(row.get("ssh_username") or ""),
             "ssh_password": str(row.get("ssh_password") or ""),
         }

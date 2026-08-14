@@ -43,18 +43,21 @@ def patch_router_host(router_name: str, host: str) -> str:
 @tool
 def patch_router_field(router_name: str, field: str, value: str) -> str:
     """
-    Update field role, network, ros_version, atau name untuk router.
+    Update field role, network, node_type, ros_version, atau name untuk router.
     MEMERLUKAN APPROVAL OPERATOR — perubahan mempengaruhi routing dan behavior agent.
     Args:
         router_name: Nama router.
-        field: Field yang diubah — 'role', 'network', 'ros_version', atau 'name'.
+        field: Field yang diubah — 'role', 'network', 'node_type', 'ros_version', atau 'name'.
         value: Nilai baru.
     """
-    ALLOWED = {"role", "network", "ros_version", "name"}
+    ALLOWED = {"role", "network", "node_type", "ros_version", "name"}
     if field not in ALLOWED:
         return f"Field '{field}' tidak diizinkan. Pilihan: {', '.join(sorted(ALLOWED))}."
     if field == "host":
         return "Gunakan patch_router_host() untuk update field 'host'."
+    VALID_NODE_TYPES = {"router", "switch", "server"}
+    if field == "node_type" and value not in VALID_NODE_TYPES:
+        return f"node_type '{value}' tidak valid. Pilihan: {', '.join(sorted(VALID_NODE_TYPES))}."
     try:
         validate_router(router_name)
         typed_value: int | str = int(value) if field == "ros_version" else value
@@ -70,6 +73,7 @@ def patch_router_field(router_name: str, field: str, value: str) -> str:
                 ros_version=existing["ros_version"],
                 role=existing["role"],
                 network=existing["network"],
+                node_type=existing.get("node_type", "router"),
                 dhcp_servers=existing["dhcp_servers"],
                 ssh_username=existing["ssh_username"],
                 ssh_password=existing["ssh_password"],
@@ -98,6 +102,7 @@ def add_router_to_config(
     role: str,
     network: str,
     ros_version: int,
+    node_type: str = "router",
 ) -> str:
     """
     Tambah router baru ke database. MEMERLUKAN APPROVAL OPERATOR.
@@ -108,20 +113,24 @@ def add_router_to_config(
         role: Role router — 'access', 'backbone', atau 'gate_idren'.
         network: Network router — 'kampus' atau 'idren'.
         ros_version: Versi RouterOS — 6 atau 7.
+        node_type: Jenis node — 'router', 'switch', atau 'server'. Default 'router'.
     """
     VALID_ROLES = {"access", "backbone", "gate_idren", "lab"}
     VALID_NETWORKS = {"kampus", "idren", "lab"}
+    VALID_NODE_TYPES = {"router", "switch", "server"}
     if role not in VALID_ROLES:
         return f"Role '{role}' tidak valid. Pilihan: {', '.join(sorted(VALID_ROLES))}."
     if network not in VALID_NETWORKS:
         return f"Network '{network}' tidak valid. Pilihan: {', '.join(sorted(VALID_NETWORKS))}."
     if ros_version not in (6, 7):
         return "ros_version harus 6 atau 7."
+    if node_type not in VALID_NODE_TYPES:
+        return f"node_type '{node_type}' tidak valid. Pilihan: {', '.join(sorted(VALID_NODE_TYPES))}."
     try:
         if name in VALID_ROUTER_NAMES:
             return f"Router '{name}' sudah ada. Gunakan patch_router_field() untuk update."
         db_add_router(name=name, host=host, ros_version=ros_version,
-                      role=role, network=network)
+                      role=role, network=network, node_type=node_type)
         reload_config()
         return (
             f"Router baru berhasil ditambahkan.\n"
@@ -129,6 +138,7 @@ def add_router_to_config(
             f"  host        : {host}\n"
             f"  role        : {role}\n"
             f"  network     : {network}\n"
+            f"  node_type   : {node_type}\n"
             f"  ros_version : {ros_version}"
         )
     except Exception as e:

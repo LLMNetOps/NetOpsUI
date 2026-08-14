@@ -3,6 +3,7 @@ import { $, esc, badge, pageHeader, loadingHtml, errorHtml, confirmDialog, alert
 
 const ROLES = ['access', 'backbone', 'gate_idren', 'lab'];
 const NETWORKS = ['kampus', 'idren', 'lab'];
+const NODE_TYPES = ['router', 'switch', 'server'];
 
 let _routersCache = [];
 let _selectedName = null; // name of node shown in detail panel (edit mode)
@@ -25,11 +26,12 @@ export async function screenNodes(c) {
             <table class="w-full text-left border-collapse">
               <thead class="bg-surface-container-low"><tr class="text-label-caps font-label-caps text-outline border-b border-outline-variant">
                 <th class="py-3 px-4">Name</th>
+                <th class="py-3 px-4">Type</th>
                 <th class="py-3 px-4">Host</th>
                 <th class="py-3 px-4">Role / Network</th>
                 <th class="py-3 px-4">SSH</th>
               </tr></thead>
-              <tbody id="nodes-tbody" class="divide-y divide-outline-variant"><tr><td class="py-8 text-center" colspan="4">${loadingHtml()}</td></tr></tbody>
+              <tbody id="nodes-tbody" class="divide-y divide-outline-variant"><tr><td class="py-8 text-center" colspan="5">${loadingHtml()}</td></tr></tbody>
             </table>
           </div>
         </div>
@@ -68,7 +70,7 @@ function renderRows() {
   if (!tb) return;
 
   if (!_routersCache.length) {
-    tb.innerHTML = `<tr><td class="py-8 px-4 text-center text-on-surface-variant text-body-sm" colspan="4">Belum ada node. Klik "Add Node".</td></tr>`;
+    tb.innerHTML = `<tr><td class="py-8 px-4 text-center text-on-surface-variant text-body-sm" colspan="5">Belum ada node. Klik "Add Node".</td></tr>`;
     return;
   }
 
@@ -79,6 +81,7 @@ function renderRows() {
       : badge('DEFAULT', 'gray');
     return `<tr data-row-select="${esc(rt.name)}" class="cursor-pointer transition-colors ${isSelected ? 'bg-primary/5 border-l-[3px] border-l-primary' : 'hover:bg-surface-container-low border-l-[3px] border-l-transparent'}">
       <td class="py-2.5 px-4"><p class="font-medium text-primary truncate max-w-[160px]">${esc(rt.name)}</p></td>
+      <td class="py-2.5 px-4 text-body-sm text-on-surface-variant capitalize">${esc(rt.node_type || 'router')}</td>
       <td class="py-2.5 px-4 font-data-mono text-data-mono text-on-surface-variant">${esc(rt.host || '—')}</td>
       <td class="py-2.5 px-4 text-body-sm text-on-surface-variant">${esc(rt.role || '—')} / ${esc(rt.network || '—')}</td>
       <td class="py-2.5 px-4">${sshBadge}</td>
@@ -211,6 +214,10 @@ function nodeFormHtml(router, isEdit) {
         <input id="nf-host" type="text" value="${esc(router?.host || '')}" placeholder="10.x.x.x" class="w-full px-3 py-2 border border-outline-variant rounded text-body-sm font-data-mono bg-surface-container-lowest focus:outline-none focus:ring-1 focus:ring-primary">
       </div>
       <div>
+        <label class="block text-label-caps font-label-caps text-on-surface-variant mb-1">Node Type</label>
+        <select id="nf-node-type" class="w-full px-3 py-2 border border-outline-variant rounded text-body-sm bg-surface-container-lowest focus:outline-none focus:ring-1 focus:ring-primary">${opts(NODE_TYPES, router?.node_type || 'router')}</select>
+      </div>
+      <div>
         <label class="block text-label-caps font-label-caps text-on-surface-variant mb-1">Role</label>
         <select id="nf-role" class="w-full px-3 py-2 border border-outline-variant rounded text-body-sm bg-surface-container-lowest focus:outline-none focus:ring-1 focus:ring-primary">${opts(ROLES, router?.role || 'backbone')}</select>
       </div>
@@ -305,6 +312,7 @@ function wireNodeForm(router, isEdit) {
     const saveBtn = $('nf-save');
     const name = ($('nf-name').value || '').trim();
     const host = ($('nf-host').value || '').trim();
+    const node_type = $('nf-node-type').value;
     const role = $('nf-role').value;
     const network = $('nf-network').value;
     const ros_version = parseInt($('nf-ros').value, 10);
@@ -321,12 +329,12 @@ function wireNodeForm(router, isEdit) {
     try {
       if (isEdit) {
         await apiPut('/api/config/routers/' + encodeURIComponent(router.name), {
-          host, role, network, ros_version,
+          host, role, network, node_type, ros_version,
           ssh_username, ssh_password: ssh_password || undefined,
         });
       } else {
         await apiPost('/api/config/routers', {
-          name, host, role, network, ros_version, ssh_username, ssh_password,
+          name, host, role, network, node_type, ros_version, ssh_username, ssh_password,
         });
         _creating = false;
         _selectedName = name;

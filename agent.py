@@ -338,3 +338,37 @@ def test_llm_connection(
             "latency_ms": round((time.monotonic() - started) * 1000),
             "error": str(e),
         }
+
+
+def list_llm_models(base_url: str | None = None, api_key: str | None = None) -> dict:
+    """List model id yang tersedia dari endpoint OpenAI-compatible (GET /models).
+
+    Dipakai Settings untuk isi dropdown model tanpa operator harus tahu nama
+    model persis lebih dulu — cukup base_url + api_key untuk cek koneksi.
+    """
+    import time
+    from openai import OpenAI  # noqa: PLC0415
+    from tools.db import db_get_llm_config  # noqa: PLC0415
+
+    cfg = db_get_llm_config()
+    base_url = base_url or cfg.get("base_url") or os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+    api_key = api_key or cfg.get("api_key") or os.getenv("OLLAMA_API_KEY", "") or "sk-placeholder"
+    started = time.monotonic()
+    try:
+        client = OpenAI(base_url=base_url, api_key=api_key, timeout=10, max_retries=0)
+        resp = client.models.list()
+        models = sorted(m.id for m in resp.data)
+        return {
+            "ok": True,
+            "base_url": base_url,
+            "models": models,
+            "latency_ms": round((time.monotonic() - started) * 1000),
+        }
+    except Exception as e:
+        return {
+            "ok": False,
+            "base_url": base_url,
+            "models": [],
+            "latency_ms": round((time.monotonic() - started) * 1000),
+            "error": str(e),
+        }
