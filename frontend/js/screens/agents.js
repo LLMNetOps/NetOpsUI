@@ -8,6 +8,20 @@ let _detailCache = {}; // name -> full detail payload, invalidated on save/resto
 let _toolNamesCache = null;
 let _skillNamesCache = null;
 let _llmProfilesCache = null;
+let _resizeHandler = null;
+
+// The panel's sticky top can't be a hardcoded pixel guess — pageHeader's subtitle
+// wraps to a different number of lines depending on viewport width, which shifts
+// where the panel actually starts. Measure its real static (unstuck) position and
+// derive max-height from that so the bottom always lands just above the viewport
+// edge instead of running off the bottom.
+function fitDetailPanel() {
+  const panel = $('agent-detail-panel');
+  if (!panel) return;
+  const top = Math.round(panel.getBoundingClientRect().top);
+  panel.style.top = `${top}px`;
+  panel.style.maxHeight = `calc(100vh - ${top}px - 24px)`;
+}
 
 async function getToolNames() {
   if (!_toolNamesCache) {
@@ -54,12 +68,17 @@ export async function screenAgents(c, param) {
         </div>
       </div>
       <div class="col-span-12 xl:col-span-7">
-        <div id="agent-detail-panel" class="bg-surface-container-lowest border border-outline-variant rounded-lg overflow-hidden flex flex-col max-h-[calc(100vh_-_104px)] sticky top-[88px]">
+        <div id="agent-detail-panel" class="bg-surface-container-lowest border border-outline-variant rounded-lg overflow-hidden flex flex-col sticky">
           ${emptyPanelHtml()}
         </div>
       </div>
     </div>
   </div>`;
+
+  fitDetailPanel();
+  if (_resizeHandler) window.removeEventListener('resize', _resizeHandler);
+  _resizeHandler = fitDetailPanel;
+  window.addEventListener('resize', _resizeHandler);
 
   _selectedName = null;
   await loadAgents();

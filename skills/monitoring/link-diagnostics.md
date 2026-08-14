@@ -1,6 +1,6 @@
 ---
 name: link-diagnostics
-domain: interface
+domain: monitoring
 triggers:
   - interface error
   - interface down

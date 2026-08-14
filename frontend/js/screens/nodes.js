@@ -6,37 +6,46 @@ const NETWORKS = ['kampus', 'idren', 'lab'];
 const NODE_TYPES = ['router', 'switch', 'server'];
 
 let _routersCache = [];
+let _statusCache = {};    // name -> { status, st, rtt, cpu, ram, up }
 let _selectedName = null; // name of node shown in detail panel (edit mode)
 let _creating = false;    // true while the detail panel shows the "new node" form
 let _globalSSH = null;    // cached /api/config/ssh response
 
+const NODE_TYPE_ICONS = { router: 'router', switch: 'lan', server: 'dns' };
+const NODES_COLSPAN = 6;
+
 export async function screenNodes(c) {
   c.innerHTML = `<div class="p-container_gutter max-w-[1600px] mx-auto">
-    ${pageHeader('Nodes', 'Kelola router yang dikelola platform ini beserta kredensial SSH-nya. Pilih node di tabel untuk edit.', `
+    ${pageHeader('Nodes', 'Kelola router yang dikelola platform ini beserta status live dan kredensial SSH-nya. Pilih node di tabel untuk edit.', `
+      <button id="btn-refresh-status" class="px-4 py-2 bg-surface-container-lowest border border-outline-variant rounded text-primary font-body-md hover:bg-surface-container transition-colors flex items-center">
+        <span class="material-symbols-outlined mr-2 text-sm">refresh</span> Refresh Status
+      </button>
       <button id="btn-add-node" class="px-4 py-2 bg-primary text-white rounded font-body-md hover:bg-primary/90 transition-colors flex items-center gap-2">
         <span class="material-symbols-outlined text-sm">add</span> Add Node
       </button>`)}
     <div class="grid grid-cols-12 gap-stack_gap_lg items-start">
-      <div class="col-span-12 xl:col-span-5">
+      <div class="col-span-12 xl:col-span-6">
         <div class="bg-surface-container-lowest border border-outline-variant rounded-lg overflow-hidden">
-          <div class="px-6 py-3 border-b border-outline-variant">
+          <div class="px-6 py-3 border-b border-outline-variant flex justify-between items-center">
             <h3 class="font-title-sm text-title-sm text-primary">Managed Nodes</h3>
+            <span class="text-label-caps font-label-caps text-on-surface-variant">Live Status</span>
           </div>
           <div class="overflow-x-auto">
             <table class="w-full text-left border-collapse">
               <thead class="bg-surface-container-low"><tr class="text-label-caps font-label-caps text-outline border-b border-outline-variant">
                 <th class="py-3 px-4">Name</th>
-                <th class="py-3 px-4">Type</th>
                 <th class="py-3 px-4">Host</th>
-                <th class="py-3 px-4">Role / Network</th>
-                <th class="py-3 px-4">SSH</th>
+                <th class="py-3 px-4">Status</th>
+                <th class="py-3 px-4">CPU</th>
+                <th class="py-3 px-4">RAM</th>
+                <th class="py-3 px-4">Uptime</th>
               </tr></thead>
-              <tbody id="nodes-tbody" class="divide-y divide-outline-variant"><tr><td class="py-8 text-center" colspan="5">${loadingHtml()}</td></tr></tbody>
+              <tbody id="nodes-tbody" class="divide-y divide-outline-variant"><tr><td class="py-8 text-center" colspan="${NODES_COLSPAN}">${loadingHtml()}</td></tr></tbody>
             </table>
           </div>
         </div>
       </div>
-      <div class="col-span-12 xl:col-span-7">
+      <div class="col-span-12 xl:col-span-6">
         <div id="node-detail-panel" class="bg-surface-container-lowest border border-outline-variant rounded-lg overflow-hidden">
           ${loadingHtml('Memuat pengaturan SSH...')}
         </div>
@@ -46,10 +55,69 @@ export async function screenNodes(c) {
 
   const addBtn = $('btn-add-node');
   if (addBtn) addBtn.onclick = startCreate;
+  const refreshBtn = $('btn-refresh-status');
+  if (refreshBtn) refreshBtn.onclick = () => loadStatus();
 
   _selectedName = null;
   _creating = false;
-  await Promise.all([loadRouters(), loadGlobalSSH()]);
+  _statusCache = {};
+  await loadRouters();
+  await Promise.all([loadGlobalSSH(), loadStatus()]);
+}
+
+// ── Live status (reachability + system info) ──────────────────────────────────
+
+function parseReachability(text) {
+  if (!text) return { status: 'gray', st: 'UNKNOWN', rtt: '—' };
+  const down = /unreachable|gagal|error/i.test(text);
+  const ok = !down && /reachable/i.test(text);
+  const m = text.match(/RTT:\s*([\d.]+\s*ms)/i);
+  return {
+    status: down ? 'red' : ok ? 'green' : 'amber',
+    st: down ? 'OFFLINE' : ok ? 'ONLINE' : 'UNKNOWN',
+    rtt: m ? m[1] : '—',
+  };
+}
+
+function parseSystemInfo(text) {
+  if (!text) return { cpu: null, ram: null, up: '—' };
+  const cpuM = text.match(/cpu-load:\s*(\d+)%/i);
+  const freeM = text.match(/free-memory:\s*([\d.]+)\s*(\w+)/i);
+  const totalM = text.match(/total-memory:\s*([\d.]+)\s*(\w+)/i);
+  const upM = text.match(/uptime:\s*(\S+)/i);
+  let ram = null;
+  if (freeM && totalM && parseFloat(totalM[1]) > 0) {
+    ram = Math.round((1 - parseFloat(freeM[1]) / parseFloat(totalM[1])) * 100);
+  }
+  return {
+    cpu: cpuM ? parseInt(cpuM[1], 10) : null,
+    ram,
+    up: upM ? upM[1] : '—',
+  };
+}
+
+async function loadStatus() {
+  const btn = $('btn-refresh-status');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="material-symbols-outlined animate-spin mr-2 text-sm">progress_activity</span> Memuat...'; }
+  try {
+    const [reachRes, sysRes] = await Promise.all([
+      apiPost('/api/tools/reachability/all', {}),
+      apiPost('/api/tools/system-info/all', {}),
+    ]);
+    const reach = reachRes.results || {};
+    const sys = sysRes.results || {};
+    const names = new Set([...Object.keys(reach), ...Object.keys(sys)]);
+    const next = {};
+    for (const name of names) {
+      next[name] = { ...parseReachability(reach[name]), ...parseSystemInfo(sys[name]) };
+    }
+    _statusCache = next;
+  } catch (e) {
+    // keep previous status cache; table still shows config data
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<span class="material-symbols-outlined mr-2 text-sm">refresh</span> Refresh Status'; }
+  }
+  renderRows();
 }
 
 // ── Table ────────────────────────────────────────────────────────────────────
@@ -61,30 +129,37 @@ async function loadRouters() {
     _routersCache = r.routers || [];
     renderRows();
   } catch (e) {
-    if (tb) tb.innerHTML = `<tr><td class="py-6 px-4 text-center" colspan="4">${errorHtml('Gagal memuat nodes: ' + e.message)}</td></tr>`;
+    if (tb) tb.innerHTML = `<tr><td class="py-6 px-4 text-center" colspan="${NODES_COLSPAN}">${errorHtml('Gagal memuat nodes: ' + e.message)}</td></tr>`;
   }
 }
+
+const barColor = v => v >= 80 ? 'bg-red-600' : v >= 60 ? 'bg-amber-500' : 'bg-green-600';
+const loadCell = v => v == null
+  ? `<td class="py-2.5 px-4 text-on-surface-variant text-body-sm">—</td>`
+  : `<td class="py-2.5 px-4"><div class="flex items-center gap-2 w-20">
+      <div class="flex-1 h-1.5 bg-surface-container-highest rounded-full overflow-hidden"><div class="h-full ${barColor(v)}" style="width:${v}%;"></div></div>
+      <span class="font-data-mono-sm text-data-mono-sm w-7 text-right">${v}%</span>
+    </div></td>`;
 
 function renderRows() {
   const tb = $('nodes-tbody');
   if (!tb) return;
 
   if (!_routersCache.length) {
-    tb.innerHTML = `<tr><td class="py-8 px-4 text-center text-on-surface-variant text-body-sm" colspan="5">Belum ada node. Klik "Add Node".</td></tr>`;
+    tb.innerHTML = `<tr><td class="py-8 px-4 text-center text-on-surface-variant text-body-sm" colspan="${NODES_COLSPAN}">Belum ada node. Klik "Add Node".</td></tr>`;
     return;
   }
 
   tb.innerHTML = _routersCache.map(rt => {
     const isSelected = !_creating && _selectedName === rt.name;
-    const sshBadge = rt.ssh_username
-      ? badge('OVERRIDE', 'blue')
-      : badge('DEFAULT', 'gray');
+    const st = _statusCache[rt.name] || { status: 'gray', st: 'UNKNOWN', rtt: '—', cpu: null, ram: null, up: '—' };
+    const icon = NODE_TYPE_ICONS[rt.node_type] || 'router';
     return `<tr data-row-select="${esc(rt.name)}" class="cursor-pointer transition-colors ${isSelected ? 'bg-primary/5 border-l-[3px] border-l-primary' : 'hover:bg-surface-container-low border-l-[3px] border-l-transparent'}">
-      <td class="py-2.5 px-4"><p class="font-medium text-primary truncate max-w-[160px]">${esc(rt.name)}</p></td>
-      <td class="py-2.5 px-4 text-body-sm text-on-surface-variant capitalize">${esc(rt.node_type || 'router')}</td>
+      <td class="py-2.5 px-4"><div class="flex items-center gap-2"><span class="material-symbols-outlined text-outline text-[18px]">${icon}</span><span class="font-medium text-primary truncate max-w-[140px]">${esc(rt.name)}</span></div></td>
       <td class="py-2.5 px-4 font-data-mono text-data-mono text-on-surface-variant">${esc(rt.host || '—')}</td>
-      <td class="py-2.5 px-4 text-body-sm text-on-surface-variant">${esc(rt.role || '—')} / ${esc(rt.network || '—')}</td>
-      <td class="py-2.5 px-4">${sshBadge}</td>
+      <td class="py-2.5 px-4">${badge(st.st, st.status)}<div class="text-[10px] text-on-surface-variant font-data-mono mt-0.5">${esc(st.rtt)}</div></td>
+      ${loadCell(st.cpu)}${loadCell(st.ram)}
+      <td class="py-2.5 px-4 font-data-mono-sm text-data-mono-sm text-on-surface-variant">${esc(st.up)}</td>
     </tr>`;
   }).join('');
 

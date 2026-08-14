@@ -336,6 +336,19 @@ def api_system_info(req: RouterRequest):
     return {"result": TOOL_MAP["get_system_info"].invoke({"router_name": req.router_name})}
 
 
+@app.post("/api/tools/system-info/all")
+def api_system_info_all():
+    from tools.base import get_unique_router_entries
+    results = {}
+    for entry in get_unique_router_entries():
+        try:
+            r = TOOL_MAP["get_system_info"].invoke({"router_name": entry["name"]})
+            results[entry["name"]] = r
+        except Exception as e:
+            results[entry["name"]] = f"Error: {e}"
+    return {"results": results}
+
+
 @app.post("/api/tools/traffic")
 def api_traffic(req: RouterRequest):
     return {"result": TOOL_MAP["get_traffic_summary"].invoke({"router_name": req.router_name})}

@@ -4,15 +4,23 @@ import { mountTagInput } from '../tag-input.js';
 
 const KNOWN_DOMAINS = ['monitoring', 'routing', 'config', 'security', 'dhcp', 'netbox', 'report', 'general'];
 const PAGE_SIZE = 10;
+const STATUS_OPTIONS = [
+  { key: 'enabled',  label: 'Enabled' },
+  { key: 'disabled', label: 'Disabled' },
+  { key: 'approval', label: 'Requires Approval' },
+  { key: 'modified', label: 'Modified' },
+];
 
 let _skillsCache = [];
-let _activeFilter = 'all';
+let _domainFilter = new Set(); // empty = no domain filter (show all)
+let _statusFilter = new Set(); // empty = no status filter (show all)
 let _filteredList = [];
 let _currentPage = 1;
 let _selectedName = null; // name of the skill shown in the detail panel (edit mode)
 let _creating = false;    // true while the detail panel is showing the "new skill" form
 let _detailCache = {};    // name -> full skill payload (with body), invalidated on save/restore/delete
 let _toolNamesCache = null;
+let _docClickHandler = null;
 
 async function getToolNames() {
   if (!_toolNamesCache) {
@@ -32,21 +40,33 @@ export async function screenSkills(c) {
       <div class="col-span-12 xl:col-span-5 space-y-stack_gap_lg">
         <div class="bg-surface-container-lowest border border-outline-variant rounded-lg overflow-hidden">
           <div class="px-6 py-3 border-b border-outline-variant flex flex-wrap gap-2 items-center justify-between">
-            <div id="skills-filters" class="flex flex-wrap gap-2"></div>
+            <span class="text-label-caps font-label-caps text-on-surface-variant">Klik ikon filter di kolom Domain / Status untuk memilih beberapa sekaligus.</span>
             <input id="skills-search" type="text" placeholder="Filter skill..." class="px-3 py-1.5 border border-outline-variant rounded text-body-sm bg-surface-container-lowest focus:outline-none focus:ring-1 focus:ring-primary w-48">
           </div>
           <div class="overflow-x-auto">
             <table class="w-full text-left border-collapse">
               <thead class="bg-surface-container-low"><tr class="text-label-caps font-label-caps text-outline border-b border-outline-variant">
                 <th class="py-3 px-4">Skill Name</th>
-                <th class="py-3 px-4">Domain</th>
-                <th class="py-3 px-4">Status</th>
+                <th class="py-3 px-4">
+                  <button id="th-domain-filter-btn" type="button" class="flex items-center gap-1 hover:text-primary transition-colors">
+                    <span>Domain</span>
+                    <span id="th-domain-filter-icon" class="material-symbols-outlined text-[14px]">filter_list</span>
+                  </button>
+                </th>
+                <th class="py-3 px-4">
+                  <button id="th-status-filter-btn" type="button" class="flex items-center gap-1 hover:text-primary transition-colors">
+                    <span>Status</span>
+                    <span id="th-status-filter-icon" class="material-symbols-outlined text-[14px]">filter_list</span>
+                  </button>
+                </th>
               </tr></thead>
               <tbody id="skills-tbody" class="divide-y divide-outline-variant"><tr><td class="py-8 text-center" colspan="3">${loadingHtml()}</td></tr></tbody>
             </table>
           </div>
           <div id="skills-pagination" class="px-4 py-3 border-t border-outline-variant flex items-center justify-between gap-4 flex-wrap"></div>
         </div>
+        <div id="th-domain-filter-dropdown" class="hidden fixed z-30 w-56 bg-surface-container-lowest border border-outline-variant rounded-lg shadow-lg py-2 normal-case font-body-sm text-on-surface"></div>
+        <div id="th-status-filter-dropdown" class="hidden fixed z-30 w-56 bg-surface-container-lowest border border-outline-variant rounded-lg shadow-lg py-2 normal-case font-body-sm text-on-surface"></div>
         <div class="bg-surface-container-lowest border border-outline-variant rounded-lg overflow-hidden">
           <div class="px-5 py-4 border-b border-outline-variant">
             <h3 class="font-title-sm text-title-sm text-primary">Pending Skills</h3>
@@ -68,9 +88,108 @@ export async function screenSkills(c) {
   const searchEl = $('skills-search');
   if (searchEl) searchEl.oninput = () => applyFilter();
 
+  setupFilterDropdown('th-domain-filter-btn', 'th-domain-filter-dropdown');
+  setupFilterDropdown('th-status-filter-btn', 'th-status-filter-dropdown');
+  renderStatusDropdown();
+
+  if (_docClickHandler) document.removeEventListener('click', _docClickHandler);
+  _docClickHandler = () => closeAllFilterDropdowns();
+  document.addEventListener('click', _docClickHandler);
+
   _selectedName = null;
   _creating = false;
+  _domainFilter = new Set();
+  _statusFilter = new Set();
   await Promise.all([loadSkills(), loadPending()]);
+}
+
+// ── Column filter dropdowns (Domain / Status) ─────────────────────────────────
+
+function closeAllFilterDropdowns() {
+  ['th-domain-filter-dropdown', 'th-status-filter-dropdown'].forEach(id => {
+    const el = $(id);
+    if (el) el.classList.add('hidden');
+  });
+}
+
+function setupFilterDropdown(btnId, dropdownId) {
+  const btn = $(btnId);
+  const dd = $(dropdownId);
+  if (!btn || !dd) return;
+  btn.onclick = e => {
+    e.stopPropagation();
+    const wasOpen = !dd.classList.contains('hidden');
+    closeAllFilterDropdowns();
+    if (!wasOpen) {
+      const r = btn.getBoundingClientRect();
+      dd.style.top = `${r.bottom + 4}px`;
+      dd.style.left = `${r.left}px`;
+      dd.classList.remove('hidden');
+    }
+  };
+  dd.onclick = e => e.stopPropagation();
+}
+
+function updateFilterIcons() {
+  const dIcon = $('th-domain-filter-icon');
+  if (dIcon) dIcon.classList.toggle('text-primary', _domainFilter.size > 0);
+  const sIcon = $('th-status-filter-icon');
+  if (sIcon) sIcon.classList.toggle('text-primary', _statusFilter.size > 0);
+}
+
+function checklistDropdownHtml(title, options, selected, clearAttr) {
+  return `<div class="px-3 pb-2 flex items-center justify-between border-b border-outline-variant mb-1">
+    <span class="text-label-caps font-label-caps text-outline">${esc(title)}</span>
+    <button ${clearAttr} class="text-label-caps font-label-caps text-primary hover:underline">Clear</button>
+  </div>
+  <div class="max-h-64 overflow-y-auto px-1">
+    ${options.map(o => `<label class="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-surface-container-low cursor-pointer">
+      <input type="checkbox" data-check="${esc(o.key)}" class="w-4 h-4 accent-primary" ${selected.has(o.key) ? 'checked' : ''}>
+      <span class="text-body-sm">${esc(o.label)}</span>
+    </label>`).join('') || `<p class="text-body-sm text-on-surface-variant px-2 py-1.5">Tidak ada opsi.</p>`}
+  </div>`;
+}
+
+function renderDomainDropdown() {
+  const el = $('th-domain-filter-dropdown');
+  if (!el) return;
+  const domains = [...new Set(_skillsCache.map(s => s.domain).filter(Boolean))].sort()
+    .map(d => ({ key: d, label: d }));
+  el.innerHTML = checklistDropdownHtml('Filter Domain', domains, _domainFilter, 'data-clear-domain');
+  el.querySelectorAll('[data-check]').forEach(cb => {
+    cb.onchange = () => {
+      const d = cb.dataset.check;
+      if (cb.checked) _domainFilter.add(d); else _domainFilter.delete(d);
+      updateFilterIcons();
+      applyFilter();
+    };
+  });
+  el.querySelector('[data-clear-domain]').onclick = () => {
+    _domainFilter.clear();
+    renderDomainDropdown();
+    updateFilterIcons();
+    applyFilter();
+  };
+}
+
+function renderStatusDropdown() {
+  const el = $('th-status-filter-dropdown');
+  if (!el) return;
+  el.innerHTML = checklistDropdownHtml('Filter Status', STATUS_OPTIONS, _statusFilter, 'data-clear-status');
+  el.querySelectorAll('[data-check]').forEach(cb => {
+    cb.onchange = () => {
+      const k = cb.dataset.check;
+      if (cb.checked) _statusFilter.add(k); else _statusFilter.delete(k);
+      updateFilterIcons();
+      applyFilter();
+    };
+  });
+  el.querySelector('[data-clear-status]').onclick = () => {
+    _statusFilter.clear();
+    renderStatusDropdown();
+    updateFilterIcons();
+    applyFilter();
+  };
 }
 
 function emptyPanelHtml() {
@@ -84,7 +203,7 @@ async function loadSkills() {
   try {
     const r = await apiGet('/api/skills');
     _skillsCache = r.skills || [];
-    buildFilters();
+    renderDomainDropdown();
     applyFilter();
     // If a row was selected (e.g. right after save/restore), refresh its panel in place
     if (_selectedName && _skillsCache.some(s => s.name === _selectedName)) {
@@ -126,22 +245,19 @@ async function loadPending() {
   }
 }
 
-function buildFilters() {
-  const el = $('skills-filters');
-  if (!el) return;
-  const domains = ['all', ...new Set(_skillsCache.map(s => s.domain).filter(Boolean))];
-  el.innerHTML = domains.map(d => `<button data-filter="${esc(d)}" class="px-3 py-1 rounded-full text-label-caps font-label-caps border transition-colors ${_activeFilter === d
-    ? 'bg-primary text-white border-primary'
-    : 'bg-surface-container-lowest text-on-surface-variant border-outline-variant hover:bg-surface-container-low'}">${esc(d === 'all' ? 'All' : d)}</button>`).join('');
-  el.querySelectorAll('[data-filter]').forEach(btn => {
-    btn.onclick = () => { _activeFilter = btn.dataset.filter; _currentPage = 1; buildFilters(); applyFilter(); };
-  });
-}
-
 function applyFilter() {
   const q = ($('skills-search') || {}).value?.toLowerCase() || '';
-  _filteredList = _activeFilter === 'all' ? _skillsCache : _skillsCache.filter(s => s.domain === _activeFilter);
-  if (q) _filteredList = _filteredList.filter(s => (s.name || '').toLowerCase().includes(q) || (s.domain || '').toLowerCase().includes(q));
+  _filteredList = _skillsCache.filter(s => {
+    if (_domainFilter.size && !_domainFilter.has(s.domain)) return false;
+    if (_statusFilter.size) {
+      const flags = new Set([s.enabled !== false ? 'enabled' : 'disabled']);
+      if (s.approval_required) flags.add('approval');
+      if (s.has_default) flags.add('modified');
+      if (![..._statusFilter].some(f => flags.has(f))) return false;
+    }
+    if (q && !(s.name || '').toLowerCase().includes(q) && !(s.domain || '').toLowerCase().includes(q)) return false;
+    return true;
+  });
   _currentPage = 1;
   renderRows();
 }
