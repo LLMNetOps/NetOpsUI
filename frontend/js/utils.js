@@ -112,12 +112,12 @@ export function agentCardHtml(alias, role, state, detail) {
 }
 
 export function cardHtml(title, body, headerRight) {
-  return `<div class="bg-surface-container-lowest border border-outline-variant rounded-lg shadow-sm">
-    <div class="flex justify-between items-center px-6 py-4 border-b border-outline-variant">
+  return `<div class="bg-surface-container-lowest border border-outline-variant rounded-lg shadow-sm flex flex-col h-full">
+    <div class="flex justify-between items-center px-6 py-4 border-b border-outline-variant shrink-0">
       <h3 class="text-title-sm font-title-sm font-bold text-primary">${title}</h3>
       ${headerRight || ''}
     </div>
-    <div class="p-6">${body}</div>
+    <div class="p-6 flex-1">${body}</div>
   </div>`;
 }
 

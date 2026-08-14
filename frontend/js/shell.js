@@ -26,13 +26,6 @@ export function renderShell() {
       <span id="breadcrumb-page">Dashboard</span>
     </nav>
     <div class="flex items-center gap-4">
-      <div class="flex items-center gap-2 px-3 py-1 bg-green-50 border border-green-100 rounded-full">
-        <span class="relative flex h-2 w-2">
-          <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-          <span class="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
-        </span>
-        <span class="font-label-caps text-label-caps text-green-700">SYSTEM ONLINE</span>
-      </div>
       <button class="text-on-surface-variant hover:bg-surface-container p-1.5 rounded-full transition-colors">
         <span class="material-symbols-outlined">notifications</span>
       </button>

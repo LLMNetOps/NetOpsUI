@@ -12,6 +12,7 @@ export const S = {
   threads: [],
   messages: [],
   chatState: 'idle',
+  stopRequested: false, // true after operator clicks Stop, until run actually ends
   pendingApproval: null,
   activeQuery: '',
   agents: makeAgentStates(),

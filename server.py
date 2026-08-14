@@ -12,7 +12,9 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import threading
 import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, AsyncGenerator, Iterator
 
@@ -59,6 +61,37 @@ app.add_middleware(
 # ── Session store ─────────────────────────────────────────────────────────────
 _sessions: dict[str, tuple[Any, Any]] = {}
 
+# One cancel flag per thread_id, live only while that thread has a run in
+# flight — set by /chat/stop, checked by agent.py between graph steps.
+_cancel_events: dict[str, threading.Event] = {}
+
+# Last known reachability per router — populated only by explicit checks
+# (Nodes page load/refresh, or the dashboard's own refresh button), never by
+# a background timer. The dashboard reads this cache as-is instead of pinging
+# on every page load, since a sequential ping sweep over many routers can take
+# tens of seconds (see check_reachability: 5s timeout per host).
+_reachability_cache: dict[str, dict] = {}
+
+
+def _parse_reachability(text: str) -> bool | None:
+    """True=reachable, False=down, None=inconclusive. Mirrors the frontend's
+    parseReachability() heuristic in nodes.js so cache and live table agree."""
+    if not text:
+        return None
+    import re
+    if re.search(r"unreachable|gagal|error", text, re.I):
+        return False
+    if re.search(r"reachable", text, re.I):
+        return True
+    return None
+
+
+def _update_reachability_cache(router_name: str, result_text: str) -> None:
+    _reachability_cache[router_name] = {
+        "reachable": _parse_reachability(result_text),
+        "checked_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+    }
+
 
 def _get_or_create_session(thread_id: str) -> tuple[Any, Any]:
     if thread_id not in _sessions:
@@ -70,7 +103,7 @@ def _get_or_create_session(thread_id: str) -> tuple[Any, Any]:
 
 # ── Async streaming helper ────────────────────────────────────────────────────
 
-async def _stream_events(gen: Iterator[tuple[str, str]]) -> AsyncGenerator[str, None]:
+async def _stream_events(gen: Iterator[tuple[str, str]], thread_id: str | None = None) -> AsyncGenerator[str, None]:
     """Wrap sync generator → async SSE lines with heartbeat.
 
     Runs the blocking generator in a thread pool and forwards events via an
@@ -117,6 +150,8 @@ async def _stream_events(gen: Iterator[tuple[str, str]]) -> AsyncGenerator[str, 
             yield f"data: {payload}\n\n"
     finally:
         get_task.cancel()
+        if thread_id is not None:
+            _cancel_events.pop(thread_id, None)
     await future
 
 
@@ -132,15 +167,21 @@ class ApproveRequest(BaseModel):
     decision: str  # "approved" | "rejected"
 
 
+class StopRequest(BaseModel):
+    thread_id: str
+
+
 # ── API endpoints ─────────────────────────────────────────────────────────────
 
 @app.post("/chat")
 async def chat(req: ChatRequest) -> StreamingResponse:
     graph, config = _get_or_create_session(req.thread_id)
     db_touch_thread(req.thread_id, req.message[:120])
-    gen = _agent.stream_agent_response(graph, config, req.message)
+    cancel_event = threading.Event()
+    _cancel_events[req.thread_id] = cancel_event
+    gen = _agent.stream_agent_response(graph, config, req.message, cancel_event=cancel_event)
     return StreamingResponse(
-        _stream_events(gen),
+        _stream_events(gen, thread_id=req.thread_id),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
@@ -152,12 +193,24 @@ async def approve(req: ApproveRequest) -> StreamingResponse:
         raise HTTPException(status_code=404, detail="Session tidak ditemukan")
     graph, config = _sessions[req.thread_id]
     db_touch_thread(req.thread_id)
-    gen = _agent.resume_after_approval(graph, config, req.decision)
+    cancel_event = threading.Event()
+    _cancel_events[req.thread_id] = cancel_event
+    gen = _agent.resume_after_approval(graph, config, req.decision, cancel_event=cancel_event)
     return StreamingResponse(
-        _stream_events(gen),
+        _stream_events(gen, thread_id=req.thread_id),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+@app.post("/chat/stop")
+def chat_stop(req: StopRequest) -> dict:
+    """Signal the in-flight run for this thread to stop at the next graph step."""
+    event = _cancel_events.get(req.thread_id)
+    if event is None:
+        return {"ok": False, "reason": "no_active_run"}
+    event.set()
+    return {"ok": True}
 
 
 @app.get("/info")
@@ -172,6 +225,62 @@ def info() -> dict:
 @app.get("/metrics")
 def metrics(n: int = 100) -> list[dict]:
     return _agent.get_token_metrics(n)
+
+
+@app.get("/api/metrics")
+def api_metrics(n: int = 500) -> dict:
+    """Aggregate token usage (data/metrics.jsonl) and tool-call frequency
+    (per-thread agent_log) for the Metrics page and dashboard.
+
+    Bounded to the last `n` metrics.jsonl entries and the 50 most recently
+    updated threads so this stays cheap regardless of how much history has
+    piled up — each thread costs one checkpoint read, not a full table scan.
+    """
+    from agents.nodes import AGENT_ALIAS  # noqa: PLC0415
+    alias_to_agent = {alias: name for name, alias in AGENT_ALIAS.items()}
+
+    agents: dict[str, dict] = {}
+
+    def _agent_bucket(key: str) -> dict:
+        return agents.setdefault(key, {"input_tokens": 0, "output_tokens": 0, "tool_calls": 0})
+
+    total_input = 0
+    total_output = 0
+    for entry in _agent.get_token_metrics(n):
+        d = _agent_bucket(entry.get("agent", "unknown"))
+        d["input_tokens"] += entry.get("prompt_tokens", 0)
+        d["output_tokens"] += entry.get("gen_tokens", 0)
+        total_input += entry.get("prompt_tokens", 0)
+        total_output += entry.get("gen_tokens", 0)
+
+    tool_frequency: dict[str, int] = {}
+    total_tool_calls = 0
+    threads = db_list_threads(limit=50)
+    for t in threads:
+        try:
+            graph, config = _get_or_create_session(t["thread_id"])
+            state = graph.get_state(config)
+            agent_log = state.values.get("agent_log", []) if state and state.values else []
+        except Exception:
+            continue
+        for log_entry in agent_log:
+            if log_entry.get("event_type") != "tool_call":
+                continue
+            total_tool_calls += 1
+            tool_name = log_entry.get("content", "").split("(")[0]
+            tool_frequency[tool_name] = tool_frequency.get(tool_name, 0) + 1
+            agent_key = alias_to_agent.get(log_entry.get("source", ""), log_entry.get("source", "unknown"))
+            _agent_bucket(agent_key)["tool_calls"] += 1
+
+    return {
+        "metrics": {
+            "total_tokens": total_input + total_output,
+            "total_tool_calls": total_tool_calls,
+            "total_sessions": len(threads),
+            "agents": agents,
+            "tool_frequency": tool_frequency,
+        }
+    }
 
 
 @app.post("/session/new")
@@ -257,6 +366,193 @@ def api_status() -> dict:
     return _agent.get_agent_status()
 
 
+_WRITE_TOOLS = ("run_command_write", "backup_router_config")
+_BACKUP_STALE_DAYS = 7
+
+
+def _llm_health_summary(n: int = 200) -> dict:
+    """Context-utilization health from data/metrics.jsonl — a static model
+    name says nothing about whether agents are running out of context and
+    getting truncated mid-response, so the dashboard needs this instead.
+
+    Some Ollama-compatible gateways don't populate prompt_eval_count/
+    eval_count in generation_info, leaving every entry at 0 with
+    done_reason="unknown" — that's "no telemetry", not "0% usage", so it's
+    reported as its own state rather than silently showing a misleading 0%.
+    """
+    entries = _agent.get_token_metrics(n)
+    if not entries:
+        return {"sample_size": 0, "telemetry_available": False, "avg_ctx_util": None, "truncated_count": 0}
+    telemetry_available = sum(e.get("prompt_tokens", 0) for e in entries) > 0
+    truncated_count = sum(1 for e in entries if e.get("done_reason") == "length")
+    avg_ctx_util = round(sum(e.get("ctx_util", 0) for e in entries) / len(entries), 1) if telemetry_available else None
+    return {
+        "sample_size": len(entries),
+        "telemetry_available": telemetry_available,
+        "avg_ctx_util": avg_ctx_util,
+        "truncated_count": truncated_count,
+    }
+
+
+def _scan_backups(router_names: list[str]) -> dict:
+    """Per-router backup age from backups/<router>/*.rsc mtimes — cheap
+    filesystem stat, no SSH involved."""
+    from tools.config_backup import BACKUP_DIR
+    now = datetime.now(timezone.utc)
+    recent, stale, never = [], [], []
+    for name in router_names:
+        router_dir = BACKUP_DIR / name
+        files = sorted(router_dir.glob("*.rsc"), key=lambda p: p.stat().st_mtime, reverse=True) if router_dir.exists() else []
+        if not files:
+            never.append(name)
+            continue
+        f = files[0]
+        mtime = datetime.fromtimestamp(f.stat().st_mtime, tz=timezone.utc)
+        age_days = round((now - mtime).total_seconds() / 86400, 1)
+        recent.append({"router": name, "filename": f.name, "mtime": mtime.isoformat(timespec="seconds"), "age_days": age_days})
+        if age_days > _BACKUP_STALE_DAYS:
+            stale.append({"router": name, "age_days": age_days})
+    recent.sort(key=lambda x: x["mtime"], reverse=True)
+    return {"recent": recent[:5], "stale": stale, "never_backed_up": never, "stale_threshold_days": _BACKUP_STALE_DAYS}
+
+
+def _scan_reports() -> list[dict]:
+    from tools.base import LAPORAN_DIR
+    if not LAPORAN_DIR.exists():
+        return []
+    files = sorted(LAPORAN_DIR.glob("*.md"), key=lambda p: p.stat().st_mtime, reverse=True)
+    return [
+        {
+            "filename": f.name,
+            "mtime": datetime.fromtimestamp(f.stat().st_mtime, tz=timezone.utc).isoformat(timespec="seconds"),
+            "size_kb": round(f.stat().st_size / 1024, 1),
+        }
+        for f in files[:5]
+    ]
+
+
+def _scan_recent_writes(threads: list[dict], limit: int = 8) -> list[dict]:
+    """Approval-gated actions (backup_router_config / run_command_write) across
+    recently-updated threads, paired with their outcome (the tool_result entry
+    logged immediately after each tool_call in agent_log).
+
+    agent_log timestamps are HH:MM:SS only (see _now_str() in agents/nodes.py)
+    — no date — so they can't be sorted correctly across threads that span
+    multiple days. Instead this relies on `threads` already being ordered
+    newest-updated-first (full-precision, from the threads table): events from
+    a thread are emitted newest-within-thread-first, and threads are visited
+    in that trusted order, stopping once enough events are collected.
+    """
+    events = []
+    for t in threads:
+        try:
+            graph, config = _get_or_create_session(t["thread_id"])
+            state = graph.get_state(config)
+            agent_log = state.values.get("agent_log", []) if state and state.values else []
+        except Exception:
+            continue
+        thread_events = []
+        for i, entry in enumerate(agent_log):
+            if entry.get("event_type") != "tool_call":
+                continue
+            content = entry.get("content", "")
+            if content.split("(")[0] not in _WRITE_TOOLS:
+                continue
+            outcome = "unknown"
+            if i + 1 < len(agent_log) and agent_log[i + 1].get("event_type") == "tool_result":
+                nc = agent_log[i + 1].get("content", "")
+                if "dibatalkan" in nc.lower() or "ditolak" in nc.lower():
+                    outcome = "rejected"
+                elif nc.lower().startswith("error"):
+                    outcome = "error"
+                else:
+                    outcome = "executed"
+            thread_events.append({
+                "thread_id": t["thread_id"],
+                "thread_title": t["title"],
+                "agent": entry.get("source"),
+                "action": content,
+                "outcome": outcome,
+                "time": entry.get("timestamp"),
+            })
+        events.extend(reversed(thread_events))
+        if len(events) >= limit:
+            break
+    return events[:limit]
+
+
+@app.get("/api/dashboard")
+def api_dashboard() -> dict:
+    """Single aggregate call for the Dashboard screen — system readiness,
+    actionable items, and recent activity. No live network probes (LLM ping,
+    router reachability) run here; those stay operator-triggered elsewhere
+    and this endpoint only reads their last cached/persisted result."""
+    from tools.base import get_unique_router_entries
+    from tools.db import db_list_agents
+    from agent import _skill_lib
+
+    status = _agent.get_agent_status()
+
+    agent_rows = db_list_agents()
+    agents_summary = {"total": len(agent_rows), "enabled": sum(1 for a in agent_rows if a["enabled"])}
+
+    all_skills = [s.summary() for s in _skill_lib.list_all()]
+    pending_names = [f.stem for f in PENDING_DIR.rglob("*.md")] if PENDING_DIR.exists() else []
+    skills_summary = {
+        "total": len(all_skills),
+        "enabled": sum(1 for s in all_skills if s.get("enabled")),
+        "pending": len(pending_names),
+    }
+
+    router_entries = get_unique_router_entries()
+    nodes, reachable, down, unknown, last_checked = [], 0, 0, 0, None
+    for e in router_entries:
+        c = _reachability_cache.get(e["name"])
+        if c:
+            status_str = "reachable" if c["reachable"] is True else "down" if c["reachable"] is False else "unknown"
+            if last_checked is None or c["checked_at"] > last_checked:
+                last_checked = c["checked_at"]
+        else:
+            status_str = "unknown"
+        if status_str == "reachable":
+            reachable += 1
+        elif status_str == "down":
+            down += 1
+        else:
+            unknown += 1
+        nodes.append({
+            "name": e["name"], "host": e.get("host", ""),
+            "status": status_str, "checked_at": c["checked_at"] if c else None,
+        })
+
+    backups = _scan_backups([e["name"] for e in router_entries])
+    reports = _scan_reports()
+    threads = db_list_threads(limit=20)
+    recent_writes = _scan_recent_writes(threads)
+
+    return {
+        "llm": {
+            "model": status.get("model"),
+            "ollama_url": status.get("ollama_url"),
+            "health": _llm_health_summary(),
+        },
+        "agents": agents_summary,
+        "skills": skills_summary,
+        "skills_pending_list": pending_names,
+        "nodes": {
+            "total": len(router_entries), "reachable": reachable, "down": down,
+            "unknown": unknown, "last_checked": last_checked, "list": nodes,
+        },
+        "backups": backups,
+        "reports": reports,
+        "threads_recent": [
+            {"thread_id": t["thread_id"], "title": t["title"], "last_message": t["last_message"], "updated_at": t["updated_at"]}
+            for t in threads[:5]
+        ],
+        "recent_writes": recent_writes,
+    }
+
+
 class ResetRequest(BaseModel):
     thread_id: str
 
@@ -315,7 +611,9 @@ def api_routers():
 
 @app.post("/api/tools/reachability")
 def api_reachability(req: RouterRequest):
-    return {"result": TOOL_MAP["check_reachability"].invoke({"router_name": req.router_name})}
+    result = TOOL_MAP["check_reachability"].invoke({"router_name": req.router_name})
+    _update_reachability_cache(req.router_name, result)
+    return {"result": result}
 
 
 @app.post("/api/tools/reachability/all")
@@ -326,6 +624,7 @@ def api_reachability_all():
         try:
             r = TOOL_MAP["check_reachability"].invoke({"router_name": entry["name"]})
             results[entry["name"]] = r
+            _update_reachability_cache(entry["name"], r)
         except Exception as e:
             results[entry["name"]] = f"Error: {e}"
     return {"results": results}

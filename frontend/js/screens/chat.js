@@ -1,7 +1,7 @@
 import { AGENTS, ROLE_TO_ALIAS } from '../config.js';
 import { S } from '../state.js';
 import { $, esc, fmtTime, fmtShortDate, fmtFullDateTime, agentCardHtml, loadingHtml, copyToClipboard, renderMarkdown, confirmDialog, alertDialog } from '../utils.js';
-import { apiGet, apiCreateSession, apiStreamChat, apiApprove, apiDelete, apiPut } from '../api.js';
+import { apiGet, apiCreateSession, apiStreamChat, apiStopChat, apiApprove, apiDelete, apiPut } from '../api.js';
 
 let _chatEl = null;
 let _elapsedIv = null;
@@ -109,6 +109,9 @@ export async function screenChat(c, threadIdParam) {
           <div class="flex items-center gap-3 max-w-[900px] mx-auto">
             <input id="chat-input" type="text" class="flex-1 bg-surface-container-low border border-outline-variant rounded-lg px-4 py-2.5 text-body-md text-on-surface focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all" placeholder="Type a command or ask a question..." autocomplete="off" spellcheck="false">
             <button id="btn-send" class="px-5 py-2.5 bg-secondary text-white rounded-lg text-body-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed">Send</button>
+            <button id="btn-stop" title="Hentikan eksekusi" class="hidden px-5 py-2.5 bg-red-600 text-white rounded-lg text-body-sm font-medium hover:opacity-90 transition-opacity items-center gap-1.5">
+              <span class="material-symbols-outlined text-base leading-none">stop_circle</span>Stop
+            </button>
           </div>
           <p class="text-[10px] text-on-surface-variant mt-2 text-center">[Enter] Kirim &middot; [Ctrl+L] Clear</p>
         </div>
@@ -194,7 +197,7 @@ async function chatLoadHistory(threadId) {
 }
 
 function chatBindEvents() {
-  const inp = $('chat-input'), btnS = $('btn-send'), btnN = $('btn-new-thread'), btnL = $('btn-copy-link');
+  const inp = $('chat-input'), btnS = $('btn-send'), btnT = $('btn-stop'), btnN = $('btn-new-thread'), btnL = $('btn-copy-link');
   const btnA = $('btn-approve'), btnR = $('btn-reject');
 
   async function send() {
@@ -216,6 +219,24 @@ function chatBindEvents() {
   }
 
   btnS.onclick = send;
+  btnT.onclick = async () => {
+    if (S.chatState !== 'streaming' || S.stopRequested) return;
+    S.stopRequested = true;
+    chatUpdateUI();
+    consolePush('stopped', 'Permintaan stop dikirim — akan berhenti setelah langkah yang sedang berjalan selesai...');
+    try {
+      const r = await apiStopChat(S.threadId);
+      if (!r || r.ok === false) {
+        consolePush('stopped', 'Tidak ada proses aktif untuk dihentikan (kemungkinan sudah selesai).');
+        S.stopRequested = false;
+        chatUpdateUI();
+      }
+    } catch (e) {
+      consolePush('error', 'Gagal mengirim permintaan stop: ' + (e.message || 'unknown'));
+      S.stopRequested = false;
+      chatUpdateUI();
+    }
+  };
   inp.onkeydown = e => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
     if (e.key === 'l' && e.ctrlKey) { e.preventDefault(); chatClear(); }
@@ -256,6 +277,9 @@ function chatHandleEvent(type, content) {
     S.chatState = 'approval';
     try { S.pendingApproval = JSON.parse(content); } catch { S.pendingApproval = { action: content }; }
     chatShowApproval();
+  } else if (type === 'stopped') {
+    consolePush('stopped', content);
+    if (last && last.role === 'agent' && !last.content) last.content = `_${content}_`;
   } else {
     consolePush(type, content);
     chatUpdateAgentFromEvent(type, content);
@@ -270,7 +294,7 @@ async function chatResolveApproval(decision) {
   _requestStartTs = Date.now();
   _lastEventTs = null;
   S.chatState = 'streaming';
-  chatRenderMessages();
+  chatRenderMessages(); chatUpdateUI();
   try { await apiApprove(S.threadId, decision, chatHandleEvent); }
   catch (e) { chatHandleEvent('error', e.message); }
   chatFinish();
@@ -370,6 +394,7 @@ function chatEventLine(ev, isActive) {
     tool_call: { tag: '#60a5fa', l: 'TOOL_CALL' },
     tool_result: { tag: '#4ade80', l: 'RESULT' },
     approval_required: { tag: '#fbbf24', l: 'APPROVAL' },
+    stopped: { tag: '#f87171', l: 'STOPPED' },
     error: { tag: '#f87171', l: 'ERROR' },
     timing: { tag: '#38bdf8', l: 'DURASI' },
   }[ev.type] || { tag: '#94a3b8', l: ev.type.toUpperCase() };
@@ -610,6 +635,20 @@ function chatStartElapsed() {
 }
 
 function chatStopElapsed() { if (_elapsedIv) { clearInterval(_elapsedIv); _elapsedIv = null; } }
-function chatUpdateUI() { const q = $('active-query'); if (q) q.textContent = S.activeQuery || '—'; }
+function chatUpdateUI() {
+  const q = $('active-query'); if (q) q.textContent = S.activeQuery || '—';
+  const running = S.chatState === 'streaming';
+  if (!running) S.stopRequested = false;
+  const btnS = $('btn-send'), btnT = $('btn-stop');
+  if (btnS) btnS.classList.toggle('hidden', running);
+  if (btnT) {
+    btnT.classList.toggle('hidden', !running);
+    btnT.classList.toggle('flex', running);
+    btnT.disabled = S.stopRequested;
+    btnT.innerHTML = S.stopRequested
+      ? `<span class="material-symbols-outlined text-base leading-none animate-spin">progress_activity</span>Menghentikan...`
+      : `<span class="material-symbols-outlined text-base leading-none">stop_circle</span>Stop`;
+  }
+}
 
 export function chatUnmount() { chatStopElapsed(); }

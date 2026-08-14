@@ -32,6 +32,15 @@ export async function apiStreamChat(threadId, message, onEvent) {
   await consumeSSE(r, onEvent);
 }
 
+export async function apiStopChat(threadId) {
+  const r = await fetch('/chat/stop', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ thread_id: threadId }),
+  });
+  return r.json();
+}
+
 export async function apiApprove(threadId, decision, onEvent) {
   const r = await fetch('/approve', {
     method: 'POST',

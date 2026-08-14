@@ -6,6 +6,7 @@ from __future__ import annotations
 import atexit
 import json
 import os
+import threading
 from pathlib import Path
 from typing import Annotated, Any, Iterator, TypedDict
 
@@ -174,7 +175,12 @@ def delete_thread(thread_id: str) -> None:
 _LIVE_STREAMED_TYPES = {"tool_call", "tool_result", "approval_required"}
 
 
-def _drain_graph_stream(graph: Any, config: RunnableConfig, stream_input: Any) -> Iterator[tuple[str, str]]:
+def _drain_graph_stream(
+    graph: Any,
+    config: RunnableConfig,
+    stream_input: Any,
+    cancel_event: threading.Event | None = None,
+) -> Iterator[tuple[str, str]]:
     """Shared consumer for stream_agent_response / resume_after_approval.
 
     Consumes both "custom" (live per-tool-call events pushed via
@@ -182,8 +188,24 @@ def _drain_graph_stream(graph: Any, config: RunnableConfig, stream_input: Any) -
     output, needed for interrupts and final AI messages) stream modes so the
     UI sees each tool call as it happens instead of only after the whole node
     (which may loop over many tool calls) returns.
+
+    If cancel_event is set (operator pressed Stop), the check happens between
+    graph steps — before the next node/tool-call is computed — not mid-step,
+    since a step already in flight (e.g. an SSH command) can't be interrupted
+    cooperatively. Closing the underlying stream iterator stops the graph from
+    scheduling any further steps.
     """
-    for mode, chunk in graph.stream(stream_input, config=config, stream_mode=["updates", "custom"]):
+    it = iter(graph.stream(stream_input, config=config, stream_mode=["updates", "custom"]))
+    while True:
+        if cancel_event is not None and cancel_event.is_set():
+            it.close()
+            yield "stopped", "Dihentikan oleh operator."
+            return
+        try:
+            mode, chunk = next(it)
+        except StopIteration:
+            return
+
         if mode == "custom":
             entry = chunk
             yield entry["event_type"], f"[{entry['source']}] {entry['content']}"
@@ -216,6 +238,7 @@ def stream_agent_response(
     graph: Any,
     config: RunnableConfig,
     message: str,
+    cancel_event: threading.Event | None = None,
 ) -> Iterator[tuple[str, str]]:
     """
     Stream agent events for a user message.
@@ -226,11 +249,13 @@ def stream_agent_response(
       "tool_result"      — tool returned result (preview)
       "ai"               — final AI text response
       "approval_required"— waiting for operator approval
+      "stopped"          — operator cancelled the run via cancel_event
       "error"            — unrecoverable error
     """
     try:
         yield from _drain_graph_stream(
             graph, config, {"messages": [HumanMessage(content=message)]},
+            cancel_event=cancel_event,
         )
     except Exception as exc:
         yield "error", str(exc)
@@ -250,13 +275,14 @@ def resume_after_approval(
     graph: Any,
     config: RunnableConfig,
     decision: str,
+    cancel_event: threading.Event | None = None,
 ) -> Iterator[tuple[str, str]]:
     """Resume after approval, streaming events back to caller.
     Yields same (event_type, content) tuples as stream_agent_response.
     May yield another 'approval_required' if a subsequent tool also needs approval.
     """
     try:
-        yield from _drain_graph_stream(graph, config, Command(resume=decision))
+        yield from _drain_graph_stream(graph, config, Command(resume=decision), cancel_event=cancel_event)
     except Exception as exc:
         yield "error", str(exc)
 
