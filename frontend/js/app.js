@@ -7,8 +7,6 @@ import { screenDashboard } from './screens/dashboard.js';
 import { screenChat, chatUnmount } from './screens/chat.js';
 import { screenNodes } from './screens/nodes.js';
 import { screenNetwork } from './screens/network.js';
-import { screenDHCP } from './screens/dhcp.js';
-import { screenNetBox } from './screens/netbox.js';
 import { screenSkills } from './screens/skills.js';
 import { screenAgents } from './screens/agents.js';
 import { screenReports } from './screens/reports.js';
@@ -43,8 +41,6 @@ async function navigate(screenId, param) {
       break;
     case 'nodes':     await screenNodes(c); break;
     case 'network':   await screenNetwork(c); break;
-    case 'dhcp':      await screenDHCP(c); break;
-    case 'netbox':    await screenNetBox(c); break;
     case 'skills':    await screenSkills(c); break;
     case 'agents':    await screenAgents(c, param); break;
     case 'reports':   await screenReports(c); break;

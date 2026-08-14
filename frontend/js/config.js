@@ -17,8 +17,6 @@ export const NAV_ITEMS = [
   { id:'chat',      label:'AI Chat',    icon:'chat_bubble' },
   { id:'nodes',     label:'Nodes',      icon:'dns',        group:'Infrastructure' },
   { id:'network',   label:'Network',    icon:'hub',        group:'Infrastructure' },
-  { id:'dhcp',      label:'DHCP',       icon:'router',     group:'Infrastructure' },
-  { id:'netbox',    label:'NetBox',     icon:'storage',    group:'Infrastructure' },
   { id:'skills',    label:'Skills',     icon:'psychology', group:'Agent Platform' },
   { id:'agents',    label:'Agents',     icon:'smart_toy',  group:'Agent Platform' },
   { id:'reports',   label:'Reports',    icon:'assessment', group:'Insights' },

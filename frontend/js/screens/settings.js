@@ -11,7 +11,6 @@ export async function screenSettings(c) {
       <button id="settings-save" class="px-4 py-2 bg-secondary text-white font-medium text-body-md rounded-md hover:bg-secondary/90 transition-colors">Save changes</button>`)}
     <div class="border-b border-outline-variant mb-stack_gap_lg flex gap-8" id="settings-tabs">
       ${tab('environment', 'LLM Setting', true)}
-      ${tab('netbox', 'NetBox', false)}
       ${tab('memory', 'Memory', false)}
     </div>
 
@@ -109,37 +108,6 @@ export async function screenSettings(c) {
       </div>
       </div>
     </div>
-    </div>
-
-    <!-- NetBox -->
-    <div class="settings-pane hidden" id="settings-content-netbox">
-      <div class="max-w-2xl bg-surface-container-lowest border border-outline-variant rounded-lg p-stack_gap_lg shadow-sm">
-        <div class="mb-6 border-b border-outline-variant pb-4">
-          <h3 class="font-title-sm text-title-sm text-primary">Source of Truth (NetBox)</h3>
-          <p class="text-body-sm text-on-surface-variant">Connect to your NetBox instance for topology discovery.</p>
-        </div>
-        <div class="space-y-6">
-          <div>
-            <label class="text-body-md font-medium text-primary block mb-1">Instance URL</label>
-            <input class="w-full text-body-sm bg-surface-container-lowest border border-outline-variant rounded-md px-3 py-2" type="text" placeholder="https://netbox.example.com"/>
-          </div>
-          <div>
-            <label class="text-body-md font-medium text-primary block mb-1">API Token</label>
-            <div class="relative">
-              <input id="nb-token-input" class="w-full text-body-sm bg-surface-container-lowest border border-outline-variant rounded-md px-3 py-2 pr-10" type="password" placeholder="••••••••"/>
-              <button onclick="document.getElementById('nb-token-input').type=document.getElementById('nb-token-input').type==='password'?'text':'password'" class="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant">
-                <span class="material-symbols-outlined text-[20px]">visibility</span>
-              </button>
-            </div>
-          </div>
-          <div class="pt-4 flex items-center justify-between border-t border-outline-variant">
-            <div class="flex items-center gap-2">
-              <div class="w-2 h-2 rounded-full bg-outline"></div>
-              <span class="text-body-sm text-on-surface-variant font-medium">Konfigurasi NetBox via .env</span>
-            </div>
-          </div>
-        </div>
-      </div>
     </div>
 
     <!-- Memory -->
