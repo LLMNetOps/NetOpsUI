@@ -180,6 +180,39 @@ def _last_specialist_from_log(state: dict, valid_agent_names: set[str]) -> str |
     return None
 
 
+# Some Ollama/model combos (observed with qwen3.6 on the OpenAI-compat endpoint)
+# don't populate the structured tool_calls field and instead leak the tool call
+# as literal text, e.g.:
+#   <tool_call> <function=run_command> <parameter=command>...</parameter> </function> </tool_call>
+# Recover the intended call from that text so the ReAct loop can still execute it.
+_LEAKED_TOOL_CALL_RE = re.compile(
+    r"<tool_call>\s*<function=(?P<name>[\w\-]+)>(?P<body>.*?)</function>\s*</tool_call>",
+    re.DOTALL,
+)
+_LEAKED_PARAM_RE = re.compile(
+    r"<parameter=(?P<key>[\w\-]+)>\s*(?P<value>.*?)\s*</parameter>",
+    re.DOTALL,
+)
+
+
+def _recover_leaked_tool_calls(response: AIMessage) -> None:
+    """If response has no structured tool_calls but its content contains a
+    leaked <tool_call> block, parse it and patch response.tool_calls/content
+    in place so callers can treat it exactly like a native tool call."""
+    if getattr(response, "tool_calls", None):
+        return
+    text = response.content or ""
+    matches = list(_LEAKED_TOOL_CALL_RE.finditer(text))
+    if not matches:
+        return
+    calls = []
+    for i, m in enumerate(matches):
+        args = dict(_LEAKED_PARAM_RE.findall(m.group("body")))
+        calls.append({"name": m.group("name"), "args": args, "id": f"leaked_{i}"})
+    response.tool_calls = calls
+    response.content = _LEAKED_TOOL_CALL_RE.sub("", text).strip()
+
+
 def _react_loop(
     llm_with_tools: Any,
     messages: list,
@@ -201,6 +234,7 @@ def _react_loop(
 
     for _ in range(max_iters):
         response = llm_with_tools.invoke(messages)
+        _recover_leaked_tool_calls(response)
         messages = messages + [response]
 
         if not getattr(response, "tool_calls", None):
@@ -975,6 +1009,7 @@ def config_node(state: dict) -> dict:
 
     for _ in range(12):
         response = _CONFIG_LLM.invoke(messages)
+        _recover_leaked_tool_calls(response)
         messages = messages + [response]
 
         if not getattr(response, "tool_calls", None):
