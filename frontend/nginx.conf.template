@@ -1,0 +1,59 @@
+# Rendered by the nginx image's envsubst at container start
+# (/etc/nginx/templates/*.template → /etc/nginx/conf.d/). Only variables that
+# are set in the environment are substituted, so nginx's own $uri/$host stay.
+#
+#   UI_PORT         port this UI listens on
+#   NETOPS_AGENT_URL  NetOps Agent REST API
+#   HERMES_URL      Hermes gateway api_server platform
+#   HERMES_API_KEY  Hermes API_SERVER_KEY — injected here so it never reaches the browser
+#   MANAGER_URL     NetOpsUI management service (server/): skills, profiles, config views
+
+server {
+    listen ${UI_PORT};
+    server_name _;
+
+    # SPA — serve index.html for all non-proxy routes.
+    # Host files are volume-mounted for hot reload during dev, but browsers
+    # heuristically cache JS/CSS with no Cache-Control header, so an edit
+    # here can silently keep serving a stale bundle from the browser cache
+    # even across a normal reload. Force revalidation on every request.
+    location / {
+        root /usr/share/nginx/html;
+        index index.html;
+        try_files $uri $uri/ /index.html;
+        add_header Cache-Control "no-cache";
+    }
+
+    # Shared by both backends: SSE-friendly, long-running agent turns
+    # (NetOps Agent delegations have been traced at 250-1600+ s).
+    proxy_http_version 1.1;
+    proxy_buffering off;
+    proxy_cache off;
+    proxy_read_timeout 3600s;
+    proxy_send_timeout 3600s;
+
+    # proxy_set_header is NOT inherited into a location that sets any header
+    # of its own, so each location repeats the full set.
+    # Origin is cleared because the browser's Origin is this UI, not the
+    # backend: Hermes rejects origins outside API_SERVER_CORS_ORIGINS, and the
+    # proxy makes CORS moot anyway.
+    location /backend/netops/ {
+        proxy_pass ${NETOPS_AGENT_URL}/;
+        proxy_set_header Connection "";
+        proxy_set_header Origin "";
+    }
+
+    # Management service: keeps the /api/ prefix (no URI on proxy_pass).
+    location /api/ {
+        proxy_pass ${MANAGER_URL};
+        proxy_set_header Connection "";
+        proxy_set_header Origin "";
+    }
+
+    location /backend/hermes/ {
+        proxy_pass ${HERMES_URL}/;
+        proxy_set_header Connection "";
+        proxy_set_header Origin "";
+        proxy_set_header Authorization "Bearer ${HERMES_API_KEY}";
+    }
+}

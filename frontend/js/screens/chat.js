@@ -1,7 +1,6 @@
-import { AGENTS, ROLE_TO_ALIAS } from '../config.js';
 import { S } from '../state.js';
-import { $, esc, fmtTime, fmtShortDate, fmtFullDateTime, agentCardHtml, loadingHtml, copyToClipboard, renderMarkdown, confirmDialog, alertDialog } from '../utils.js';
-import { apiGet, apiCreateSession, apiStreamChat, apiStopChat, apiApprove, apiDelete, apiPut } from '../api.js';
+import { $, esc, fmtTime, fmtShortDate, fmtFullDateTime, copyToClipboard, renderMarkdown, confirmDialog, alertDialog } from '../utils.js';
+import { activeBackend } from '../backends/index.js';
 
 let _chatEl = null;
 let _elapsedIv = null;
@@ -14,11 +13,11 @@ function fmtDelta(ms) {
 }
 
 // ── Process console persistence — scoped per thread, survives page reload ────
-// Keyed by thread id so each chat session has its own independent log, not one
-// shared across every conversation. S.console always points at (by reference,
+// Keyed by backend + thread id so each chat session has its own independent
+// log, not one shared across every conversation. S.console always points at (by reference,
 // not copy) _consoleStore[S.threadId] so pushes/clears stay in sync with the
 // persisted store without an extra write-back step.
-const CONSOLE_STORAGE_KEY = 'llmnetops-console-v2';
+const CONSOLE_STORAGE_KEY = 'llmnetops-console-v3';
 const CONSOLE_MAX_ENTRIES = 500;
 const CONSOLE_MAX_THREADS = 30;
 
@@ -29,7 +28,8 @@ let _consoleStore = {};
     const raw = localStorage.getItem(CONSOLE_STORAGE_KEY);
     if (!raw) return;
     const parsed = JSON.parse(raw);
-    for (const [tid, entries] of Object.entries(parsed)) {
+    for (const [key, entries] of Object.entries(parsed)) {
+      const tid = key.replace(/^palapa:/, 'netops:'); // backend id used before the rename
       _consoleStore[tid] = entries.map(e => ({ ...e, ts: new Date(e.ts) }));
     }
   } catch { /* corrupt or unavailable — start empty */ }
@@ -41,44 +41,58 @@ function consoleSave() {
   } catch { /* storage full/unavailable — degrade to in-memory only */ }
 }
 
+function consoleKey(threadId) {
+  return `${activeBackend().id}:${threadId}`;
+}
+
 function consoleForThread(threadId) {
-  if (!_consoleStore[threadId]) {
+  const key = consoleKey(threadId);
+  if (!_consoleStore[key]) {
     const keys = Object.keys(_consoleStore);
     if (keys.length >= CONSOLE_MAX_THREADS) delete _consoleStore[keys[0]]; // evict oldest tracked thread
-    _consoleStore[threadId] = [];
+    _consoleStore[key] = [];
   }
-  return _consoleStore[threadId];
+  return _consoleStore[key];
+}
+
+function threadFromSummary(t) {
+  return { id: t.id, title: t.title || 'New Chat', ts: t.updatedAt, createdAt: t.createdAt, lastMessage: t.lastMessage || '' };
+}
+
+// Creates a thread on the active backend and makes it current. Returns false
+// (after telling the operator) when the backend refuses or is unreachable.
+async function chatNewThread() {
+  try {
+    const t = threadFromSummary(await activeBackend().createThread());
+    S.threads.unshift(t);
+    S.threadId = t.id;
+    return true;
+  } catch (e) {
+    await alertDialog(`Gagal membuat thread di ${activeBackend().label}: ${e.message}`, 'Backend Tidak Terjangkau');
+    return false;
+  }
 }
 
 export async function screenChat(c, threadIdParam) {
-  if (S.threads.length === 0) {
+  const backend = activeBackend();
+  let loadError = null;
+  if (S.threadsBackend !== backend.id) {
+    // Threads belong to one backend; switching backends starts from its list.
+    S.threads = []; S.threadId = null; S.messages = [];
     try {
-      const r = await apiGet('/api/sessions');
-      if (r.sessions && r.sessions.length > 0) {
-        S.threads = r.sessions.map(s => ({
-          id: s.thread_id,
-          title: s.title || 'New Chat',
-          ts: new Date(s.updated_at || s.created_at),
-          createdAt: new Date(s.created_at),
-          lastMessage: s.last_message || '',
-        }));
-      }
-    } catch { /* offline */ }
+      S.threads = (await backend.listThreads()).map(threadFromSummary);
+      S.threadsBackend = backend.id;
+    } catch (e) {
+      loadError = e.message;
+    }
   }
 
   let targetThreadId = threadIdParam || S.threadId;
   if (!targetThreadId) {
     if (S.threads.length > 0) {
       targetThreadId = S.threads[0].id;
-    } else {
-      try {
-        const r = await apiCreateSession();
-        targetThreadId = r.thread_id;
-        S.threads.unshift({ id: targetThreadId, title: 'New Chat', ts: new Date(), createdAt: new Date(), lastMessage: '' });
-      } catch {
-        targetThreadId = crypto.randomUUID();
-        S.threads.unshift({ id: targetThreadId, title: 'Offline', ts: new Date(), createdAt: new Date(), lastMessage: '' });
-      }
+    } else if (!loadError && await chatNewThread()) {
+      targetThreadId = S.threadId;
     }
   } else if (!S.threads.some(t => t.id === targetThreadId)) {
     // Deep link to a thread not yet in our local list (e.g. shared link opened fresh) — placeholder entry
@@ -86,8 +100,8 @@ export async function screenChat(c, threadIdParam) {
   }
 
   const threadChanged = targetThreadId !== S.threadId;
-  S.threadId = targetThreadId;
-  S.console = consoleForThread(S.threadId);
+  S.threadId = targetThreadId || null;
+  S.console = S.threadId ? consoleForThread(S.threadId) : [];
   chatSyncUrl();
 
   c.innerHTML = `
@@ -101,6 +115,7 @@ export async function screenChat(c, threadIdParam) {
             <button id="btn-new-thread" title="New thread" class="material-symbols-outlined text-sm text-primary hover:bg-surface-container rounded p-1 transition-colors">add_box</button>
           </div>
         </div>
+        ${loadError ? `<div class="m-3 p-3 rounded bg-red-50 border border-red-100 text-red-700 text-[11px]">Gagal memuat thread dari ${esc(backend.label)}: ${esc(loadError)}</div>` : ''}
         <div class="flex-1 overflow-y-auto chat-scroll p-3 space-y-1" id="thread-list"></div>
       </aside>
       <section class="flex-1 flex flex-col min-w-0">
@@ -118,9 +133,15 @@ export async function screenChat(c, threadIdParam) {
       </section>
       <aside class="w-72 border-l border-outline-variant bg-surface-container-low flex flex-col shrink-0">
         <div class="p-4 border-b border-outline-variant">
-          <span class="text-label-caps font-label-caps text-on-surface-variant">Active Network Agents</span>
+          <p class="text-label-caps font-label-caps text-on-surface-variant">Backend</p>
+          <a href="#settings" class="text-body-sm font-medium text-primary hover:underline">${esc(backend.label)}</a>
+          ${backend.capabilities.approval ? '' : '<p class="text-[10px] text-on-surface-variant mt-0.5">Tanpa approval &middot; tool read-only</p>'}
         </div>
-        <div id="agent-panel" class="flex-1 overflow-y-auto chat-scroll p-3 space-y-2"></div>
+        <div class="px-4 pt-4 pb-2 flex justify-between items-center">
+          <span class="text-label-caps font-label-caps text-on-surface-variant">Tool Activity</span>
+          <span id="tool-count" class="text-[10px] text-outline tabular-nums"></span>
+        </div>
+        <div id="tool-panel" class="flex-1 overflow-y-auto chat-scroll px-3 pb-3 space-y-2"></div>
         <div class="p-4 border-t border-outline-variant">
           <p class="text-label-caps font-label-caps text-on-surface-variant mb-1">Active Query</p>
           <p id="active-query" class="text-[11px] text-on-surface-variant truncate">—</p>
@@ -142,7 +163,7 @@ export async function screenChat(c, threadIdParam) {
     </div>
   </div>
   <div id="approval-overlay" class="hidden fixed inset-0 bg-black/30 backdrop-blur-sm z-[200] flex items-center justify-center">
-    <div class="bg-surface-container-lowest rounded-xl shadow-xl max-w-[500px] w-full mx-4 overflow-hidden">
+    <div class="bg-surface-container-lowest rounded-xl shadow-xl max-w-[560px] w-full mx-4 overflow-hidden">
       <div class="bg-amber-50 px-6 py-3 flex items-center gap-2 border-b border-amber-200">
         <span class="material-symbols-outlined text-amber-700">warning</span>
         <span class="text-label-caps font-label-caps text-amber-800">APPROVAL REQUIRED</span>
@@ -151,26 +172,24 @@ export async function screenChat(c, threadIdParam) {
         <h3 class="text-title-sm font-title-sm font-bold text-on-surface mb-2">Confirm System Operation</h3>
         <p class="text-body-sm text-on-surface-variant mb-4">An automated agent has requested permission to perform a high-impact task.</p>
         <div class="border border-outline-variant rounded-lg divide-y divide-outline-variant text-body-sm">
-          <div class="flex justify-between px-4 py-2.5"><span class="text-label-caps font-label-caps text-on-surface-variant">AGENT</span><span id="m-agent" class="font-medium">—</span></div>
-          <div class="flex justify-between px-4 py-2.5"><span class="text-label-caps font-label-caps text-on-surface-variant">ACTION</span><span id="m-action" class="font-data-mono text-data-mono">—</span></div>
-          <div class="flex justify-between px-4 py-2.5"><span class="text-label-caps font-label-caps text-on-surface-variant">RISK LEVEL</span><span id="m-risk">—</span></div>
+          <div class="px-4 py-2.5"><p class="text-label-caps font-label-caps text-on-surface-variant mb-1">ACTION</p><pre id="m-action" class="font-data-mono text-data-mono whitespace-pre-wrap break-all">—</pre></div>
+          <div id="m-desc-row" class="px-4 py-2.5"><p class="text-label-caps font-label-caps text-on-surface-variant mb-1">ALASAN</p><p id="m-desc">—</p></div>
         </div>
       </div>
-      <div class="px-6 pb-6 flex items-center justify-between">
-        <span class="text-[10px] text-on-surface-variant">[Y] Approve &middot; [N] Reject</span>
-        <div class="flex gap-3">
-          <button id="btn-reject" class="px-4 py-2 border border-red-300 text-red-700 rounded-lg text-body-sm font-medium hover:bg-red-50 transition-colors">Reject</button>
-          <button id="btn-approve" class="px-4 py-2 bg-green-700 text-white rounded-lg text-body-sm font-medium hover:bg-green-800 transition-colors">Approve</button>
-        </div>
+      <div class="px-6 pb-6 flex items-center justify-between gap-3">
+        <span class="text-[10px] text-on-surface-variant">[Y] Sekali &middot; [N] Tolak</span>
+        <div id="approval-choices" class="flex flex-wrap justify-end gap-2"></div>
       </div>
     </div>
   </div>`;
 
   _chatEl = $('chat-messages');
   chatRenderThreads();
-  chatRenderAgents();
+  chatRenderTools();
   consoleRender();
-  if (threadChanged || S.messages.length === 0) {
+  if (!S.threadId) {
+    chatRenderMessages();
+  } else if (threadChanged || S.messages.length === 0) {
     await chatLoadHistory(S.threadId);
   } else {
     chatRenderMessages();
@@ -188,33 +207,37 @@ function chatSyncUrl() {
 async function chatLoadHistory(threadId) {
   chatRenderMessages();
   try {
-    const r = await apiGet('/api/threads/' + encodeURIComponent(threadId) + '/messages');
-    S.messages = (r.messages || []).map(m => ({
-      role: m.role, content: m.content, ts: new Date(), streaming: false,
-    }));
-  } catch { /* offline or new thread */ }
+    const msgs = await activeBackend().loadMessages(threadId);
+    if (threadId !== S.threadId) return; // switched away while loading
+    S.messages = msgs.map(m => ({ role: m.role, content: m.content, ts: null, streaming: false }));
+  } catch (e) {
+    consolePush('error', 'Gagal memuat riwayat: ' + e.message);
+  }
   chatRenderMessages();
 }
 
 function chatBindEvents() {
   const inp = $('chat-input'), btnS = $('btn-send'), btnT = $('btn-stop'), btnN = $('btn-new-thread'), btnL = $('btn-copy-link');
-  const btnA = $('btn-approve'), btnR = $('btn-reject');
 
   async function send() {
     const text = inp.value.trim();
     if (!text || S.chatState !== 'idle') return;
+    if (!S.threadId && !(await chatNewThread())) return;
+    const backend = activeBackend();
+    const threadId = S.threadId;
     inp.value = '';
     S.activeQuery = text;
     S.messages.push({ role: 'user', content: text, ts: new Date() });
     S.messages.push({ role: 'agent', content: '', ts: new Date(), streaming: true });
-    chatResetAgents();
+    chatResetTools();
     chatStartElapsed();
     _requestStartTs = Date.now();
     _lastEventTs = null;
     S.chatState = 'streaming';
+    chatTouchThread(threadId, text);
     chatRenderMessages(); chatUpdateUI();
-    try { await apiStreamChat(S.threadId, text, chatHandleEvent); }
-    catch (e) { chatHandleEvent('error', e.message || 'Connection failed'); }
+    try { await backend.send(threadId, text, chatHandleEvent); }
+    catch (e) { chatHandleEvent({ type: 'error', text: e.message || 'Connection failed' }); }
     chatFinish();
   }
 
@@ -223,9 +246,9 @@ function chatBindEvents() {
     if (S.chatState !== 'streaming' || S.stopRequested) return;
     S.stopRequested = true;
     chatUpdateUI();
-    consolePush('stopped', 'Permintaan stop dikirim — akan berhenti setelah langkah yang sedang berjalan selesai...');
+    consolePush('stopped', 'Permintaan stop dikirim...');
     try {
-      const r = await apiStopChat(S.threadId);
+      const r = await activeBackend().stop(S.threadId);
       if (!r || r.ok === false) {
         consolePush('stopped', 'Tidak ada proses aktif untuk dihentikan (kemungkinan sudah selesai).');
         S.stopRequested = false;
@@ -242,11 +265,7 @@ function chatBindEvents() {
     if (e.key === 'l' && e.ctrlKey) { e.preventDefault(); chatClear(); }
   };
   btnN.onclick = async () => {
-    try {
-      const r = await apiCreateSession();
-      S.threadId = r.thread_id;
-      S.threads.unshift({ id: r.thread_id, title: 'New Chat', ts: new Date(), createdAt: new Date(), lastMessage: '' });
-    } catch { S.threadId = crypto.randomUUID(); }
+    if (S.chatState !== 'idle' || !(await chatNewThread())) return;
     S.console = consoleForThread(S.threadId);
     chatSyncUrl();
     chatClear();
@@ -259,45 +278,91 @@ function chatBindEvents() {
     setTimeout(() => { btnL.textContent = 'link'; }, 1200);
     if (!ok) window.prompt('Salin link chat ini:', url);
   };
-  btnA.onclick = () => chatResolveApproval('approved');
-  btnR.onclick = () => chatResolveApproval('rejected');
+  $('approval-choices').onclick = e => {
+    const b = e.target.closest('[data-choice]');
+    if (b) chatResolveApproval(b.dataset.choice);
+  };
 
-  document.addEventListener('keydown', function _ak(e) {
-    if (S.chatState !== 'approval') return;
-    if (e.key === 'y' || e.key === 'Y') chatResolveApproval('approved');
-    if (e.key === 'n' || e.key === 'N') chatResolveApproval('rejected');
-  });
+  if (!_approvalKeysBound) {
+    _approvalKeysBound = true;
+    document.addEventListener('keydown', e => {
+      if (!S.pendingApproval) return;
+      if (e.key === 'y' || e.key === 'Y') chatResolveApproval('once');
+      if (e.key === 'n' || e.key === 'N') chatResolveApproval('deny');
+    });
+  }
 }
 
-function chatHandleEvent(type, content) {
+let _approvalKeysBound = false;
+
+// Keeps the thread list ordering/preview in sync with a message just sent,
+// without refetching the list from the backend.
+function chatTouchThread(threadId, text) {
+  const t = S.threads.find(x => x.id === threadId);
+  if (!t) return;
+  if (!t.title || t.title === 'New Chat') t.title = text.slice(0, 60);
+  t.lastMessage = text.slice(0, 120);
+  t.ts = new Date();
+  S.threads = [t, ...S.threads.filter(x => x !== t)];
+  chatRenderThreads();
+}
+
+// Normalized backend events — see the adapter contract in backends/index.js.
+function chatHandleEvent(ev) {
   const last = S.messages[S.messages.length - 1];
-  if (type === 'ai') {
-    if (last && last.role === 'agent') last.content += (last.content ? '\n' : '') + content;
-  } else if (type === 'approval_required') {
-    S.chatState = 'approval';
-    try { S.pendingApproval = JSON.parse(content); } catch { S.pendingApproval = { action: content }; }
-    chatShowApproval();
-  } else if (type === 'stopped') {
-    consolePush('stopped', content);
-    if (last && last.role === 'agent' && !last.content) last.content = `_${content}_`;
-  } else {
-    consolePush(type, content);
-    chatUpdateAgentFromEvent(type, content);
-    if (type === 'tool_call') S.toolCount++;
+  const agentMsg = last && last.role === 'agent' ? last : null;
+  switch (ev.type) {
+    case 'delta':
+      if (agentMsg) agentMsg.content += ev.text;
+      break;
+    case 'tool_start':
+      S.tools.push({ name: ev.name, detail: ev.detail, state: 'running', durationMs: null });
+      S.toolCount++;
+      consolePush('tool_call', `${ev.name}${ev.detail ? ' ' + ev.detail : ''}`);
+      chatRenderTools();
+      break;
+    case 'tool_end': {
+      // Hermes announces tool_start first; NetOps Agent only reports completed calls.
+      const running = [...S.tools].reverse().find(t => t.name === ev.name && t.state === 'running');
+      const state = ev.error ? 'failed' : 'done';
+      if (running) Object.assign(running, { state, durationMs: ev.durationMs });
+      else { S.tools.push({ name: ev.name, detail: ev.detail, state, durationMs: ev.durationMs }); S.toolCount++; }
+      consolePush(ev.error ? 'error' : 'tool_result',
+        `${ev.name} (${fmtDelta(ev.durationMs || 0).slice(1)})${ev.detail ? ' → ' + ev.detail : ''}`);
+      chatRenderTools();
+      break;
+    }
+    case 'approval':
+      S.pendingApproval = ev.data;
+      consolePush('approval_required', ev.data.action);
+      chatShowApproval();
+      break;
+    case 'stopped':
+      consolePush('stopped', ev.text);
+      if (agentMsg && !agentMsg.content) agentMsg.content = `_${ev.text}_`;
+      break;
+    case 'error':
+      consolePush('error', ev.text);
+      if (agentMsg && !agentMsg.content) agentMsg.content = `**Error:** ${ev.text}`;
+      break;
+    default: // note, thinking
+      consolePush(ev.type, ev.text);
   }
   chatRenderMessages(); chatUpdateUI();
 }
 
-async function chatResolveApproval(decision) {
+async function chatResolveApproval(choice) {
+  const p = S.pendingApproval;
+  if (!p) return;
   chatHideApproval();
-  consolePush('routing', `Operator: ${decision === 'approved' ? 'DISETUJUI' : 'DITOLAK'}`);
-  _requestStartTs = Date.now();
-  _lastEventTs = null;
-  S.chatState = 'streaming';
-  chatRenderMessages(); chatUpdateUI();
-  try { await apiApprove(S.threadId, decision, chatHandleEvent); }
-  catch (e) { chatHandleEvent('error', e.message); }
-  chatFinish();
+  consolePush('approval_required', `Operator: ${choice === 'deny' ? 'DITOLAK' : 'DISETUJUI (' + choice + ')'}`);
+  try {
+    // The run's event stream stays open while waiting, so the turn simply
+    // continues in send() once the backend accepts the decision.
+    await activeBackend().respondApproval(S.threadId, choice, p.requestId);
+  } catch (e) {
+    consolePush('error', 'Gagal mengirim keputusan approval: ' + e.message);
+  }
 }
 
 function chatFinish() {
@@ -309,40 +374,48 @@ function chatFinish() {
     consolePush('timing', `Total durasi: ${fmtDelta(Date.now() - _requestStartTs)}`);
     _requestStartTs = null;
   }
-  AGENTS.forEach(a => { if (S.agents[a.alias].state === 'running') S.agents[a.alias].state = 'done'; });
-  chatRenderMessages(); chatRenderAgents(); chatUpdateUI();
+  S.tools.forEach(t => { if (t.state === 'running') t.state = 'done'; });
+  chatHideApproval();
+  chatRenderMessages(); chatRenderTools(); chatUpdateUI();
 }
 
 function chatClear() {
-  S.messages = []; S.activeQuery = ''; S.toolCount = 0; S.chatState = 'idle';
-  Object.keys(S.agents).forEach(k => { S.agents[k] = { state: 'standby', detail: '', toolCount: 0 }; });
+  S.messages = []; S.activeQuery = ''; S.chatState = 'idle';
+  chatResetTools();
   chatStopElapsed();
-  chatRenderMessages(); chatRenderAgents(); chatRenderThreads(); chatUpdateUI();
+  chatRenderMessages(); chatRenderThreads(); chatUpdateUI();
 }
 
-function chatResetAgents() {
-  Object.keys(S.agents).forEach(k => { S.agents[k] = { state: 'standby', detail: '', toolCount: 0 }; });
-  S.agents.bambang = { state: 'running', detail: 'routing...', toolCount: 0 };
+function chatResetTools() {
+  S.tools = [];
   S.toolCount = 0;
-  chatRenderAgents();
+  chatRenderTools();
 }
 
-function chatUpdateAgentFromEvent(type, content) {
-  const m = content.match(/^\[(\w+)\]\s*(.*)/);
-  if (!m) return;
-  const alias = ROLE_TO_ALIAS[m[1]] || m[1];
-  const msg = m[2];
-  if (type === 'routing' && msg.startsWith('→')) {
-    if (S.agents[alias]) S.agents[alias].state = 'done';
-    const tgt = msg.match(/→\s*(\w+)/)?.[1];
-    const ta = ROLE_TO_ALIAS[tgt];
-    if (ta && S.agents[ta]) { S.agents[ta].state = 'running'; S.agents[ta].detail = ''; }
-  } else if (type === 'tool_call') {
-    if (S.agents[alias]) { S.agents[alias].state = 'running'; S.agents[alias].detail = msg.split('(')[0]; S.agents[alias].toolCount++; }
-  } else if (type === 'error') {
-    if (S.agents[alias]) S.agents[alias].state = 'failed';
+function chatRenderTools() {
+  const el = $('tool-panel'); if (!el) return;
+  const cnt = $('tool-count'); if (cnt) cnt.textContent = S.toolCount ? `${S.toolCount} call` : '';
+  if (!S.tools.length) {
+    el.innerHTML = `<p class="text-[11px] text-on-surface-variant px-1">${S.chatState === 'streaming' ? 'Menunggu tool call...' : 'Belum ada tool call pada giliran ini.'}</p>`;
+    return;
   }
-  chatRenderAgents();
+  const styles = {
+    running: { dot: 'bg-green-500 pulse-green', text: 'text-green-700', label: 'RUNNING', bl: 'border-l-[3px] border-l-green-500' },
+    done:    { dot: 'bg-gray-400', text: 'text-on-surface-variant', label: 'DONE', bl: '' },
+    failed:  { dot: 'bg-red-500', text: 'text-red-700', label: 'FAILED', bl: 'border-l-[3px] border-l-red-500' },
+  };
+  el.innerHTML = S.tools.map(t => {
+    const st = styles[t.state] || styles.done;
+    const dur = t.durationMs != null ? ` &middot; ${fmtDelta(t.durationMs).slice(1)}` : '';
+    return `<div class="bg-surface-container-lowest border border-outline-variant ${st.bl} rounded-lg p-3">
+      <div class="flex justify-between items-center gap-2">
+        <span class="text-xs font-bold text-primary font-data-mono-sm truncate" title="${esc(t.name)}">${esc(t.name)}</span>
+        <span class="flex items-center gap-1.5 shrink-0"><span class="w-2 h-2 rounded-full ${st.dot}"></span><span class="text-label-caps font-label-caps ${st.text}">${st.label}</span></span>
+      </div>
+      ${t.detail ? `<p class="text-[10px] text-on-surface-variant font-data-mono-sm mt-1 truncate" title="${esc(t.detail)}">${esc(t.detail)}</p>` : ''}
+      ${dur ? `<p class="text-[10px] text-outline mt-0.5 tabular-nums">${dur.replace(' &middot; ', '')}</p>` : ''}
+    </div>`;
+  }).join('');
 }
 
 function chatRenderMessages() {
@@ -351,7 +424,7 @@ function chatRenderMessages() {
     el.innerHTML = `<div class="flex-1 flex flex-col items-center justify-center text-center">
       <span class="material-symbols-outlined text-5xl text-outline-variant mb-3">hub</span>
       <h3 class="text-title-sm font-title-sm text-primary mb-1">LLMNetOps</h3>
-      <p class="text-body-sm text-on-surface-variant max-w-xs">Type a command to start an operational session with the AI agent network.</p>
+      <p class="text-body-sm text-on-surface-variant max-w-xs">Ketik perintah untuk memulai sesi dengan <b>${esc(activeBackend().label)}</b>.</p>
     </div>`;
     return;
   }
@@ -362,7 +435,7 @@ function chatRenderMessages() {
 function chatUserMsg(m) {
   return `<div class="flex flex-col items-end max-w-[85%] self-end">
     <div class="flex items-center gap-2 mb-1">
-      <span class="text-[10px] text-outline tabular-nums">${fmtTime(m.ts)}</span>
+      <span class="text-[10px] text-outline tabular-nums">${m.ts ? fmtTime(m.ts) : ''}</span>
       <span class="bg-primary text-white px-2 py-0.5 rounded text-[10px] font-bold tracking-wider">ANDA</span>
     </div>
     <div class="bg-primary-container text-white p-4 rounded-xl rounded-tr-none shadow-sm">
@@ -380,7 +453,7 @@ function chatAgentMsg(m) {
   return `<div class="flex flex-col items-start max-w-[90%] self-start">
     <div class="flex items-center gap-2 mb-1">
       <span class="bg-secondary text-white px-2 py-0.5 rounded text-[10px] font-bold tracking-wider">AGENT</span>
-      <span class="text-[10px] text-outline tabular-nums">${fmtTime(m.ts)}</span>
+      <span class="text-[10px] text-outline tabular-nums">${m.ts ? fmtTime(m.ts) : ''}</span>
     </div>
     <div class="bg-surface-container-lowest p-4 rounded-xl rounded-tl-none border border-outline-variant shadow-sm w-full">
       ${txt}${typing}
@@ -390,7 +463,8 @@ function chatAgentMsg(m) {
 
 function chatEventLine(ev, isActive) {
   const c = {
-    routing: { tag: '#fcd34d', l: 'ROUTING' },
+    note: { tag: '#fcd34d', l: 'NOTE' },
+    thinking: { tag: '#a78bfa', l: 'THINKING' },
     tool_call: { tag: '#60a5fa', l: 'TOOL_CALL' },
     tool_result: { tag: '#4ade80', l: 'RESULT' },
     approval_required: { tag: '#fbbf24', l: 'APPROVAL' },
@@ -521,7 +595,7 @@ async function chatRenameThread(threadId, event) {
     const title = input.value.trim() || current || 'New Chat';
     if (t) t.title = title;
     if (title !== current) {
-      try { await apiPut('/api/threads/' + encodeURIComponent(threadId), { title }); }
+      try { await activeBackend().renameThread(threadId, title); }
       catch (e) { await alertDialog('Gagal mengubah nama: ' + e.message, 'Terjadi Kesalahan'); }
     }
     chatRenderThreads();
@@ -554,14 +628,14 @@ async function chatDeleteThread(threadId, event) {
   if (!ok) return;
 
   try {
-    await apiDelete('/api/threads/' + encodeURIComponent(threadId));
+    await activeBackend().deleteThread(threadId);
   } catch (e) {
     await alertDialog('Gagal menghapus thread: ' + e.message, 'Terjadi Kesalahan');
     return;
   }
 
   S.threads = S.threads.filter(x => x.id !== threadId);
-  delete _consoleStore[threadId];
+  delete _consoleStore[consoleKey(threadId)];
   consoleSave();
 
   if (threadId !== S.threadId) {
@@ -572,12 +646,8 @@ async function chatDeleteThread(threadId, event) {
   if (S.threads.length > 0) {
     await chatSwitchThread(S.threads[0].id);
   } else {
-    try {
-      const r = await apiCreateSession();
-      S.threadId = r.thread_id;
-      S.threads.unshift({ id: r.thread_id, title: 'New Chat', ts: new Date(), createdAt: new Date(), lastMessage: '' });
-    } catch { S.threadId = crypto.randomUUID(); }
-    S.console = consoleForThread(S.threadId);
+    if (!(await chatNewThread())) S.threadId = null;
+    S.console = S.threadId ? consoleForThread(S.threadId) : [];
     chatSyncUrl();
     chatClear();
     consoleRender();
@@ -586,15 +656,14 @@ async function chatDeleteThread(threadId, event) {
 window.chatDeleteThread = chatDeleteThread;
 
 async function chatSwitchThread(threadId) {
-  if (threadId === S.threadId) return;
+  if (threadId === S.threadId || S.chatState !== 'idle') return;
   S.threadId = threadId;
   S.console = consoleForThread(threadId);
   chatSyncUrl();
   S.activeQuery = '';
   S.chatState = 'idle';
-  Object.keys(S.agents).forEach(k => { S.agents[k] = { state: 'standby', detail: '', toolCount: 0 }; });
+  chatResetTools();
   chatStopElapsed();
-  chatRenderAgents();
   chatRenderThreads();
   chatUpdateUI();
   consoleRender();
@@ -603,21 +672,27 @@ async function chatSwitchThread(threadId) {
 }
 window.chatSwitchThread = chatSwitchThread;
 
-function chatRenderAgents() {
-  const el = $('agent-panel'); if (!el) return;
-  el.innerHTML = AGENTS.map(a => agentCardHtml(a.alias, a.role, S.agents[a.alias].state, S.agents[a.alias].detail)).join('');
-}
+const APPROVAL_CHOICES = {
+  once:    { label: 'Izinkan sekali', cls: 'bg-green-700 text-white hover:bg-green-800' },
+  session: { label: 'Izinkan sesi ini', cls: 'border border-outline-variant text-primary hover:bg-surface-container' },
+  always:  { label: 'Selalu izinkan', cls: 'border border-outline-variant text-primary hover:bg-surface-container' },
+  deny:    { label: 'Tolak', cls: 'border border-red-300 text-red-700 hover:bg-red-50' },
+};
 
 function chatShowApproval() {
   const o = $('approval-overlay'); if (!o) return; o.classList.remove('hidden');
   const p = S.pendingApproval || {};
-  const ae = $('m-agent'), ac = $('m-action'), ar = $('m-risk');
-  if (ae) ae.textContent = p.agent || 'config_agent';
+  const ac = $('m-action'), de = $('m-desc'), dr = $('m-desc-row'), ch = $('approval-choices');
   if (ac) ac.textContent = p.action || '—';
-  if (ar) {
-    const lv = (p.risk_level || 'medium').toUpperCase();
-    const cls = lv === 'HIGH' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-amber-50 text-amber-700 border-amber-200';
-    ar.innerHTML = `<span class="px-2 py-0.5 text-[10px] font-bold border rounded-full ${cls}">${lv}</span>`;
+  if (de) de.textContent = p.description || '';
+  if (dr) dr.classList.toggle('hidden', !p.description || p.description === p.action);
+  if (ch) {
+    // Deny first, most permissive last — matches the order operators scan.
+    const order = ['deny', 'always', 'session', 'once'];
+    ch.innerHTML = order.filter(c => (p.choices || ['once', 'deny']).includes(c)).map(c => {
+      const s = APPROVAL_CHOICES[c];
+      return `<button data-choice="${c}" class="px-4 py-2 rounded-lg text-body-sm font-medium transition-colors ${s.cls}">${s.label}</button>`;
+    }).join('');
   }
 }
 

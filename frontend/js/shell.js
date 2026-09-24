@@ -1,6 +1,7 @@
 import { S } from './state.js';
 import { $, esc } from './utils.js';
 import { NAV_ITEMS } from './config.js';
+import { activeBackend } from './backends/index.js';
 
 export function renderShell() {
   $('app').innerHTML = `
@@ -26,9 +27,7 @@ export function renderShell() {
       <span id="breadcrumb-page">Dashboard</span>
     </nav>
     <div class="flex items-center gap-4">
-      <button class="text-on-surface-variant hover:bg-surface-container p-1.5 rounded-full transition-colors">
-        <span class="material-symbols-outlined">notifications</span>
-      </button>
+      <a href="#settings" id="backend-indicator" title="Backend aktif — ganti di Settings" class="flex items-center gap-2 px-3 py-1 border border-outline-variant rounded-full text-body-sm text-primary hover:bg-surface-container transition-colors"></a>
       <div class="h-8 w-8 rounded-full bg-surface-container flex items-center justify-center border border-outline-variant">
         <span class="material-symbols-outlined text-on-surface-variant text-lg">account_circle</span>
       </div>
@@ -38,6 +37,29 @@ export function renderShell() {
     <div id="screen-container"></div>
   </main>`;
   renderNav();
+  renderBackendIndicator();
+  window.addEventListener('backend-changed', renderBackendIndicator);
+}
+
+// Header pill: active backend + reachability. Health is re-probed on every
+// render (shell load and backend switch), never on a timer.
+export async function renderBackendIndicator() {
+  const el = $('backend-indicator');
+  if (!el) return;
+  const b = activeBackend();
+  const pill = (dot, title) => {
+    el.innerHTML = `<span class="w-2 h-2 rounded-full ${dot}"></span><span class="font-medium">${esc(b.label)}</span>`;
+    el.title = title;
+  };
+  pill('bg-gray-300', 'Memeriksa koneksi...');
+  try {
+    const h = await b.health();
+    if (activeBackend() !== b) return; // switched while probing
+    pill(h.ok ? 'bg-green-500' : 'bg-amber-500', `${b.label} · model ${h.model}${h.detail ? ' · ' + h.detail : ''}`);
+  } catch (e) {
+    if (activeBackend() !== b) return;
+    pill('bg-red-500', `${b.label} tidak terjangkau: ${e.message}`);
+  }
 }
 
 let _collapsedGroups = new Set();
@@ -88,7 +110,8 @@ export function renderNav() {
 
     const hiddenCls = item.group && _collapsedGroups.has(item.group) ? 'hidden' : '';
     return `${separator}<a class="${base} ${cls} ${hiddenCls}" data-screen="${item.id}">
-      <span class="material-symbols-outlined" style="${fill}">${item.icon}</span><span>${item.label}</span>
+      <span class="material-symbols-outlined" style="${fill}">${item.icon}</span><span class="flex-1">${item.label}</span>
+      ${item.unavailable ? '<span class="text-[9px] font-bold uppercase tracking-wider text-surface-container-lowest/40">soon</span>' : ''}
     </a>`;
   }).join('');
 

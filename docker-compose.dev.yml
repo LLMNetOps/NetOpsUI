@@ -1,0 +1,12 @@
+# Development override: serve the frontend straight from the working tree so
+# edits show up on reload (no image rebuild). nginx is told to revalidate JS/CSS
+# on every request, so a plain reload picks changes up.
+services:
+  frontend:
+    volumes:
+      - ./frontend/index.html:/usr/share/nginx/html/index.html:ro
+      - ./frontend/css:/usr/share/nginx/html/css:ro
+      - ./frontend/js:/usr/share/nginx/html/js:ro
+      - ./frontend/assets:/usr/share/nginx/html/assets:ro
+      - ./frontend/fonts:/usr/share/nginx/html/fonts:ro
+      - ./frontend/nginx.conf.template:/etc/nginx/templates/default.conf.template:ro

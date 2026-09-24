@@ -1,380 +1,119 @@
-import { apiGet, apiPut, apiPost } from '../api.js';
-import { $, esc, badge, pageHeader, loadingHtml, errorHtml, alertDialog, confirmDialog } from '../utils.js';
-import { mountTagInput } from '../tag-input.js';
+import { $, esc, badge, pageHeader, loadingHtml, errorHtml, confirmDialog, alertDialog } from '../utils.js';
+import { mgr, getActiveProfile, setActiveProfile } from '../manager.js';
 
-let _agentsCache = [];
-let _selectedName = null;
-let _detailCache = {}; // name -> full detail payload, invalidated on save/restore
-let _toolNamesCache = null;
-let _skillNamesCache = null;
-let _llmProfilesCache = null;
-let _resizeHandler = null;
+const SLUG_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
 
-// The panel's sticky top can't be a hardcoded pixel guess — pageHeader's subtitle
-// wraps to a different number of lines depending on viewport width, which shifts
-// where the panel actually starts. Measure its real static (unstuck) position and
-// derive max-height from that so the bottom always lands just above the viewport
-// edge instead of running off the bottom.
-function fitDetailPanel() {
-  const panel = $('agent-detail-panel');
-  if (!panel) return;
-  const top = Math.round(panel.getBoundingClientRect().top);
-  panel.style.top = `${top}px`;
-  panel.style.maxHeight = `calc(100vh - ${top}px - 24px)`;
-}
+// Agent profiles = named system prompts kept in NetOpsUI's DB.
+//  - Hermes: the active profile is sent with every chat run as `instructions`.
+//  - NetOps Agent: has no per-request prompt; a profile can be applied to its
+//    SOUL.md (persona file), which replaces the file (old one is backed up).
+export async function screenAgents(c) {
+  let profiles = [], selected = null, isNew = false;
 
-async function getToolNames() {
-  if (!_toolNamesCache) {
-    const r = await apiGet('/api/tool-names');
-    _toolNamesCache = r.tools || [];
-  }
-  return _toolNamesCache;
-}
-
-async function getSkillNames() {
-  if (!_skillNamesCache) {
-    const r = await apiGet('/api/skills');
-    _skillNamesCache = (r.skills || []).map(s => s.name);
-  }
-  return _skillNamesCache;
-}
-
-// Active LLM connection profiles, configured in #settings. Multiple profiles can be
-// active at once so different agents can each be wired to a different backend.
-async function getActiveLlmProfiles() {
-  if (!_llmProfilesCache) {
-    const r = await apiGet('/api/config/llm/profiles');
-    _llmProfilesCache = (r.profiles || []).filter(p => p.is_active);
-  }
-  return _llmProfilesCache;
-}
-
-export async function screenAgents(c, param) {
-  c.innerHTML = `<div class="p-container_gutter max-w-[1600px] mx-auto">
-    ${pageHeader('Agents', 'Kelola konfigurasi specialist agent. Pilih agent di kiri untuk edit. Perubahan disimpan ke database dan baru berlaku setelah server di-restart.')}
-    <div class="grid grid-cols-12 gap-stack_gap_lg items-start">
-      <div class="col-span-12 xl:col-span-5">
+  c.innerHTML = `<div class="p-container_gutter max-w-[1700px] mx-auto">
+    ${pageHeader('Agents', 'Profil agent (prompt) yang dikelola di NetOpsUI. Dipakai per-chat di Hermes, atau diterapkan ke SOUL.md NetOps Agent.', `
+      <button id="ag-new" class="px-4 py-2 bg-secondary text-white rounded-lg text-body-sm font-medium hover:opacity-90 flex items-center gap-1"><span class="material-symbols-outlined text-[18px]">add</span>Profil Baru</button>`)}
+    <div class="grid grid-cols-12 gap-6">
+      <div class="col-span-12 xl:col-span-4">
         <div class="bg-surface-container-lowest border border-outline-variant rounded-lg overflow-hidden">
-          <div class="overflow-x-auto">
-            <table class="w-full text-left border-collapse">
-              <thead class="bg-surface-container-low"><tr class="text-label-caps font-label-caps text-outline border-b border-outline-variant">
-                <th class="py-3 px-4">Agent</th>
-                <th class="py-3 px-4">Model</th>
-                <th class="py-3 px-4">Status</th>
-              </tr></thead>
-              <tbody id="agents-tbody" class="divide-y divide-outline-variant"><tr><td class="py-8 text-center" colspan="3">${loadingHtml()}</td></tr></tbody>
-            </table>
-          </div>
+          <div id="ag-list">${loadingHtml('Memuat...')}</div>
         </div>
       </div>
-      <div class="col-span-12 xl:col-span-7">
-        <div id="agent-detail-panel" class="bg-surface-container-lowest border border-outline-variant rounded-lg overflow-hidden flex flex-col sticky">
-          ${emptyPanelHtml()}
-        </div>
-      </div>
+      <div class="col-span-12 xl:col-span-8"><div id="ag-editor"></div></div>
     </div>
   </div>`;
 
-  fitDetailPanel();
-  if (_resizeHandler) window.removeEventListener('resize', _resizeHandler);
-  _resizeHandler = fitDetailPanel;
-  window.addEventListener('resize', _resizeHandler);
-
-  _selectedName = null;
-  await loadAgents();
-
-  if (param && _agentsCache.some(a => a.name === param)) {
-    await selectAgent(param);
+  function renderList() {
+    const active = getActiveProfile();
+    $('ag-list').innerHTML = profiles.length ? profiles.map(p => `
+      <button data-slug="${esc(p.slug)}" class="w-full text-left px-5 py-3 border-b border-outline-variant hover:bg-surface-container-low transition-colors ${selected === p.slug ? 'bg-surface-container-low' : ''}">
+        <div class="flex justify-between items-center gap-2"><p class="font-medium text-primary truncate">${esc(p.name)}</p>${active === p.slug ? badge('Chat Hermes', 'blue') : ''}</div>
+        <p class="text-[11px] text-on-surface-variant truncate">${esc(p.description || p.slug)}</p>
+      </button>`).join('') : `<p class="p-5 text-body-sm text-on-surface-variant">Belum ada profil.</p>`;
+    $('ag-list').querySelectorAll('[data-slug]').forEach(b => { b.onclick = () => select(b.dataset.slug); });
   }
-}
 
-function emptyPanelHtml() {
-  return `<div class="p-12 flex flex-col items-center justify-center text-center">
-    <span class="material-symbols-outlined text-5xl text-outline-variant mb-3">smart_toy</span>
-    <p class="text-body-sm text-on-surface-variant">Pilih agent di tabel untuk melihat dan mengedit konfigurasinya.</p>
-  </div>`;
-}
-
-async function loadAgents() {
-  const tb = $('agents-tbody');
-  try {
-    const r = await apiGet('/api/agents');
-    _agentsCache = r.agents || [];
-    renderRows();
-    // If a row was selected (e.g. right after save/restore), refresh its panel in place
-    if (_selectedName && _agentsCache.some(a => a.name === _selectedName)) {
-      await renderDetailPanel(_selectedName);
+  function renderEditor() {
+    const el = $('ag-editor');
+    if (!isNew && !selected) {
+      el.innerHTML = `<div class="bg-surface-container-lowest border border-outline-variant rounded-lg p-12 text-center text-body-sm text-on-surface-variant">Pilih profil di kiri, atau buat profil baru.</div>`;
+      return;
     }
-  } catch (e) {
-    if (tb) tb.innerHTML = `<tr><td class="py-6 px-4 text-center" colspan="3">${errorHtml('Gagal memuat agents: ' + e.message)}</td></tr>`;
-  }
-}
-
-function renderRows() {
-  const tb = $('agents-tbody');
-  if (!tb) return;
-
-  if (!_agentsCache.length) {
-    tb.innerHTML = `<tr><td class="py-8 px-4 text-center text-on-surface-variant text-body-sm" colspan="3">Tidak ada agent ditemukan.</td></tr>`;
-    return;
-  }
-
-  tb.innerHTML = _agentsCache.map(a => summaryRowHtml(a)).join('');
-
-  tb.querySelectorAll('[data-row-select]').forEach(row => {
-    row.onclick = () => selectAgent(row.dataset.rowSelect);
-  });
-}
-
-function summaryRowHtml(a) {
-  const isSelected = _selectedName === a.name;
-  return `<tr data-row-select="${esc(a.name)}" class="cursor-pointer transition-colors ${isSelected ? 'bg-primary/5 border-l-[3px] border-l-primary' : 'hover:bg-surface-container-low border-l-[3px] border-l-transparent'}">
-    <td class="py-3 px-4">
-      <p class="font-data-mono text-data-mono font-medium text-primary">${esc(a.name)}</p>
-      <p class="text-label-caps font-label-caps text-on-surface-variant mt-0.5">${esc(a.alias || '')}</p>
-    </td>
-    <td class="py-3 px-4 text-body-sm font-data-mono-sm">${esc(a.model || '')}</td>
-    <td class="py-3 px-4">
-      ${badge(a.enabled !== false ? 'ENABLED' : 'DISABLED', a.enabled !== false ? 'green' : 'gray')}
-      ${a.has_default ? badge('MODIFIED', 'amber') : ''}
-    </td>
-  </tr>`;
-}
-
-async function selectAgent(name) {
-  _selectedName = name;
-  renderRows();
-  await renderDetailPanel(name);
-}
-
-async function renderDetailPanel(name) {
-  const panel = $('agent-detail-panel');
-  if (!panel) return;
-  panel.innerHTML = loadingHtml('Memuat detail agent...');
-
-  try {
-    const agent = _detailCache[name] || await apiGet(`/api/agents/${encodeURIComponent(name)}`);
-    _detailCache[name] = agent;
-    if (_selectedName !== name) return; // user already clicked another row while this was loading
-    panel.innerHTML = editFormHtml(agent);
-    await wireEditForm(agent);
-  } catch (e) {
-    if (_selectedName !== name) return;
-    panel.innerHTML = errorHtml('Gagal memuat agent: ' + e.message);
-  }
-}
-
-function editFormHtml(agent) {
-  return `<div class="flex justify-between items-center px-6 py-4 border-b border-outline-variant flex-shrink-0">
-    <h3 class="font-title-sm text-title-sm text-primary font-bold">${esc(agent.name)}${agent.alias ? ` <span class="text-on-surface-variant font-normal text-body-sm">(${esc(agent.alias)})</span>` : ''}</h3>
-    <button id="af-close" class="text-on-surface-variant hover:text-primary transition-colors p-1 rounded" title="Tutup"><span class="material-symbols-outlined text-[20px]">close</span></button>
-  </div>
-  <div class="p-6 space-y-4 flex-1 min-h-0 overflow-y-auto">
-    <div id="af-error" class="hidden"></div>
-    <div>
-      <label class="block text-label-caps font-label-caps text-on-surface-variant mb-1">Description (dipakai supervisor untuk routing)</label>
-      <input id="af-description" type="text" value="${esc(agent.description || '')}" class="w-full px-3 py-2 border border-outline-variant rounded text-body-sm bg-surface-container-lowest focus:outline-none focus:ring-1 focus:ring-primary">
-    </div>
-    <div class="grid grid-cols-2 gap-4">
-      <div>
-        <label class="block text-label-caps font-label-caps text-on-surface-variant mb-1">Model</label>
-        <select id="af-model" class="w-full px-3 py-2 border border-outline-variant rounded text-body-sm bg-surface-container-lowest focus:outline-none focus:ring-1 focus:ring-primary">
-          <option value="${esc(agent.model || '')}">${esc(agent.model || '(pilih model)')}</option>
-        </select>
-        <p id="af-model-hint" class="text-[11px] text-on-surface-variant mt-1">Daftar model dimuat dari Ollama Host di sebelah kanan.</p>
+    const p = isNew ? { slug: '', name: '', description: '', prompt: '' } : profiles.find(x => x.slug === selected);
+    if (!p) { el.innerHTML = ''; return; }
+    const isActive = getActiveProfile() === p.slug;
+    el.innerHTML = `<div class="bg-surface-container-lowest border border-outline-variant rounded-lg">
+      <div class="px-6 py-4 border-b border-outline-variant"><h3 class="font-title-sm text-title-sm text-primary">${isNew ? 'Profil Baru' : esc(p.name)}</h3></div>
+      <div class="p-6 space-y-4">
+        <div class="grid grid-cols-2 gap-4">
+          <label class="block"><span class="text-[11px] text-on-surface-variant">Nama</span>
+            <input id="g-name" value="${esc(p.name)}" class="mt-1 w-full border border-outline-variant rounded-md px-3 py-2 text-body-sm"/></label>
+          <label class="block"><span class="text-[11px] text-on-surface-variant">Slug</span>
+            <input id="g-slug" ${isNew ? '' : 'disabled'} value="${esc(p.slug)}" placeholder="noc-operator" class="mt-1 w-full border border-outline-variant rounded-md px-3 py-2 text-body-sm font-data-mono disabled:bg-surface-container"/></label>
+        </div>
+        <label class="block"><span class="text-[11px] text-on-surface-variant">Deskripsi</span>
+          <input id="g-desc" value="${esc(p.description)}" class="mt-1 w-full border border-outline-variant rounded-md px-3 py-2 text-body-sm"/></label>
+        <label class="block"><span class="text-[11px] text-on-surface-variant">Prompt / persona</span>
+          <textarea id="g-prompt" rows="16" spellcheck="false" class="mt-1 w-full border border-outline-variant rounded-md px-3 py-2 text-data-mono font-data-mono">${esc(p.prompt)}</textarea></label>
+        <div id="g-err" class="text-red-600 text-body-sm"></div>
+        <div class="flex flex-wrap items-center gap-2">
+          <button id="g-save" class="px-4 py-2 bg-secondary text-white rounded-lg text-body-sm font-medium hover:opacity-90">Simpan</button>
+          ${isNew ? '' : `
+            <button id="g-use" class="px-3 py-2 border border-outline-variant rounded-lg text-body-sm text-primary hover:bg-surface-container">${isActive ? 'Berhenti pakai di chat Hermes' : 'Pakai di chat Hermes'}</button>
+            <button id="g-soul" class="px-3 py-2 border border-outline-variant rounded-lg text-body-sm text-primary hover:bg-surface-container">Terapkan ke SOUL.md NetOps Agent</button>
+            <span class="flex-1"></span>
+            <button id="g-delete" class="px-3 py-2 border border-red-300 text-red-700 rounded-lg text-body-sm hover:bg-red-50">Hapus</button>`}
+        </div>
       </div>
-      <div>
-        <label class="block text-label-caps font-label-caps text-on-surface-variant mb-1">Ollama Host (opsional)</label>
-        <select id="af-ollama-host" class="w-full px-3 py-2 border border-outline-variant rounded text-body-sm bg-surface-container-lowest focus:outline-none focus:ring-1 focus:ring-primary">
-          <option value="">Memuat profile...</option>
-        </select>
-        <p class="text-[11px] text-on-surface-variant mt-1">Dari LLM Connection Profiles yang aktif di Settings. Kosongkan untuk pakai default global.</p>
-      </div>
-    </div>
-    <div class="grid grid-cols-2 gap-4">
-      <div>
-        <label class="block text-label-caps font-label-caps text-on-surface-variant mb-1">num_ctx</label>
-        <input id="af-num-ctx" type="number" value="${agent.num_ctx ?? 8192}" class="w-full px-3 py-2 border border-outline-variant rounded text-body-sm bg-surface-container-lowest focus:outline-none focus:ring-1 focus:ring-primary">
-      </div>
-      <div>
-        <label class="block text-label-caps font-label-caps text-on-surface-variant mb-1">num_predict</label>
-        <input id="af-num-predict" type="number" value="${agent.num_predict ?? 2048}" class="w-full px-3 py-2 border border-outline-variant rounded text-body-sm bg-surface-container-lowest focus:outline-none focus:ring-1 focus:ring-primary">
-      </div>
-    </div>
-    <div class="grid grid-cols-3 gap-4">
-      <div>
-        <label class="block text-label-caps font-label-caps text-on-surface-variant mb-1">context_window</label>
-        <input id="af-context-window" type="number" value="${agent.context_window ?? 10}" class="w-full px-3 py-2 border border-outline-variant rounded text-body-sm bg-surface-container-lowest focus:outline-none focus:ring-1 focus:ring-primary">
-      </div>
-      <div>
-        <label class="block text-label-caps font-label-caps text-on-surface-variant mb-1">timeout (detik)</label>
-        <input id="af-timeout" type="number" value="${agent.timeout ?? 300}" class="w-full px-3 py-2 border border-outline-variant rounded text-body-sm bg-surface-container-lowest focus:outline-none focus:ring-1 focus:ring-primary">
-      </div>
-      <div>
-        <label class="block text-label-caps font-label-caps text-on-surface-variant mb-1">max_iters</label>
-        <input id="af-max-iters" type="number" value="${agent.max_iters ?? 20}" class="w-full px-3 py-2 border border-outline-variant rounded text-body-sm bg-surface-container-lowest focus:outline-none focus:ring-1 focus:ring-primary">
-      </div>
-    </div>
-    <div>
-      <label class="block text-label-caps font-label-caps text-on-surface-variant mb-1">Tools</label>
-      <div id="af-tools"></div>
-    </div>
-    <div>
-      <label class="block text-label-caps font-label-caps text-on-surface-variant mb-1">Skills</label>
-      <div id="af-skills"></div>
-    </div>
-    <div class="flex gap-6">
-      <label class="flex items-center gap-2 cursor-pointer">
-        <input id="af-enabled" type="checkbox" ${agent.enabled !== false ? 'checked' : ''} class="w-4 h-4 accent-primary">
-        <span class="text-body-sm text-on-surface-variant">Enabled</span>
-      </label>
-      <label class="flex items-center gap-2 cursor-pointer">
-        <input id="af-reasoning" type="checkbox" ${agent.reasoning ? 'checked' : ''} class="w-4 h-4 accent-primary">
-        <span class="text-body-sm text-on-surface-variant">Reasoning mode</span>
-      </label>
-    </div>
-    <div>
-      <label class="block text-label-caps font-label-caps text-on-surface-variant mb-1">System Prompt (Bahasa Indonesia)</label>
-      <textarea id="af-body" rows="14" class="w-full px-3 py-2 border border-outline-variant rounded text-body-sm font-data-mono-sm bg-surface-container-lowest focus:outline-none focus:ring-1 focus:ring-primary resize-y"></textarea>
-    </div>
-  </div>
-  <div class="flex justify-between items-center px-6 py-4 border-t border-outline-variant flex-shrink-0">
-    ${agent.has_default
-      ? `<button id="af-restore" class="px-4 py-2 border border-amber-200 text-amber-700 rounded text-body-sm hover:bg-amber-50 transition-colors flex items-center gap-2">
-           <span class="material-symbols-outlined text-sm">restart_alt</span>Restore Default
-         </button>`
-      : '<span></span>'}
-    <div class="flex items-center gap-3">
-      <span class="text-label-caps font-label-caps text-on-surface-variant hidden md:inline">Perlu restart server agar diterapkan</span>
-      <button id="af-cancel" class="px-4 py-2 border border-outline-variant rounded text-body-sm text-on-surface-variant hover:bg-surface-container-low transition-colors">Reset</button>
-      <button id="af-save" class="px-5 py-2 bg-primary text-white rounded text-body-sm font-medium hover:bg-primary/90 transition-colors flex items-center gap-2">
-        <span class="material-symbols-outlined text-sm">save</span>Simpan Perubahan
-      </button>
-    </div>
-  </div>`;
-}
-
-async function wireEditForm(agent) {
-  // Set textarea value directly — bypasses HTML parsing of potentially large text
-  $('af-body').value = agent.body || '';
-
-  const [toolNames, skillNames, llmProfiles] = await Promise.all([getToolNames(), getSkillNames(), getActiveLlmProfiles()]);
-  const toolsWidget = mountTagInput($('af-tools'), { initial: agent.tools || [], options: toolNames, placeholder: 'Cari tool...' });
-  const skillsWidget = mountTagInput($('af-skills'), { initial: agent.skills || [], options: skillNames, placeholder: 'Cari skill...' });
-
-  const hostSelect = $('af-ollama-host');
-  const current = agent.ollama_host || '';
-  const knownUrls = new Set(llmProfiles.map(p => p.base_url));
-  const customOpt = current && !knownUrls.has(current)
-    ? `<option value="${esc(current)}" selected>${esc(current)} (custom)</option>` : '';
-  hostSelect.innerHTML = `<option value="">(pakai default global)</option>${customOpt}`
-    + llmProfiles.map(p => `<option value="${esc(p.base_url)}" ${p.base_url === current ? 'selected' : ''}>${esc(p.name)} — ${esc(p.base_url)}</option>`).join('');
-
-  // Model dropdown depends on which host is selected — fetch the model list for
-  // that connection so the operator picks from what's actually available instead
-  // of typing a name that might not exist (typos silently break the agent).
-  function setModelOptions(models, currentValue) {
-    const sel = $('af-model');
-    if (!sel) return;
-    const values = [...models];
-    if (currentValue && !values.includes(currentValue)) values.unshift(currentValue);
-    sel.innerHTML = values.length
-      ? values.map(m => `<option value="${esc(m)}">${esc(m)}</option>`).join('')
-      : `<option value="${esc(currentValue)}">${esc(currentValue || '(tidak ada model ditemukan)')}</option>`;
-    if (currentValue) sel.value = currentValue;
+    </div>`;
+    $('g-save').onclick = save;
+    if ($('g-use')) $('g-use').onclick = () => { setActiveProfile(isActive ? null : p.slug); renderList(); renderEditor(); };
+    if ($('g-soul')) $('g-soul').onclick = applySoul;
+    if ($('g-delete')) $('g-delete').onclick = del;
   }
 
-  async function refreshModelOptions() {
-    const hint = $('af-model-hint');
-    const currentModel = ($('af-model').value || '').trim() || agent.model || '';
-    const hostUrl = hostSelect.value;
-    const matchedProfile = llmProfiles.find(p => p.base_url === hostUrl);
-    if (hint) hint.textContent = 'Memuat model tersedia...';
+  const form = () => ({ slug: $('g-slug').value.trim(), name: $('g-name').value.trim(), description: $('g-desc').value.trim(), prompt: $('g-prompt').value });
+
+  async function save() {
+    const f = form(), err = $('g-err');
+    if (!f.name) { err.textContent = 'Nama wajib diisi.'; return; }
+    if (isNew && !SLUG_RE.test(f.slug)) { err.textContent = 'Slug harus huruf kecil/angka/strip, maksimal 64 karakter.'; return; }
     try {
-      const r = matchedProfile
-        ? await apiPost(`/api/config/llm/profiles/${matchedProfile.id}/models`, {})
-        : await apiPost('/api/llm/models', hostUrl ? { base_url: hostUrl } : {});
-      if (r.ok) {
-        setModelOptions(r.models, currentModel);
-        if (hint) hint.textContent = `${r.models.length} model ditemukan dari ${matchedProfile ? matchedProfile.name : (hostUrl || 'default global')} (${r.latency_ms} ms).`;
-      } else if (hint) {
-        hint.textContent = `Gagal memuat model dari host ini: ${r.error || 'Unknown error'}. Model saat ini (${esc(currentModel)}) tetap dipakai.`;
-      }
-    } catch (e) {
-      if (hint) hint.textContent = 'Gagal menghubungi backend: ' + e.message;
-    }
+      const saved = isNew ? await mgr('/profiles', { method: 'POST', body: f }) : await mgr('/profiles/' + f.slug, { method: 'PUT', body: f });
+      isNew = false; await load(); select(saved.slug);
+    } catch (e) { err.textContent = e.message; }
   }
 
-  hostSelect.onchange = refreshModelOptions;
-  refreshModelOptions();
-
-  $('af-close').onclick = () => {
-    _selectedName = null;
-    renderRows();
-    $('agent-detail-panel').innerHTML = emptyPanelHtml();
-  };
-
-  // Reset just re-renders the panel from the last-loaded (cached) agent data, discarding edits
-  $('af-cancel').onclick = async () => {
-    $('agent-detail-panel').innerHTML = editFormHtml(agent);
-    await wireEditForm(agent);
-  };
-
-  const restoreBtn = $('af-restore');
-  if (restoreBtn) restoreBtn.onclick = async () => {
+  async function applySoul() {
+    const cur = await mgr('/backends/netops/soul').catch(() => null);
     const ok = await confirmDialog({
-      title: 'Restore ke default?',
-      message: `Semua perubahan pada agent "${agent.name}" akan dikembalikan ke versi default dari repo. Tindakan ini tidak bisa dibatalkan.`,
-      confirmLabel: 'Restore', danger: true,
+      title: 'Timpa SOUL.md NetOps Agent?',
+      message: `Isi SOUL.md saat ini akan diganti dengan prompt profil ini dan berlaku untuk semua sesi NetOps Agent berikutnya.${cur?.exists ? ' Versi lama disimpan sebagai backup di server NetOpsUI.' : ''}`,
+      confirmLabel: 'Terapkan', danger: true,
     });
     if (!ok) return;
+    try { await mgr(`/profiles/${selected}/apply-soul`, { method: 'POST' }); await alertDialog('SOUL.md NetOps Agent diperbarui.', 'Berhasil'); }
+    catch (e) { $('g-err').textContent = e.message; }
+  }
+
+  async function del() {
+    const ok = await confirmDialog({ title: 'Hapus profil?', message: `"${selected}" akan dihapus dari NetOpsUI. SOUL.md NetOps Agent yang sudah pernah diterapkan tidak berubah.`, confirmLabel: 'Hapus', danger: true });
+    if (!ok) return;
     try {
-      await apiPost(`/api/agents/${encodeURIComponent(agent.name)}/restore`, {});
-      delete _detailCache[agent.name];
-      await loadAgents();
-    } catch (e) {
-      await alertDialog('Gagal restore: ' + e.message, 'Terjadi Kesalahan');
-    }
-  };
+      await mgr('/profiles/' + selected, { method: 'DELETE' });
+      if (getActiveProfile() === selected) setActiveProfile(null);
+      selected = null; await load();
+    } catch (e) { $('g-err').textContent = e.message; }
+  }
 
-  $('af-save').onclick = async () => {
-    const errEl = $('af-error');
-    const saveBtn = $('af-save');
-    const description = ($('af-description').value || '').trim();
-    const model = ($('af-model').value || '').trim();
-    const body = ($('af-body').value || '').trim();
+  function select(slug) { selected = slug; isNew = false; renderList(); renderEditor(); }
+  $('ag-new').onclick = () => { isNew = true; selected = null; renderList(); renderEditor(); };
 
-    if (!description) { errEl.innerHTML = errorHtml('Description wajib diisi.'); errEl.classList.remove('hidden'); return; }
-    if (!model) { errEl.innerHTML = errorHtml('Model wajib diisi.'); errEl.classList.remove('hidden'); return; }
-    if (!body) { errEl.innerHTML = errorHtml('System prompt wajib diisi.'); errEl.classList.remove('hidden'); return; }
+  async function load() {
+    try { profiles = (await mgr('/profiles')).profiles; renderList(); }
+    catch (e) { $('ag-list').innerHTML = errorHtml('Gagal memuat profil: ' + e.message); }
+  }
 
-    const payload = {
-      description, model, body,
-      tools: toolsWidget.getValues(),
-      skills: skillsWidget.getValues(),
-      num_ctx: parseInt($('af-num-ctx').value) || 8192,
-      num_predict: parseInt($('af-num-predict').value) || 2048,
-      context_window: parseInt($('af-context-window').value) || 10,
-      timeout: parseInt($('af-timeout').value) || 300,
-      max_iters: parseInt($('af-max-iters').value) || 20,
-      ollama_host: ($('af-ollama-host').value || '').trim(),
-      reasoning: $('af-reasoning').checked,
-      enabled: $('af-enabled').checked,
-    };
-
-    errEl.classList.add('hidden');
-    saveBtn.disabled = true;
-    saveBtn.innerHTML = '<span class="material-symbols-outlined animate-spin text-sm">progress_activity</span> Menyimpan...';
-
-    try {
-      await apiPut(`/api/agents/${encodeURIComponent(agent.name)}`, payload);
-      delete _detailCache[agent.name];
-      await loadAgents();
-    } catch (e) {
-      errEl.innerHTML = errorHtml(e.message || 'Gagal menyimpan agent.');
-      errEl.classList.remove('hidden');
-      saveBtn.disabled = false;
-      saveBtn.innerHTML = '<span class="material-symbols-outlined text-sm">save</span>Simpan Perubahan';
-    }
-  };
+  await load();
+  renderEditor();
 }

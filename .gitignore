@@ -1,22 +1,15 @@
-# Abaikan file sensitif dan generated
-config.yaml
+# Environment (holds the Hermes API key)
 .env
+
+# Generated / local
+laporan/
 output/
-.venv/
+*.log
+.scratch/
+node_modules/
+
+# Manager service database and SOUL.md backups
+data/*
+!data/.gitkeep
 __pycache__/
 *.pyc
-
-# Data DHCP lease (berisi MAC address & IP perangkat nyata)
-*.txt
-laporan/
-
-# Log files
-*.log
-schedule.log
-
-# Config backups (berisi konfigurasi router lengkap)
-backups/
-!backups/.gitkeep
-
-# SQLite checkpoints (berisi riwayat percakapan)
-data/
