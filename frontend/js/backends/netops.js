@@ -129,6 +129,12 @@ export const netops = {
     }
   },
 
+  // Stops following a run without stopping it: the manager keeps the run going and
+  // stores its answer, so the operator can leave the thread and re-attach later.
+  detach(threadId) {
+    _controllers[threadId]?.abort();
+  },
+
   async stop(threadId) {
     try { return await mgr(`/threads/${encodeURIComponent(threadId)}/stop`, { method: 'POST' }); }
     catch { return { ok: false }; }

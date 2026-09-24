@@ -112,7 +112,8 @@ def _worker(run: Run, messages: list[dict]) -> None:
                 elif kind == "tool_call":
                     run.emit({"type": "tool_end", "name": data.get("name"),
                               "detail": data.get("arguments") or "",
-                              "durationMs": (data.get("duration") or 0) * 1000})
+                              "durationMs": (data.get("duration") or 0) * 1000,
+                              "source": data.get("source") or "main"})
                 elif kind == "done":
                     break
     except Exception as e:  # noqa: BLE001 — anything from the agent connection ends the run

@@ -253,8 +253,10 @@ async function chatAttach(threadId) {
   S.chatState = 'streaming';
   consolePush('note', 'Tersambung ke proses yang sedang berjalan di server.');
   chatRenderMessages(); chatUpdateUI();
-  try { await backend.resume(threadId, chatHandleEvent); }
-  catch (e) { chatHandleEvent({ type: 'error', text: e.message || 'Connection failed' }); }
+  const emit = ev => { if (threadId === S.threadId) chatHandleEvent(ev); };
+  try { await backend.resume(threadId, emit); }
+  catch (e) { emit({ type: 'error', text: e.message || 'Connection failed' }); }
+  if (threadId !== S.threadId) return; // left the thread; its run continues on the server
   chatFinish();
   // The server stored the final answer; show that copy and refresh the thread list.
   if (threadId === S.threadId) {
@@ -286,9 +288,11 @@ function chatBindEvents() {
     S.chatState = 'streaming';
     chatTouchThread(threadId, text);
     chatRenderMessages(); chatUpdateUI();
-    try { await backend.send(threadId, text, chatHandleEvent); }
-    catch (e) { chatHandleEvent({ type: 'error', text: e.message || 'Connection failed' }); }
-    chatFinish();
+    // Events from a thread the operator has since left must not touch the visible one.
+    const emit = ev => { if (threadId === S.threadId) chatHandleEvent(ev); };
+    try { await backend.send(threadId, text, emit); }
+    catch (e) { emit({ type: 'error', text: e.message || 'Connection failed' }); }
+    if (threadId === S.threadId) chatFinish();
   }
 
   btnS.onclick = send;
@@ -376,7 +380,7 @@ function chatHandleEvent(ev) {
       const running = [...S.tools].reverse().find(t => t.name === ev.name && t.state === 'running');
       const state = ev.error ? 'failed' : 'done';
       if (running) Object.assign(running, { state, durationMs: ev.durationMs });
-      else { S.tools.push({ name: ev.name, detail: ev.detail, state, durationMs: ev.durationMs }); S.toolCount++; }
+      else { S.tools.push({ name: ev.name, detail: ev.detail, source: ev.source, state, durationMs: ev.durationMs }); S.toolCount++; }
       consolePush(ev.error ? 'error' : 'tool_result',
         `${ev.name} (${fmtDelta(ev.durationMs || 0).slice(1)})${ev.detail ? ' → ' + ev.detail : ''}`);
       chatRenderTools();
@@ -442,6 +446,26 @@ function chatResetTools() {
   chatRenderTools();
 }
 
+// Tool arguments arrive as a raw JSON string. Show the one value that says what the
+// call does (command, path, agent…) instead of the JSON; `{}` means no arguments.
+const TOOL_KEYS = ['command', 'cmd', 'query', 'path', 'agent', 'device', 'host', 'name', 'task', 'url'];
+function toolSummary(detail) {
+  if (!detail) return '';
+  let a;
+  try { a = JSON.parse(detail); } catch { return detail; }
+  if (!a || typeof a !== 'object') return String(a ?? '');
+  const entries = Object.entries(a).filter(([, v]) => v !== '' && v != null);
+  if (!entries.length) return '';
+  const key = TOOL_KEYS.find(k => a[k]);
+  const fmt = v => (typeof v === 'string' ? v : JSON.stringify(v));
+  if (!key) return entries.map(([k, v]) => `${k}=${fmt(v)}`).join(' ');
+  const head = a.action ? `${a.action} ` : '';
+  return head + fmt(a[key]);
+}
+function toolFull(detail) {
+  try { return JSON.stringify(JSON.parse(detail), null, 2); } catch { return detail || ''; }
+}
+
 function chatRenderTools() {
   const el = $('tool-panel'); if (!el) return;
   const cnt = $('tool-count'); if (cnt) cnt.textContent = S.toolCount ? `${S.toolCount} call` : '';
@@ -456,13 +480,15 @@ function chatRenderTools() {
   };
   el.innerHTML = S.tools.map(t => {
     const st = styles[t.state] || styles.done;
+    const summary = toolSummary(t.detail);
+    const child = t.source && t.source !== 'main' ? t.source.replace(/^child:/, '') : '';
     const dur = t.durationMs != null ? ` &middot; ${fmtDelta(t.durationMs).slice(1)}` : '';
     return `<div class="bg-surface-container-lowest border border-outline-variant ${st.bl} rounded-lg p-3">
       <div class="flex justify-between items-center gap-2">
-        <span class="text-xs font-bold text-primary font-data-mono-sm truncate" title="${esc(t.name)}">${esc(t.name)}</span>
+        <span class="text-xs font-bold text-primary font-data-mono-sm truncate" title="${esc(t.name)}">${child ? '↳ ' : ''}${esc(t.name)}${child ? ` <span class="font-normal text-outline">· ${esc(child)}</span>` : ''}</span>
         <span class="flex items-center gap-1.5 shrink-0"><span class="w-2 h-2 rounded-full ${st.dot}"></span><span class="text-label-caps font-label-caps ${st.text}">${st.label}</span></span>
       </div>
-      ${t.detail ? `<p class="text-[10px] text-on-surface-variant font-data-mono-sm mt-1 truncate" title="${esc(t.detail)}">${esc(t.detail)}</p>` : ''}
+      ${summary ? `<details class="mt-1"><summary class="text-[10px] text-on-surface-variant font-data-mono-sm cursor-pointer truncate list-none" title="Klik untuk detail lengkap">${esc(summary)}</summary><pre class="text-[10px] text-on-surface-variant font-data-mono-sm mt-1 whitespace-pre-wrap break-all">${esc(toolFull(t.detail))}</pre></details>` : ''}
       ${dur ? `<p class="text-[10px] text-outline mt-0.5 tabular-nums">${dur.replace(' &middot; ', '')}</p>` : ''}
     </div>`;
   }).join('');
@@ -729,7 +755,18 @@ async function chatDeleteThread(threadId, event) {
 window.chatDeleteThread = chatDeleteThread;
 
 async function chatSwitchThread(threadId) {
-  if (threadId === S.threadId || S.chatState !== 'idle') return;
+  if (threadId === S.threadId) return;
+  if (S.chatState !== 'idle') {
+    // A run in progress used to lock every other thread. Leave it running on the
+    // server and stop following it; coming back re-attaches while it still runs.
+    const backend = activeBackend();
+    if (!backend.detach) return;
+    backend.detach(S.threadId);
+    S.chatState = 'idle';
+    S.pendingApproval = null;
+    chatHideApproval();
+    _requestStartTs = null;
+  }
   S.threadId = threadId;
   S.console = consoleForThread(threadId);
   chatSyncUrl();
