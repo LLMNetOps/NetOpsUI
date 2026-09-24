@@ -24,7 +24,7 @@ Browser (SPA vanilla JS)
    ▼
 nginx  (container frontend, :3000)
    │  buang header Origin; sisipkan            │
-   │  Authorization: Bearer $HERMES_API_KEY    │
+   │  Authorization: Bearer <key dari database │
    ▼  (khusus Hermes)                          ▼
 NetOps Agent :8100        Hermes :8642      manager :8200  (container manager: FastAPI + SQLite)
                                             skill library · profil agent · view config
@@ -36,7 +36,7 @@ NetOps Agent :8100        Hermes :8642      manager :8200  (container manager: F
 - `frontend/js/backends/`: satu adapter per backend dengan kontrak yang sama (lihat komentar di `index.js`). Screen hanya bicara lewat `activeBackend()`.
 - `server/`: **manager**, service milik NetOpsUI untuk hal yang tidak punya API di kedua backend.
 - Kedua container memakai **host network** agar bisa menjangkau backend yang hanya mendengarkan di `127.0.0.1`. Backend tidak perlu dibuka ke jaringan.
-- API key Hermes hanya ada di environment nginx, tidak pernah sampai ke browser.
+- **Credential tidak disimpan di environment.** API key Hermes disimpan di database manager (diisi di *Settings → Backend*); nginx memintanya ke manager di setiap request (`auth_request`) dan menyisipkannya ke Hermes, sehingga tidak pernah sampai ke browser dan bisa diganti tanpa restart. Key provider LLM juga hanya di database (lihat bagian LLM provider).
 
 ## Fitur
 
@@ -46,8 +46,8 @@ NetOps Agent :8100        Hermes :8642      manager :8200  (container manager: F
 | **AI Chat** | Streaming, panel tool activity, stop, riwayat thread. Approval command berisiko hanya di Hermes |
 | **Skills** | Library skill di NetOpsUI: buat/edit, import dari disk backend, **publish** ke backend, cabut |
 | **Agents** | Profil agent (prompt): dipakai per-chat di Hermes, atau diterapkan ke `SOUL.md` NetOps Agent |
-| **Settings** | Pilih backend aktif; tab *File Konfigurasi* menampilkan `config.yaml`, nama variabel `.env`, dan `SOUL.md` |
-| Nodes, Reports, Backups, Metrics | **Belum tersedia**: belum ada API-nya di kedua backend |
+| **Settings** | Tab *Backend*: pilih backend aktif. Tab *LLM Provider*: kelola provider LLM dan terapkan ke backend. Tab *File Konfigurasi*: `config.yaml`, nama variabel `.env`, dan `SOUL.md` |
+| Nodes, Backups, Metrics | **Belum tersedia**: belum ada API-nya di kedua backend |
 
 Perbedaan perilaku antar backend:
 
@@ -58,9 +58,10 @@ Perbedaan perilaku antar backend:
 
 - **Skills**: database SQLite adalah sumber kebenaran. *Publish* menulis `SKILL.md` ke `<NETOPS_AGENT_HOME>/skills/<slug>/` atau `<HERMES_HOME>/skills/netopsui/<slug>/`. Status per backend: Draft, Tersinkron, Perlu publish, Diubah di backend. Publish ditolak jika file tujuan bukan hasil publish NetOpsUI, kecuali dikonfirmasi. Menghapus skill dari library **tidak** menghapus file yang sudah dipublish.
 - **Profil agent**: disimpan di SQLite. *Terapkan ke SOUL.md* menimpa persona NetOps Agent dan mencadangkan versi lama ke `data/backups/`.
+- **LLM provider** (Settings → LLM Provider): profil provider (nama, Base URL OpenAI-compatible, model, API key) disimpan di SQLite. *Cek Koneksi* memanggil `{base_url}/models` dari server (key tidak pernah ke browser) dan mengisi daftar model. *Terapkan* menulis bagian `model:` di `config.yaml` **NetOps Agent** (`name`, `base_url`, `api_key`; opsional juga agent delegasi) dan/atau **Hermes** (`default`, `provider: custom`, `base_url`, `api_key`). Edit dilakukan per baris tanpa menyusun ulang file, sehingga komentar dan key lain utuh; hasilnya di-parse ulang dan dibandingkan dengan aslinya, dan penulisan dibatalkan bila ada perbedaan lain. Backup dibuat di `data/backups/` (berisi isi config apa adanya, termasuk rahasia). Provider **tanpa key** menghapus `api_key` lama agar key provider sebelumnya tidak terkirim ke endpoint baru. **Backend tidak di-restart oleh NetOpsUI**: NetOps Agent baru membaca config baru setelah API-nya di-restart.
 - **View config**: `config.yaml` ditampilkan dengan nilai rahasia disamarkan (berdasarkan nama key: `key`, `token`, `secret`, `passw`, `credential`, `auth`; referensi `${ENV_VAR}` tetap terlihat). `.env` hanya menampilkan **nama** variabel.
 
-Hak akses container manager sengaja minimal: hanya `skills/` kedua backend dan `SOUL.md` NetOps Agent yang bisa ditulis; `config.yaml`, `.env`, dan `SOUL.md` Hermes read-only; `sessions.db` dan sisanya tidak di-mount.
+Hak akses container manager sengaja minimal. Bisa ditulis: `skills/` kedua backend, `SOUL.md` NetOps Agent, dan `config.yaml` kedua backend (hanya blok `model:` yang diubah, lewat fitur LLM Provider). Read-only: `.env` dan `SOUL.md` Hermes. `sessions.db` dan sisanya tidak di-mount.
 
 ---
 
@@ -117,7 +118,6 @@ Yang **wajib** diperiksa di `.env`:
 
 | Variabel | Isi |
 |---|---|
-| `HERMES_API_KEY` | Sama persis dengan `API_SERVER_KEY` di `~/.hermes/.env` |
 | `NETOPS_AGENT_HOME` | Folder home NetOps Agent (saat ini `/home/<user>/.palapa`) |
 | `HERMES_HOME` | Folder home Hermes (`/home/<user>/.hermes`) |
 | `HOST_UID` / `HOST_GID` | Hasil `id -u` dan `id -g`, agar file yang ditulis manager dimiliki user Anda |
@@ -145,6 +145,8 @@ curl -s localhost:3000/backend/hermes/health        # lewat proxy → health Her
 
 Lalu buka `http://<host>:3000`. Header menampilkan backend aktif dengan titik hijau bila terhubung. Pilih backend di **Settings**.
 
+**Isi API key Hermes** (hanya bila memakai Hermes): buka **Settings → Backend**, pada kartu Hermes tempel `API_SERVER_KEY` (nilai dari `~/.hermes/.env`), klik **Cek**, lalu **Simpan**. Key disimpan di database, bukan di `.env`.
+
 ### Mode development (hot reload)
 
 Frontend disajikan langsung dari working tree; cukup reload browser setelah mengubah JS/CSS:
@@ -169,7 +171,7 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
 
 **Update** aman untuk data: database di `data/` dipertahankan, dan perubahan skema/nama yang diperlukan dimigrasi otomatis saat manager start. Pilihan backend dan riwayat chat di browser juga ikut termigrasi.
 
-**Backup.** Yang perlu dicadangkan hanya `data/` (database skill/profil dan cadangan `SOUL.md`) dan `.env`:
+**Backup.** Yang perlu dicadangkan hanya `data/` (database skill/profil/credential dan cadangan `SOUL.md`/`config.yaml`) dan `.env`. Karena `data/` berisi credential, simpan cadangannya dengan hak akses ketat:
 
 ```bash
 docker compose stop manager
@@ -186,11 +188,14 @@ Skill yang sudah dipublish ada di folder skill masing-masing backend dan ikut ca
 | Gejala | Penyebab dan solusi |
 |---|---|
 | `502 Bad Gateway` di `/backend/netops/…` atau `/backend/hermes/…` | Backend belum berjalan atau port salah. Cek `curl localhost:8100/health` / `:8642/health`. UI tetap jalan; header menampilkan titik merah. |
-| Hermes: chat gagal `401`/`403` | `HERMES_API_KEY` di `.env` tidak sama dengan `API_SERVER_KEY`, atau `api_server` belum aktif. Setelah mengubah `.env`, jalankan `docker compose up -d`. |
+| Hermes: chat gagal `401`/`403` | API key Hermes belum diisi atau tidak sama dengan `API_SERVER_KEY` di `~/.hermes/.env`, atau `api_server` belum aktif. Isi/ganti di **Settings → Backend → Hermes → API Key** (gunakan *Cek* sebelum *Simpan*); berlaku langsung tanpa restart. |
 | `manager` terus restart, log `unable to open database file` | `data/` dimiliki `root` (dibuat Docker karena tidak ada) atau `HOST_UID/GID` salah. `sudo chown -R $(id -u):$(id -g) data`, cek `HOST_UID/GID`. |
 | `not a directory` / mount error saat `up` | File yang di-mount belum ada di host dan Docker membuatnya sebagai folder. Hapus folder itu, buat file aslinya, ulangi. |
 | `set NETOPS_AGENT_HOME in .env` | Variabel wajib belum diisi di `.env`. |
 | Port sudah dipakai | Ubah `UI_PORT` / `MANAGER_PORT` di `.env`. Port 8000 di host ini milik `mikrotik-mcp`. |
+| Terapkan LLM Provider gagal `409 read-only` | `config.yaml` di-mount `:ro` (compose lama). Hapus `:ro` dari mount `config.yaml` di `docker-compose.yml`, lalu `docker compose up -d`. |
+| Terapkan LLM Provider gagal `422` | Blok `model:` di config tidak berformat block-style YAML atau tidak ditemukan; config **tidak** ditulis. Ubah manual. |
+| Config diedit di host tapi manager masih menampilkan yang lama | Editor yang mengganti file (bukan menimpa) membuat bind mount menunjuk file lama. `docker compose restart manager`. |
 | Publish skill ditolak (409) | File tujuan sudah ada dan bukan hasil publish NetOpsUI. Periksa isinya, lalu konfirmasi timpa bila memang diinginkan. |
 | Perubahan JS tidak muncul | Tanpa override dev, image harus di-rebuild: `docker compose up -d --build frontend`, lalu hard refresh (Ctrl+Shift+R). |
 
@@ -198,20 +203,21 @@ Skill yang sudah dipublish ada di folder skill masing-masing backend dan ikut ca
 
 - **UI belum punya autentikasi.** Siapa pun yang bisa membuka UI bisa memakai chat, menulis skill ke folder backend, dan menimpa `SOUL.md` NetOps Agent. Untuk akses di luar localhost, pasang lapisan autentikasi di depannya (reverse proxy dengan basic auth/SSO, VPN, atau firewall yang membatasi port `3000`).
 - Backend dan manager hanya mendengarkan di `127.0.0.1`; hanya port UI yang terbuka.
-- `.env` berisi `HERMES_API_KEY`; jangan di-commit (sudah di `.gitignore`).
+- `.env` hanya berisi URL, port, dan path (tanpa credential), tetapi tetap di-ignore git. Semua credential ada di `data/netopsui.db` (izin 0600, plaintext): API key Hermes dan key provider LLM. Batasi akses ke folder `data/` dan cadangannya.
+- **API key provider** disimpan **plaintext** di `data/netopsui.db` (izin file 0600) dan, setelah *Terapkan*, sebagai teks di `config.yaml` backend (menggantikan referensi `${ENV}` bila ada). Batasi akses ke folder `data/` dan cadangannya. Fitur *Cek Koneksi* membuat server memanggil URL yang diberikan operator, jadi tanpa autentikasi UI ini bisa dipakai untuk memindai jaringan internal.
 - Penyamaran nilai rahasia di view config berdasarkan **nama key**. Rahasia yang disimpan di key bernama lain tidak akan tersamar.
 
 ## Struktur repo
 
 ```
 docker-compose.yml · docker-compose.dev.yml · .env.example · .dockerignore
-data/                     database manager + backup SOUL.md (isi tidak di-commit)
+data/                     database manager + backup SOUL.md/config.yaml (isi tidak di-commit)
 frontend/
 ├── index.html, css/, fonts/, assets/
 ├── js/
 │   ├── app.js, shell.js, state.js, config.js, utils.js, manager.js
 │   ├── backends/         common.js · netops.js · hermes.js · index.js
-│   └── screens/          dashboard · chat · skills · agents · settings · unavailable
+│   └── screens/          dashboard · chat · skills · agents · settings · settings-llm · unavailable
 ├── nginx.conf.template   proxy ke backend + manager (envsubst saat start)
 └── Dockerfile
 server/                   manager: main.py · backends.py · db.py · Dockerfile

@@ -5,6 +5,7 @@ import { NAV_ITEMS } from './config.js';
 
 import { screenDashboard } from './screens/dashboard.js';
 import { screenChat, chatUnmount } from './screens/chat.js';
+import { screenNodes } from './screens/nodes.js';
 import { screenSkills } from './screens/skills.js';
 import { screenAgents } from './screens/agents.js';
 import { screenSettings } from './screens/settings.js';
@@ -27,7 +28,8 @@ async function navigate(screenId, param) {
 
   c.innerHTML = '';
 
-  if (!item || item.unavailable) {
+  if (!item) { location.hash = 'dashboard'; return; } // unknown/removed route
+  if (item.unavailable) {
     screenUnavailable(c, screenId);
     return;
   }
@@ -38,6 +40,7 @@ async function navigate(screenId, param) {
       await screenChat(c, param);
       _currentUnmount = chatUnmount;
       break;
+    case 'nodes':     await screenNodes(c); break;
     case 'skills':    await screenSkills(c); break;
     case 'agents':    await screenAgents(c); break;
     case 'settings':  await screenSettings(c); break;

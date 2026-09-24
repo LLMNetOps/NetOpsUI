@@ -26,6 +26,8 @@ async function errorDetail(r) {
   const text = await r.text().catch(() => '');
   try {
     const j = JSON.parse(text);
+    // FastAPI validation errors: detail is a list of { loc, msg }.
+    if (Array.isArray(j.detail)) return j.detail.map(d => `${(d.loc || []).slice(1).join('.')}: ${d.msg}`).join('; ');
     return j.detail || j.error?.message || j.error || j.message || text;
   } catch {
     return text || r.statusText;
@@ -85,4 +87,16 @@ export function contentText(content) {
     return content.map(p => (typeof p === 'string' ? p : p?.text || '')).filter(Boolean).join('\n');
   }
   return '';
+}
+
+// crypto.randomUUID() only exists in secure contexts (HTTPS or localhost); the
+// console is normally served over plain http://<host>:3000, where it is
+// undefined. getRandomValues() is available everywhere.
+export function uuid() {
+  if (typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+  const b = crypto.getRandomValues(new Uint8Array(16));
+  b[6] = (b[6] & 0x0f) | 0x40;
+  b[8] = (b[8] & 0x3f) | 0x80;
+  const h = [...b].map(x => x.toString(16).padStart(2, '0')).join('');
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
 }

@@ -6,7 +6,7 @@
 // approval flow (its network tools are read-only) and no stop endpoint — Stop
 // aborts the SSE stream, but the agent loop on the server keeps running until
 // it finishes on its own.
-import { http, ensureOk, readSSE } from './common.js';
+import { http, ensureOk, readSSE, uuid } from './common.js';
 
 const BASE = '/backend/netops';
 const STORAGE_KEY = 'llmnetops-netops-threads-v1';
@@ -53,6 +53,7 @@ export const netops = {
     approval: false,
     stop: 'abort',        // only cuts the stream; the server-side run is not interrupted
     serverThreads: false, // threads are stored in the browser
+    devices: true,        // POST /devices registers a node (no list/update/delete endpoint yet)
   },
 
   async health() {
@@ -70,7 +71,7 @@ export const netops = {
       const oldest = ids.sort((a, b) => _threads[a].updatedAt - _threads[b].updatedAt)[0];
       delete _threads[oldest];
     }
-    const t = ensureThread(crypto.randomUUID());
+    const t = ensureThread(uuid());
     save();
     return summary(t);
   },
@@ -143,6 +144,12 @@ export const netops = {
     if (!c) return { ok: false };
     c.abort();
     return { ok: true };
+  },
+
+  // Registers a device/node. Credentials in `device` go straight to the agent;
+  // the response never echoes username/password back.
+  async addDevice(device) {
+    return http(BASE, '/devices', { method: 'POST', body: device });
   },
 
   async listSkills() {

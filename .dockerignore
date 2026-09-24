@@ -2,6 +2,5 @@
 .env
 data/
 docs/
-laporan/
 **/__pycache__
 **/*.pyc

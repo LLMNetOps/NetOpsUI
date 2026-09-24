@@ -26,6 +26,20 @@ CREATE TABLE IF NOT EXISTS skill_publications (
   published_at TEXT NOT NULL DEFAULT (datetime('now')),
   PRIMARY KEY (slug, backend)
 );
+CREATE TABLE IF NOT EXISTS llm_providers (
+  slug        TEXT PRIMARY KEY,
+  name        TEXT NOT NULL,
+  base_url    TEXT NOT NULL,
+  api_key     TEXT,
+  model       TEXT NOT NULL DEFAULT '',
+  created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS secrets (
+  name       TEXT PRIMARY KEY,
+  value      TEXT NOT NULL,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 CREATE TABLE IF NOT EXISTS profiles (
   slug        TEXT PRIMARY KEY,
   name        TEXT NOT NULL,
@@ -59,6 +73,10 @@ def init() -> None:
         c.executescript(SCHEMA)
         # The backend was called 'palapa' before the rename to NetOps Agent.
         c.execute("UPDATE OR IGNORE skill_publications SET backend='netops' WHERE backend='palapa'")
+    try:
+        os.chmod(db_path(), 0o600)  # holds provider API keys
+    except OSError:
+        pass
 
 
 def skill_row(r: sqlite3.Row) -> dict:

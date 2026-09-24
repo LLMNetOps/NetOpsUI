@@ -12,7 +12,7 @@ Hanya satu backend aktif pada satu waktu (`localStorage['llmnetops-backend']`, d
 ## Menjalankan
 
 ```bash
-cp .env.example .env         # isi HERMES_API_KEY, HOST_UID/GID, NETOPS_AGENT_HOME/HERMES_HOME
+cp .env.example .env         # isi HOST_UID/GID, NETOPS_AGENT_HOME/HERMES_HOME (tanpa credential)
 docker compose up -d --build                                              # produksi
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d      # dev (hot reload)
 ```
@@ -34,7 +34,7 @@ screens/{skills,agents}.js, settings (tab file) → manager.js → /api/… → 
 - **`backends/common.js`**: `http()`, `readSSE()` (mendukung `event:` dan multi-line `data:`), `toDate()`, `contentText()`.
 - **`backends/netops.js`**: `/chat` stateless, jadi thread + pesan disimpan di `localStorage['llmnetops-netops-threads-v1']` (key lama `…palapa…` dan id backend `palapa` dimigrasi otomatis) dan seluruh history dikirim tiap giliran. Stop = `AbortController` (run di server tidak berhenti). Tidak ada approval.
 - **`backends/hermes.js`**: thread = Hermes session. Giliran chat memakai **`POST /v1/runs` + `GET /v1/runs/{id}/events`**, bukan `/api/sessions/{id}/chat/stream`, karena hanya runs yang mengirim `approval.request` dan menerima `/approval` dan `/stop`. Profil agent aktif dikirim sebagai `instructions`.
-- **`frontend/nginx.conf.template`**: proxy `/backend/netops/`, `/backend/hermes/`, `/api/` (manager). Menyisipkan `Authorization: Bearer $HERMES_API_KEY` dan **mengosongkan `Origin`** (Hermes menolak origin di luar `API_SERVER_CORS_ORIGINS`).
+- **`frontend/nginx.conf.template`**: proxy `/backend/netops/`, `/backend/hermes/`, `/api/` (manager). Menyisipkan `Authorization` Hermes lewat `auth_request` ke `/internal/hermes-auth` milik manager (key dari **database**, bukan env) dan **mengosongkan `Origin`** (Hermes menolak origin di luar `API_SERVER_CORS_ORIGINS`).
 - **`server/`** (manager): `backends.py` (akses filesystem terbatas, render/parse `SKILL.md`, masking config), `db.py` (SQLite: `skills`, `skill_publications`, `profiles`; baris `backend='palapa'` dimigrasi ke `netops` saat start), `main.py` (API). Skill = folder `<slug>/SKILL.md` dengan frontmatter YAML di kedua backend; Hermes menaruh skill NetOpsUI di `skills/netopsui/`.
 
 ### Event ternormalisasi (dikonsumsi `screens/chat.js`)
@@ -43,13 +43,14 @@ screens/{skills,agents}.js, settings (tab file) → manager.js → /api/… → 
 
 ### Screen "belum tersedia"
 
-`NAV_ITEMS[].unavailable = true` di `config.js` → `screens/unavailable.js`. Saat ini: Nodes, Reports, Backups, Metrics. Aktifkan kembali dengan menghapus flag, menambah screen, dan method adapter/manager setelah datanya ada.
+`NAV_ITEMS[].unavailable = true` di `config.js` → `screens/unavailable.js`. Saat ini: Backups, Metrics. (Nodes aktif: hanya tambah node lewat `POST /devices` NetOps Agent; belum ada list/update/delete.) Aktifkan kembali dengan menghapus flag, menambah screen, dan method adapter/manager setelah datanya ada.
 
 ## Aturan
 
-- **Jangan simpan API key/credential di JS.** Kredensial disisipkan nginx dari env container. Manager tidak pernah mengembalikan nilai `.env`; `config.yaml` selalu dimasking.
+- **Credential hanya di database manager** (tabel `secrets`, `llm_providers`; DB 0600), **tidak pernah di environment/`.env`/compose** dan tidak di JS. Jangan menambah env var berisi rahasia. API key Hermes: `PUT /api/backends/hermes/credential` (write-only, hanya `has_key` yang dikembalikan), divalidasi ASCII tercetak tanpa spasi (anti header injection); nginx mengambilnya per request dari `/internal/hermes-auth` (di luar `/api/`, jadi tidak ter-proxy ke browser; location `/_hermes_auth` bersifat `internal`). Tanpa key: header kosong → Hermes 401. Manager tidak pernah mengembalikan nilai `.env`; `config.yaml` selalu dimasking.
 - Di nginx, `proxy_set_header` **tidak diwarisi** ke `location` yang punya `proxy_set_header` sendiri. Setiap location mengulang header lengkap.
 - Manager: slug divalidasi `^[a-z0-9][a-z0-9-]{0,63}$` dan path skill dicek tetap di dalam folder skills (anti path traversal). `SOUL.md` ditulis *in place* (bisa berupa bind mount satu file yang tidak bisa di-rename atomik).
+- **LLM provider** (`server/llm.py`, `screens/settings-llm.js`): API key write-only (tidak pernah dikembalikan API; `has_key` saja); `/api/llm/test` dijalankan server-side, tidak mengikuti redirect, dan key tersimpan hanya dipakai bila Base URL sama; mengubah Base URL tanpa memasukkan key ulang ditolak. "Terapkan" mengedit **baris demi baris** blok `model:` di `config.yaml` (netops: `name/base_url/api_key`, opsional `delegation.agents.*.model`; hermes: `default/provider=custom/base_url/api_key`), **tidak** men-dump ulang YAML. `edit_config()` mem-parse hasil dan membandingkannya dengan aslinya (hanya key target yang boleh beda) sebelum menulis; backup ke `DATA_DIR/backups/` (0600). Provider tanpa key menghapus `api_key` lama. Hanya YAML block-style yang didukung (flow-style → 422). Backend tidak di-restart oleh NetOpsUI.
 - Publish skill tidak menimpa file yang bukan hasil publish NetOpsUI tanpa `force`. Menghapus skill di library tidak menghapus file yang sudah dipublish.
 - File tunggal yang di-mount di compose harus sudah ada di host, dan `data/` harus ada (`data/.gitkeep`) agar tidak dibuat `root` oleh Docker.
 - **Pengujian harus memakai `DATA_DIR` terpisah** (dan salinan home backend). `./data` berisi data asli operator; stack uji yang memakai `./data` yang sama akan bercampur dengannya.
@@ -64,7 +65,7 @@ screens/{skills,agents}.js, settings (tab file) → manager.js → /api/… → 
 ## File Tidak Di-commit
 
 ```
-.env      # HERMES_API_KEY, URL backend, HOST_UID/GID
+.env      # URL/port/path backend, HOST_UID/GID (TANPA credential)
 data/*    # database manager + backup SOUL.md (kecuali data/.gitkeep); lokasi bisa diganti via DATA_DIR
 ```
 

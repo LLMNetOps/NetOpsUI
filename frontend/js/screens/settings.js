@@ -1,6 +1,7 @@
-import { $, esc, badge, pageHeader } from '../utils.js';
+import { $, esc, badge, pageHeader, confirmDialog } from '../utils.js';
 import { BACKENDS, activeBackend, setActiveBackend } from '../backends/index.js';
 import { mgr } from '../manager.js';
+import { renderLlm } from './settings-llm.js';
 
 const CAPABILITY_LABELS = [
   ['serverThreads', 'Riwayat chat tersimpan di server', 'Riwayat chat tersimpan di browser ini'],
@@ -14,7 +15,7 @@ export async function screenSettings(c) {
   c.innerHTML = `<div class="p-container_gutter max-w-[1100px] mx-auto">
     ${pageHeader('Settings', 'Pilih backend agent yang dipakai UI dan lihat konfigurasinya.')}
     <div id="settings-tabs" class="border-b border-outline-variant mb-6 flex gap-8">
-      ${tab('backend', 'Backend', true)}${tab('files', 'File Konfigurasi', false)}
+      ${tab('backend', 'Backend', true)}${tab('llm', 'LLM Provider', false)}${tab('files', 'File Konfigurasi', false)}
     </div>
     <div id="pane-backend">
       <div id="backend-cards" class="grid grid-cols-1 md:grid-cols-2 gap-6"></div>
@@ -23,6 +24,7 @@ export async function screenSettings(c) {
         Alamat backend dan API key Hermes diatur di environment container frontend, bukan di browser — lihat README.
       </p>
     </div>
+    <div id="pane-llm" class="hidden"></div>
     <div id="pane-files" class="hidden"></div>
   </div>`;
 
@@ -34,7 +36,9 @@ export async function screenSettings(c) {
       x.className = `pb-3 px-1 text-body-md ${on ? 'border-b-2 border-primary text-primary font-semibold' : 'text-on-surface-variant hover:text-primary'}`;
     });
     $('pane-backend').classList.toggle('hidden', b.dataset.tab !== 'backend');
+    $('pane-llm').classList.toggle('hidden', b.dataset.tab !== 'llm');
     $('pane-files').classList.toggle('hidden', b.dataset.tab !== 'files');
+    if (b.dataset.tab === 'llm') renderLlm($('pane-llm'));
     if (b.dataset.tab === 'files') renderFiles();
   };
 
@@ -90,6 +94,7 @@ function renderCards() {
       </div>
       <div class="p-5 flex-1 space-y-4 text-body-sm">
         <div id="health-${b.id}" class="text-on-surface-variant">Memeriksa koneksi...</div>
+        ${b.capabilities.credential ? `<div id="cred-${b.id}" class="border-t border-outline-variant pt-4"></div>` : ''}
         <ul class="space-y-1.5 text-on-surface-variant">${caps}
           <li class="flex items-center gap-2"><span class="material-symbols-outlined text-[16px] text-outline">stop_circle</span>${stop}</li>
         </ul>
@@ -100,6 +105,8 @@ function renderCards() {
       </div>
     </div>`;
   }).join('');
+
+  Object.values(BACKENDS).filter(b => b.capabilities.credential).forEach(b => renderCredential(b));
 
   el.onclick = e => {
     const act = e.target.closest('[data-activate]');
@@ -128,4 +135,55 @@ async function probe(id) {
     el().innerHTML = `<div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-red-500"></span><span class="font-medium text-red-700">Tidak terjangkau</span></div>
       <p class="text-[11px] text-on-surface-variant mt-1 break-all">${esc(e.message)}</p>`;
   }
+}
+
+// API key of a backend, kept in the manager's database (never in an env var).
+// Write-only: the manager only says whether a key is set. It is tested
+// server-side, and nginx injects it into proxied requests.
+async function renderCredential(b) {
+  const el = $(`cred-${b.id}`);
+  if (!el) return;
+  let st;
+  try { st = await mgr(`/backends/${b.id}/credential`); }
+  catch (e) { el.innerHTML = `<p class="text-body-sm text-red-600">Gagal memuat status API key: ${esc(e.message)}</p>`; return; }
+  el.innerHTML = `
+    <div class="flex justify-between items-center mb-2">
+      <p class="text-label-caps font-label-caps text-on-surface-variant">API Key</p>
+      ${st.has_key ? badge('tersimpan', 'green') : badge('belum diatur', 'amber')}
+    </div>
+    <input id="cred-key-${b.id}" type="password" autocomplete="new-password" class="w-full text-body-sm bg-surface-container-lowest border border-outline-variant rounded-md px-3 py-2 font-data-mono"
+      placeholder="${st.has_key ? '•••••••• tersimpan — isi untuk mengganti' : 'Tempel API key (API_SERVER_KEY Hermes)'}"/>
+    <div class="flex flex-wrap items-center gap-2 mt-2">
+      <button id="cred-test-${b.id}" class="px-3 py-1.5 border border-outline-variant text-primary text-body-sm rounded-md hover:bg-surface-container">Cek</button>
+      <button id="cred-save-${b.id}" class="px-3 py-1.5 bg-secondary text-white text-body-sm font-medium rounded-md hover:opacity-90">Simpan</button>
+      ${st.has_key ? `<button id="cred-del-${b.id}" class="px-3 py-1.5 border border-red-300 text-red-700 text-body-sm rounded-md hover:bg-red-50">Hapus</button>` : ''}
+      <span id="cred-out-${b.id}" class="text-body-sm text-on-surface-variant"></span>
+    </div>
+    <p class="text-[11px] text-on-surface-variant mt-2">Disimpan di database NetOpsUI (bukan di environment) dan tidak pernah dikirim balik ke browser. Berlaku langsung tanpa restart.${st.updated_at ? ' Terakhir diubah ' + esc(st.updated_at) + ' UTC.' : ''}</p>`;
+  const out = $(`cred-out-${b.id}`), input = $(`cred-key-${b.id}`);
+  const say = (msg, cls) => { out.className = `text-body-sm ${cls}`; out.textContent = msg; };
+
+  $(`cred-test-${b.id}`).onclick = async () => {
+    say('Memeriksa...', 'text-on-surface-variant');
+    try {
+      const r = await mgr(`/backends/${b.id}/credential/test`, { method: 'POST', body: { api_key: input.value || null } });
+      r.ok ? say(`Key diterima${r.models?.length ? ' · model: ' + r.models[0] : ''}`, 'text-green-700') : say(r.error, 'text-red-600');
+    } catch (e) { say(e.message, 'text-red-600'); }
+  };
+  $(`cred-save-${b.id}`).onclick = async () => {
+    if (!input.value.trim()) { say('Isi API key terlebih dulu.', 'text-red-600'); return; }
+    try { await mgr(`/backends/${b.id}/credential`, { method: 'PUT', body: { api_key: input.value } }); }
+    catch (e) { say(e.message, 'text-red-600'); return; }
+    await renderCredential(b);
+    probe(b.id);
+    window.dispatchEvent(new CustomEvent('backend-changed', { detail: { id: activeBackend().id } })); // refresh header indicator
+  };
+  const del = $(`cred-del-${b.id}`);
+  if (del) del.onclick = async () => {
+    const ok = await confirmDialog({ title: 'Hapus API key?', message: `API key ${b.label} dihapus dari database. Chat ke backend ini akan ditolak (401) sampai key diisi lagi.`, confirmLabel: 'Hapus', danger: true });
+    if (!ok) return;
+    try { await mgr(`/backends/${b.id}/credential`, { method: 'DELETE' }); } catch (e) { say(e.message, 'text-red-600'); return; }
+    await renderCredential(b);
+    window.dispatchEvent(new CustomEvent('backend-changed', { detail: { id: activeBackend().id } }));
+  };
 }

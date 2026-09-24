@@ -2,7 +2,7 @@
 // the choice is made on the Settings screen and remembered per browser.
 //
 // Adapter contract (see netops.js / hermes.js):
-//   id, label, shortLabel, description, capabilities { approval, stop, serverThreads }
+//   id, label, shortLabel, description, capabilities { approval, stop, serverThreads, credential }
 //   health()                      → { ok, model, detail }
 //   listThreads()                 → [{ id, title, createdAt, updatedAt, lastMessage }]
 //   createThread()                → thread summary
@@ -16,6 +16,7 @@
 //   stop(threadId)                → { ok }
 //   respondApproval(threadId, choice, requestId)   (only when capabilities.approval)
 //   listSkills()                  → [{ name, description, tags }]
+//   addDevice(device)             → registered device (only when capabilities.devices)
 import { netops } from './netops.js';
 import { hermes } from './hermes.js';
 

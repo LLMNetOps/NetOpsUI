@@ -16,16 +16,16 @@ services:
       UI_PORT: ${UI_PORT:-3000}
       NETOPS_AGENT_URL: ${NETOPS_AGENT_URL:-http://127.0.0.1:8100}
       HERMES_URL: ${HERMES_URL:-http://127.0.0.1:8642}
-      HERMES_API_KEY: ${HERMES_API_KEY:-}
       MANAGER_URL: http://127.0.0.1:${MANAGER_PORT:-8200}
     depends_on:
       manager:
         condition: service_healthy
     restart: unless-stopped
 
-  # Mounts are the minimum the manager needs: only skills/ (and NetOps Agent's
-  # SOUL.md) are writable; config.yaml and .env are read-only; sessions.db and
-  # the rest of each home directory are not mounted at all.
+  # Mounts are the minimum the manager needs. Writable: skills/, NetOps Agent's
+  # SOUL.md, and both config.yaml (Settings > LLM Provider edits only the
+  # `model:` block, with a backup and a verification step). .env is read-only;
+  # sessions.db and the rest of each home directory are not mounted at all.
   # NOTE: single-file mounts must exist on the host first, or Docker creates a
   # directory in their place. ./data is committed (data/.gitkeep) for the same
   # reason: if it were missing Docker would create it root-owned and the
@@ -37,14 +37,15 @@ services:
     user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
     environment:
       MANAGER_PORT: ${MANAGER_PORT:-8200}
+      HERMES_URL: ${HERMES_URL:-http://127.0.0.1:8642}   # only to test the stored key
     volumes:
       - ${DATA_DIR:-./data}:/data/netopsui
       - ${NETOPS_AGENT_HOME:?set NETOPS_AGENT_HOME in .env}/skills:/data/netops/skills
       - ${NETOPS_AGENT_HOME}/SOUL.md:/data/netops/SOUL.md
-      - ${NETOPS_AGENT_HOME}/config.yaml:/data/netops/config.yaml:ro
+      - ${NETOPS_AGENT_HOME}/config.yaml:/data/netops/config.yaml
       - ${NETOPS_AGENT_HOME}/.env:/data/netops/.env:ro
       - ${HERMES_HOME:?set HERMES_HOME in .env}/skills:/data/hermes/skills
       - ${HERMES_HOME}/SOUL.md:/data/hermes/SOUL.md:ro
-      - ${HERMES_HOME}/config.yaml:/data/hermes/config.yaml:ro
+      - ${HERMES_HOME}/config.yaml:/data/hermes/config.yaml
       - ${HERMES_HOME}/.env:/data/hermes/.env:ro
     restart: unless-stopped

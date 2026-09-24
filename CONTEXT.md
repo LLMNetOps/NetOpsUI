@@ -17,13 +17,14 @@ Web console untuk operasional jaringan berbasis agent AI. Agent berjalan di back
 | Publish | Menulis `SKILL.md` dari library ke folder skill sebuah backend. Status: Draft / Tersinkron / Perlu publish / Diubah di backend |
 | Profil agent | Prompt bernama di DB NetOpsUI. Hermes: dikirim per run sebagai `instructions`. NetOps Agent: diterapkan ke `SOUL.md` |
 | SOUL.md | File persona agent (dibaca backend). NetOpsUI hanya menulisnya lewat aksi "Terapkan ke SOUL.md" pada NetOps Agent |
-| Belum tersedia | Screen yang datanya belum punya API (`NAV_ITEMS[].unavailable`): Nodes, Reports, Backups, Metrics |
+| Provider LLM | Profil endpoint OpenAI-compatible (Base URL, model, API key write-only) di DB NetOpsUI. *Terapkan* menulis blok `model:` di config.yaml backend; backend perlu di-restart oleh operator |
+| Belum tersedia | Screen yang datanya belum punya API (`NAV_ITEMS[].unavailable`): Nodes, Backups, Metrics |
 
 ## Invariant Sistem
 
 - UI tidak memuat logika agent/LLM dan tidak pernah memanggil router secara langsung.
 - Screen hanya berkomunikasi dengan backend melalui `activeBackend()`; tidak ada `fetch` langsung ke backend dari screen.
-- Kredensial (API key Hermes) hanya ada di environment nginx, tidak pernah di browser. Manager tidak pernah mengembalikan nilai `.env`, dan `config.yaml` selalu dimasking.
+- Credential (API key Hermes, key provider LLM) hanya disimpan di database manager, tidak pernah di environment/`.env` dan tidak pernah di browser; API hanya mengembalikan status `has_key`. Satu-satunya tempat lain key provider berada adalah config backend setelah operator menekan *Terapkan*. Manager tidak pernah mengembalikan nilai `.env`, dan `config.yaml` selalu dimasking.
 - Thread milik satu backend; mengganti backend aktif memuat ulang daftar thread dari backend itu.
-- Manager hanya menulis ke `skills/` kedua backend dan `SOUL.md` NetOps Agent; sisanya read-only. Publish tidak menimpa file yang bukan hasil publish NetOpsUI tanpa konfirmasi.
+- Manager hanya menulis ke `skills/` kedua backend, `SOUL.md` NetOps Agent, dan blok `model:` di `config.yaml` kedua backend (dengan backup dan verifikasi); sisanya read-only. Publish tidak menimpa file yang bukan hasil publish NetOpsUI tanpa konfirmasi.
 - Repo NetOpsUI tidak mengubah repo palapa-agent maupun home backend di luar dua jalur tulis di atas.

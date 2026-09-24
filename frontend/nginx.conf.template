@@ -5,7 +5,6 @@
 #   UI_PORT         port this UI listens on
 #   NETOPS_AGENT_URL  NetOps Agent REST API
 #   HERMES_URL      Hermes gateway api_server platform
-#   HERMES_API_KEY  Hermes API_SERVER_KEY — injected here so it never reaches the browser
 #   MANAGER_URL     NetOpsUI management service (server/): skills, profiles, config views
 
 server {
@@ -50,10 +49,24 @@ server {
         proxy_set_header Origin "";
     }
 
+    # The Hermes API key lives in the manager's database (Settings > Backend),
+    # not in an environment variable: nginx fetches it per request via
+    # auth_request and injects it, so it never reaches the browser and can be
+    # changed without a restart. No key set = no Authorization header = Hermes 401.
     location /backend/hermes/ {
+        auth_request /_hermes_auth;
+        auth_request_set $hermes_auth $upstream_http_x_hermes_authorization;
         proxy_pass ${HERMES_URL}/;
         proxy_set_header Connection "";
         proxy_set_header Origin "";
-        proxy_set_header Authorization "Bearer ${HERMES_API_KEY}";
+        proxy_set_header Authorization $hermes_auth;
+    }
+
+    location = /_hermes_auth {
+        internal;
+        proxy_pass ${MANAGER_URL}/internal/hermes-auth;
+        proxy_pass_request_body off;
+        proxy_set_header Content-Length "";
+        proxy_set_header Connection "";
     }
 }

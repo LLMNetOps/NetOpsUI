@@ -6,7 +6,8 @@
 // /api/sessions/{id}/chat/stream) is used because only runs emit
 // `approval.request` and accept /approval and /stop.
 //
-// The API key (API_SERVER_KEY) is injected by the nginx proxy — never here.
+// The API key (API_SERVER_KEY) is kept in the manager's database and injected by
+// the nginx proxy (auth_request) — never here, and not in an environment variable.
 import { http, ensureOk, readSSE, toDate, contentText } from './common.js';
 import { mgr, getActiveProfile } from '../manager.js';
 
@@ -33,6 +34,7 @@ export const hermes = {
     approval: true,
     stop: 'interrupt',
     serverThreads: true,
+    credential: true,     // needs an API key, managed in Settings > Backend
   },
 
   async health() {

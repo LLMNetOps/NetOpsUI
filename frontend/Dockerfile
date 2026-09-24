@@ -11,11 +11,10 @@ COPY fonts/ /usr/share/nginx/html/fonts/
 COPY nginx.conf.template /etc/nginx/templates/default.conf.template
 
 # Only these are substituted; nginx's own $uri/$host etc. are left alone.
-ENV NGINX_ENVSUBST_FILTER="^(UI_PORT|NETOPS_AGENT_URL|HERMES_URL|HERMES_API_KEY|MANAGER_URL)$" \
+ENV NGINX_ENVSUBST_FILTER="^(UI_PORT|NETOPS_AGENT_URL|HERMES_URL|MANAGER_URL)$" \
     UI_PORT=3000 \
     NETOPS_AGENT_URL=http://127.0.0.1:8100 \
     HERMES_URL=http://127.0.0.1:8642 \
-    HERMES_API_KEY= \
     MANAGER_URL=http://127.0.0.1:8200
 
 EXPOSE 3000

@@ -9,10 +9,9 @@
 export const NAV_ITEMS = [
   { id:'dashboard', label:'Dashboard',  icon:'dashboard' },
   { id:'chat',      label:'AI Chat',    icon:'chat_bubble' },
-  { id:'nodes',     label:'Nodes',      icon:'dns',        group:'Infrastructure', unavailable:true },
+  { id:'nodes',     label:'Nodes',      icon:'dns',        group:'Infrastructure' },
   { id:'skills',    label:'Skills',     icon:'psychology', group:'Agent Platform' },
   { id:'agents',    label:'Agents',     icon:'smart_toy',  group:'Agent Platform' },
-  { id:'reports',   label:'Reports',    icon:'assessment', group:'Insights', unavailable:true },
   { id:'backups',   label:'Backups',    icon:'backup',     group:'Insights', unavailable:true },
   { id:'metrics',   label:'Metrics',    icon:'insights',   group:'Insights', unavailable:true },
   { id:'settings',  label:'Settings',   icon:'settings' },
