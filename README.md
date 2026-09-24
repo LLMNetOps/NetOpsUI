@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="frontend/assets/llmnetops-logo-with-mascot.png" alt="LLMNetOps" width="360">
+</p>
+
 # NetOpsUI — LLMNetOps Console
 
 Web console untuk operasional jaringan berbasis agent AI. NetOpsUI **tidak menjalankan agent**: chat dan tool jaringan dikerjakan oleh salah satu dari dua backend, sedangkan NetOpsUI menyediakan antarmukanya.
@@ -16,6 +20,16 @@ Hanya satu backend aktif pada satu waktu, dipilih di **Settings**.
 - **Nodes**: daftar dan pendaftaran perangkat jaringan (NetOps Agent).
 - **Skills** dan **Agents**: kelola skill dan profil agent, lalu publish ke backend.
 - **Settings**: pilih backend, kelola LLM provider, lihat file konfigurasi, ganti password.
+
+## Tampilan
+
+Halaman login:
+
+![Halaman login](frontend/assets/login-page.png)
+
+Dashboard setelah login berhasil:
+
+![Dashboard](frontend/assets/dashboard-page.png)
 
 ## Sebelum digunakan
 
@@ -52,7 +66,7 @@ curl -s localhost:8642/health     # Hermes
 ### 2. Konfigurasi
 
 ```bash
-git clone <url-repo> NetOpsUI && cd NetOpsUI
+git clone https://github.com/LLMNetOps/NetOpsUI.git NetOpsUI && cd NetOpsUI
 git checkout ui
 cp .env.example .env
 $EDITOR .env
