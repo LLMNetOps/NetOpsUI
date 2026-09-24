@@ -144,10 +144,12 @@ export const netops = {
     return (await http(BASE, '/devices')) || [];
   },
 
-  // PUT /devices/{name} (assumed contract, not in the agent yet): replaces the
-  // node's fields, with username/password optional (omitted = unchanged).
+  // PATCH /devices/{name}: partial update, omitted fields stay unchanged. `name` in
+  // the URL is the fixed identifier (a `name` in the body is ignored). username and
+  // password must come together or not at all (400). 404 unknown name, 400 duplicate
+  // names. The response never carries credentials.
   async updateDevice(name, device) {
-    return http(BASE, '/devices/' + encodeURIComponent(name), { method: 'PUT', body: device });
+    return http(BASE, '/devices/' + encodeURIComponent(name), { method: 'PATCH', body: device });
   },
 
   // DELETE /devices/{name}: removes the node from inventory.yaml (404 unknown name,

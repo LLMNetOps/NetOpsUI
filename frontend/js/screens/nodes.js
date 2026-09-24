@@ -181,12 +181,18 @@ export async function screenNodes(c) {
       if (!v) continue;
       body[f.id] = f.type === 'number' ? Number(v) : v;
     }
+    if (existing) {
+      delete body.name; // the name is the URL identifier and cannot be changed
+      if (!body.username !== !body.password) {
+        setMsg('Username dan password SSH harus diisi keduanya, atau dikosongkan keduanya.', 'err');
+        return;
+      }
+    }
     const btn = $('nd-save');
     btn.disabled = true;
     setMsg('Menyimpan…');
     try {
       if (existing) {
-        body.name = existing.name;
         await backend.updateDevice(existing.name, body);
         await refresh();
         show({ type: 'view', name: existing.name });
@@ -196,7 +202,7 @@ export async function screenNodes(c) {
         show({ type: 'view', name: d.name });
       }
     } catch (err) {
-      setMsg(explain(err, existing ? 'PUT' : 'POST'), 'err');
+      setMsg(explain(err, existing ? 'PATCH' : 'POST'), 'err');
       btn.disabled = false;
     }
   }
@@ -225,6 +231,8 @@ export async function screenNodes(c) {
     if (err.status === 405 || (err.status === 404 && err.message.endsWith(': Not Found'))) {
       return `NetOps Agent belum menyediakan endpoint ${method} /devices/{name}. (${err.message})`;
     }
+    if (err.status === 404) return `Node tidak ditemukan di inventory. (${err.message})`;
+    if (err.status === 400) return `Permintaan ditolak: ${err.message}`;
     return err.message;
   }
 
