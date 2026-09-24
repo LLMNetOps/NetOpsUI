@@ -40,6 +40,35 @@ CREATE TABLE IF NOT EXISTS secrets (
   value      TEXT NOT NULL,
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+CREATE TABLE IF NOT EXISTS chat_threads (
+  id           TEXT PRIMARY KEY,
+  backend      TEXT NOT NULL,
+  title        TEXT NOT NULL DEFAULT 'New Chat',
+  owner        TEXT NOT NULL DEFAULT '',
+  last_message TEXT NOT NULL DEFAULT '',
+  running_since TEXT,
+  created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  updated_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+CREATE TABLE IF NOT EXISTS chat_messages (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  thread_id  TEXT NOT NULL REFERENCES chat_threads(id) ON DELETE CASCADE,
+  role       TEXT NOT NULL,
+  content    TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+CREATE INDEX IF NOT EXISTS idx_chat_messages_thread ON chat_messages(thread_id, id);
+CREATE TABLE IF NOT EXISTS users (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  username      TEXT NOT NULL UNIQUE,
+  password_hash TEXT NOT NULL,
+  created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS sessions (
+  token_hash TEXT PRIMARY KEY,
+  user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  expires_at REAL NOT NULL
+);
 CREATE TABLE IF NOT EXISTS profiles (
   slug        TEXT PRIMARY KEY,
   name        TEXT NOT NULL,
@@ -74,7 +103,7 @@ def init() -> None:
         # The backend was called 'palapa' before the rename to NetOps Agent.
         c.execute("UPDATE OR IGNORE skill_publications SET backend='netops' WHERE backend='palapa'")
     try:
-        os.chmod(db_path(), 0o600)  # holds provider API keys
+        os.chmod(db_path(), 0o600)  # holds provider API keys and password hashes
     except OSError:
         pass
 

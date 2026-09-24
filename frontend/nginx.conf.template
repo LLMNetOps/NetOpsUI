@@ -37,6 +37,7 @@ server {
     # backend: Hermes rejects origins outside API_SERVER_CORS_ORIGINS, and the
     # proxy makes CORS moot anyway.
     location /backend/netops/ {
+        auth_request /_session_check;
         proxy_pass ${NETOPS_AGENT_URL}/;
         proxy_set_header Connection "";
         proxy_set_header Origin "";
@@ -47,6 +48,8 @@ server {
         proxy_pass ${MANAGER_URL};
         proxy_set_header Connection "";
         proxy_set_header Origin "";
+        proxy_set_header X-Real-IP $remote_addr;  # chat thread owner label, login throttle
+        proxy_set_header X-Forwarded-Proto $scheme;  # Secure flag on the session cookie
     }
 
     # The Hermes API key lives in the manager's database (Settings > Backend),
@@ -60,6 +63,16 @@ server {
         proxy_set_header Connection "";
         proxy_set_header Origin "";
         proxy_set_header Authorization $hermes_auth;
+    }
+
+    # Login guard for the proxies that bypass the manager. /api/ is guarded by
+    # the manager itself. The subrequest carries the browser's Cookie header.
+    location = /_session_check {
+        internal;
+        proxy_pass ${MANAGER_URL}/internal/session-check;
+        proxy_pass_request_body off;
+        proxy_set_header Content-Length "";
+        proxy_set_header Connection "";
     }
 
     location = /_hermes_auth {

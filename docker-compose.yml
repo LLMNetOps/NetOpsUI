@@ -38,6 +38,7 @@ services:
     environment:
       MANAGER_PORT: ${MANAGER_PORT:-8200}
       HERMES_URL: ${HERMES_URL:-http://127.0.0.1:8642}   # only to test the stored key
+      NETOPS_AGENT_URL: ${NETOPS_AGENT_URL:-http://127.0.0.1:8100}   # the manager runs chats against it
     volumes:
       - ${DATA_DIR:-./data}:/data/netopsui
       - ${NETOPS_AGENT_HOME:?set NETOPS_AGENT_HOME in .env}/skills:/data/netops/skills

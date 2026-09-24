@@ -16,7 +16,12 @@
 //   stop(threadId)                → { ok }
 //   respondApproval(threadId, choice, requestId)   (only when capabilities.approval)
 //   listSkills()                  → [{ name, description, tags }]
+//   listJobs() / runJob(id) / pauseJob(id) / resumeJob(id)  (only when capabilities.jobs)
+//   listActivity(limit)           → [{ at, message, toolCalls, errors, timeouts, durationS }] (only when capabilities.activity)
+//   listDevices()                 → [{name, mgmt_ip, …}] (only when capabilities.devices)
 //   addDevice(device)             → registered device (only when capabilities.devices)
+//   updateDevice(name, device)    → updated device (only when capabilities.devices)
+//   deleteDevice(name)            → void (only when capabilities.devices)
 import { netops } from './netops.js';
 import { hermes } from './hermes.js';
 

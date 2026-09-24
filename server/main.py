@@ -1,8 +1,9 @@
 """NetOpsUI management service.
 
 Owns what NetOps Agent and Hermes have no API for: the skill library, agent
-profiles/prompts, and read-only views of each backend's config files. Chat
-itself never goes through here — the browser reaches the backends via nginx.
+profiles/prompts, and read-only views of each backend's config files. Hermes
+chat goes browser → nginx → Hermes directly; NetOps Agent chat runs through
+here (runs.py) so answers are saved even if the browser goes away.
 """
 from __future__ import annotations
 
@@ -12,21 +13,27 @@ import re
 import time
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Response
+from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
+import auth
 import backends as bk
 import db
 import llm
+import runs
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     db.init()
+    runs.init_runs()
     yield
 
 
 app = FastAPI(title="NetOpsUI Manager", docs_url=None, redoc_url=None, lifespan=lifespan)
+app.middleware("http")(auth.guard)
+app.include_router(auth.router)
 
 
 def _bad(msg: str, code: int = 400):
@@ -513,11 +520,229 @@ def test_credential(backend: str, t: CredentialTestIn) -> dict:
 
 
 @app.get("/internal/hermes-auth")
-def hermes_auth() -> Response:
+def hermes_auth(request: Request) -> Response:
     """auth_request target for nginx (not under /api/, so not proxied to browsers).
-    Always 204; the header is empty when no key is set, which makes nginx send no
-    Authorization and lets Hermes answer 401 itself."""
+    204 with a session cookie (nginx forwards the request's headers); the header is
+    empty when no key is set, which makes nginx send no Authorization and lets
+    Hermes answer 401 itself."""
+    if auth.session_user(request) is None:
+        return Response(status_code=401)
     r = _get_secret(_CRED_NAME["hermes"])
     return Response(status_code=204, headers={
         "X-Hermes-Authorization": f"Bearer {r['value']}" if r else "",
         "Cache-Control": "no-store"})
+
+
+# ── chat threads (shared across every browser) ───────────────────────────────
+# NetOps Agent's /chat is stateless, so threads used to live in each browser's
+# localStorage and other operators' chats were invisible. They are stored here
+# instead. `owner` is the client label the browser sends
+# plus the address nginx saw (X-Real-IP), enough to tell operators apart.
+
+_THREAD_ID_RE = re.compile(r"[A-Za-z0-9_-]{1,64}")
+_RUNNING_STALE_S = 3600  # a run flagged longer ago than this is assumed dead (tab closed mid-run)
+
+
+class ThreadIn(BaseModel):
+    id: str
+    backend: str = "netops"
+    title: str = "New Chat"
+    client: str = ""
+
+
+class ThreadPatch(BaseModel):
+    title: str | None = Field(default=None, max_length=200)
+    running: bool | None = None
+
+
+class MessageIn(BaseModel):
+    role: str
+    content: str = Field(default="", max_length=200_000)
+
+
+class ImportThread(BaseModel):
+    id: str
+    title: str = "New Chat"
+    createdAt: float = 0   # epoch ms, as kept in localStorage
+    updatedAt: float = 0
+    messages: list[MessageIn] = []
+
+
+class ThreadImportIn(BaseModel):
+    backend: str = "netops"
+    client: str = ""
+    threads: list[ImportThread]
+
+
+def _owner(req: Request, client: str) -> str:
+    ip = req.headers.get("x-real-ip") or (req.client.host if req.client else "")
+    label = re.sub(r"[^\w .@-]", "", client)[:40]
+    return f"{label} ({ip})" if label and ip else label or ip
+
+
+def _tid(tid: str) -> str:
+    if not _THREAD_ID_RE.fullmatch(tid):
+        _bad("id thread tidak valid")
+    return tid
+
+
+def _thread_public(r) -> dict:
+    d = dict(r)
+    since = d.pop("running_since")
+    d["running"] = bool(since) and time.time() - _parse_ts(since) < _RUNNING_STALE_S
+    return d
+
+
+def _parse_ts(s: str) -> float:
+    from datetime import datetime
+    try:
+        return datetime.fromisoformat(s.replace("Z", "+00:00")).timestamp()
+    except ValueError:
+        return 0.0
+
+
+def _iso(ms: float) -> str | None:
+    from datetime import datetime, timezone
+    if not ms:
+        return None
+    return datetime.fromtimestamp(ms / 1000, timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+
+
+def _thread_or_404(c, tid: str):
+    r = c.execute("SELECT * FROM chat_threads WHERE id=?", (tid,)).fetchone()
+    if not r:
+        _bad("thread tidak ditemukan", 404)
+    return r
+
+
+@app.get("/api/threads")
+def list_threads(backend: str = "netops", limit: int = 200) -> dict:
+    with db.conn() as c:
+        rows = c.execute("SELECT * FROM chat_threads WHERE backend=? ORDER BY updated_at DESC LIMIT ?",
+                         (backend, max(1, min(limit, 500)))).fetchall()
+    return {"threads": [_thread_public(r) for r in rows]}
+
+
+@app.post("/api/threads", status_code=201)
+def create_thread(t: ThreadIn, request: Request) -> dict:
+    _tid(t.id)
+    with db.conn() as c:
+        c.execute("INSERT OR IGNORE INTO chat_threads (id, backend, title, owner) VALUES (?,?,?,?)",
+                  (t.id, t.backend, t.title[:200] or "New Chat", _owner(request, t.client)))
+        return _thread_public(_thread_or_404(c, t.id))
+
+
+@app.get("/api/threads/{tid}")
+def get_thread(tid: str) -> dict:
+    with db.conn() as c:
+        return _thread_public(_thread_or_404(c, _tid(tid)))
+
+
+@app.get("/api/threads/{tid}/messages")
+def thread_messages(tid: str) -> dict:
+    with db.conn() as c:
+        _thread_or_404(c, _tid(tid))
+        rows = c.execute("SELECT role, content, created_at FROM chat_messages WHERE thread_id=? ORDER BY id",
+                         (tid,)).fetchall()
+    return {"messages": [dict(r) for r in rows]}
+
+
+@app.post("/api/threads/{tid}/messages", status_code=201)
+def append_message(tid: str, m: MessageIn) -> dict:
+    if m.role not in ("user", "agent"):
+        _bad("role harus 'user' atau 'agent'")
+    with db.conn() as c:
+        t = _thread_or_404(c, _tid(tid))
+        c.execute("INSERT INTO chat_messages (thread_id, role, content) VALUES (?,?,?)", (tid, m.role, m.content))
+        title = t["title"]
+        if m.role == "user" and title == "New Chat":
+            title = m.content[:60] or title
+        last = m.content[:120] if m.role == "user" else t["last_message"]
+        c.execute("UPDATE chat_threads SET title=?, last_message=?, "
+                  "updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?", (title, last, tid))
+    return {"ok": True}
+
+
+@app.patch("/api/threads/{tid}")
+def patch_thread(tid: str, p: ThreadPatch) -> dict:
+    with db.conn() as c:
+        _thread_or_404(c, _tid(tid))
+        if p.title is not None:
+            c.execute("UPDATE chat_threads SET title=? WHERE id=?", (p.title.strip() or "New Chat", tid))
+        if p.running is not None:
+            c.execute("UPDATE chat_threads SET running_since=CASE WHEN ? THEN strftime('%Y-%m-%dT%H:%M:%fZ','now') "
+                      "ELSE NULL END, updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?",
+                      (1 if p.running else 0, tid))
+        return _thread_public(_thread_or_404(c, tid))
+
+
+@app.delete("/api/threads/{tid}")
+def delete_thread(tid: str) -> dict:
+    with db.conn() as c:
+        c.execute("DELETE FROM chat_threads WHERE id=?", (_tid(tid),))
+    return {"ok": True}
+
+
+@app.post("/api/threads/import")
+def import_threads(req: ThreadImportIn, request: Request) -> dict:
+    """One-time move of a browser's localStorage threads to the server; ids
+    already present are skipped, so re-running is harmless."""
+    owner = _owner(request, req.client)
+    n = 0
+    with db.conn() as c:
+        for t in req.threads:
+            if not _THREAD_ID_RE.fullmatch(t.id) or c.execute(
+                    "SELECT 1 FROM chat_threads WHERE id=?", (t.id,)).fetchone():
+                continue
+            msgs = [m for m in t.messages if m.role in ("user", "agent")]
+            last = next((m.content for m in reversed(msgs) if m.role == "user"), "")[:120]
+            created, updated = _iso(t.createdAt), _iso(t.updatedAt)
+            c.execute("INSERT INTO chat_threads (id, backend, title, owner, last_message, created_at, updated_at) "
+                      "VALUES (?,?,?,?,?,COALESCE(?, strftime('%Y-%m-%dT%H:%M:%fZ','now')),"
+                      "COALESCE(?, strftime('%Y-%m-%dT%H:%M:%fZ','now')))",
+                      (t.id, req.backend, t.title[:200], owner, last, created, updated))
+            c.executemany("INSERT INTO chat_messages (thread_id, role, content) VALUES (?,?,?)",
+                          [(t.id, m.role, m.content) for m in msgs])
+            n += 1
+    return {"imported": n}
+
+
+# ── chat runs: the manager calls NetOps Agent, browsers only watch ───────────
+
+class RunIn(BaseModel):
+    text: str = Field(min_length=1, max_length=100_000)
+
+
+@app.post("/api/threads/{tid}/run", status_code=202)
+def start_run(tid: str, req: RunIn) -> dict:
+    with db.conn() as c:
+        _thread_or_404(c, _tid(tid))
+        if runs.is_active(tid):
+            _bad("Thread ini sedang diproses; tunggu sampai selesai atau hentikan dulu", 409)
+        prior = [{"role": "assistant" if r["role"] == "agent" else "user", "content": r["content"]}
+                 for r in c.execute("SELECT role, content FROM chat_messages WHERE thread_id=? ORDER BY id", (tid,))
+                 if r["content"]]
+        c.execute("INSERT INTO chat_messages (thread_id, role, content) VALUES (?,?,?)", (tid, "user", req.text))
+        t = _thread_or_404(c, tid)
+        title = t["title"] if t["title"] != "New Chat" else (req.text[:60] or "New Chat")
+        c.execute("UPDATE chat_threads SET title=?, last_message=?, "
+                  "running_since=strftime('%Y-%m-%dT%H:%M:%fZ','now'), "
+                  "updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?", (title, req.text[:120], tid))
+    try:
+        runs.start(tid, prior + [{"role": "user", "content": req.text}])
+    except RuntimeError:
+        _bad("Thread ini sedang diproses", 409)
+    return {"started": True}
+
+
+@app.get("/api/threads/{tid}/events")
+def run_events(tid: str, after: int = 0) -> StreamingResponse:
+    """SSE of the thread's run (delta / tool_end / error / stopped, then done).
+    Replays from event `after`, so a refreshed page can re-attach to a live run."""
+    return StreamingResponse(runs.stream(_tid(tid), after), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+@app.post("/api/threads/{tid}/stop")
+def stop_run(tid: str) -> dict:
+    return {"ok": runs.cancel(_tid(tid))}

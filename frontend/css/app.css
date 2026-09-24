@@ -112,3 +112,34 @@ body {
 .md-table { border-collapse: collapse; width: 100%; font-size: 0.92em; }
 .md-table th, .md-table td { border: 1px solid #c3c6cf; padding: 6px 10px; text-align: left; vertical-align: top; }
 .md-table th { background: #eceef1; font-weight: 600; }
+
+/* Sidebar mascot: static, standing on the divider above the operator block and peeking
+   out from behind the sidebar's right edge (the vertical line against the content area):
+   mirrored so the waving arm is on the visible side, leaning toward the edge (head tilted right). The wrapper
+   clips whatever passes the edge. A soft halo and a thin light edge keep the dark-blue
+   body readable on navy. Hidden on short viewports so it never crowds the nav. */
+.sidebar-mascot {
+  display: none;
+  position: relative;
+  height: 190px;
+  margin-bottom: -16px;   /* cancels the operator block's mt-4 so the feet meet its divider */
+  overflow: hidden;
+  background: radial-gradient(circle at 78% 60%, rgba(135, 170, 225, 0.28), rgba(135, 170, 225, 0) 60%);
+}
+@media (min-height: 800px) { .sidebar-mascot { display: block; } }
+.mascot-img {
+  position: absolute;
+  right: -84px;           /* about half the body sits behind the edge; slides out on hover */
+  bottom: 0;
+  height: 185px;
+  width: auto;
+  user-select: none;
+  pointer-events: none;
+  transform: rotate(-7deg) scaleX(-1);
+  transform-origin: 50% 100%;
+  transition: right 0.35s ease;
+  filter: drop-shadow(0 0 1px rgba(225, 236, 255, 0.95)) drop-shadow(0 0 1px rgba(225, 236, 255, 0.7))
+          drop-shadow(0 4px 8px rgba(0, 0, 0, 0.35));
+}
+.sidebar-mascot:hover .mascot-img { right: 24px; }   /* hovering the strip slides it fully into view, to the left */
+@media (prefers-reduced-motion: reduce) { .mascot-img { transition: none; } }

@@ -8,7 +8,7 @@
 //
 // The API key (API_SERVER_KEY) is kept in the manager's database and injected by
 // the nginx proxy (auth_request) — never here, and not in an environment variable.
-import { http, ensureOk, readSSE, toDate, contentText } from './common.js';
+import { http, ensureOk, readSSE, toDate, contentText, uuid } from './common.js';
 import { mgr, getActiveProfile } from '../manager.js';
 
 const BASE = '/backend/hermes';
@@ -35,6 +35,26 @@ export const hermes = {
     stop: 'interrupt',
     serverThreads: true,
     credential: true,     // needs an API key, managed in Settings > Backend
+    jobs: true,           // scheduled (cron) jobs via /api/jobs
+  },
+
+  // Cron jobs: agent runs on a schedule. Fields used by the dashboard:
+  // id, name, schedule_display, state, enabled, last_run_at, next_run_at, last_status, last_error.
+  async listJobs() {
+    const r = await http(BASE, '/api/jobs?include_disabled=true');
+    return r?.jobs || [];
+  },
+
+  async runJob(id) {
+    await http(BASE, `/api/jobs/${encodeURIComponent(id)}/run`, { method: 'POST' });
+  },
+
+  async pauseJob(id) {
+    await http(BASE, `/api/jobs/${encodeURIComponent(id)}/pause`, { method: 'POST' });
+  },
+
+  async resumeJob(id) {
+    await http(BASE, `/api/jobs/${encodeURIComponent(id)}/resume`, { method: 'POST' });
   },
 
   async health() {
@@ -53,7 +73,7 @@ export const hermes = {
   },
 
   async createThread() {
-    const r = await http(BASE, '/api/sessions', { method: 'POST', body: {} });
+    const r = await http(BASE, '/api/sessions', { method: 'POST', body: { id: uuid() } });
     return summary(r.session);
   },
 

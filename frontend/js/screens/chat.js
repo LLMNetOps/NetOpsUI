@@ -4,6 +4,7 @@ import { activeBackend } from '../backends/index.js';
 
 let _chatEl = null;
 let _elapsedIv = null;
+let _threadsIv = null;     // polls the shared thread list so other operators' chats show up
 let _requestStartTs = null; // wall-clock start of the current request leg (reset per send/resume)
 let _lastEventTs = null;    // used to compute per-step gaps between console entries
 
@@ -56,7 +57,7 @@ function consoleForThread(threadId) {
 }
 
 function threadFromSummary(t) {
-  return { id: t.id, title: t.title || 'New Chat', ts: t.updatedAt, createdAt: t.createdAt, lastMessage: t.lastMessage || '' };
+  return { id: t.id, title: t.title || 'New Chat', ts: t.updatedAt, createdAt: t.createdAt, lastMessage: t.lastMessage || '', owner: t.owner || '', running: !!t.running };
 }
 
 // Creates a thread on the active backend and makes it current. Returns false
@@ -184,6 +185,21 @@ export async function screenChat(c, threadIdParam) {
   </div>`;
 
   _chatEl = $('chat-messages');
+  // Messages are re-rendered wholesale while streaming, so the copy button is handled by delegation.
+  _chatEl.onclick = async e => {
+    const btn = e.target.closest('[data-copy-msg]');
+    if (!btn) return;
+    const text = S.messages[+btn.dataset.copyMsg]?.content;
+    if (!text) return;
+    const ok = await copyToClipboard(text);
+    btn.querySelector('.material-symbols-outlined').textContent = ok ? 'check' : 'error';
+    btn.title = ok ? 'Tersalin' : 'Gagal menyalin';
+    setTimeout(() => {
+      if (!btn.isConnected) return;
+      btn.querySelector('.material-symbols-outlined').textContent = 'content_copy';
+      btn.title = 'Salin jawaban';
+    }, 1500);
+  };
   chatRenderThreads();
   chatRenderTools();
   consoleRender();
@@ -196,6 +212,7 @@ export async function screenChat(c, threadIdParam) {
   }
   chatBindEvents();
   chatBindConsole();
+  chatStartThreadPoll();
 }
 
 function chatSyncUrl() {
@@ -204,16 +221,49 @@ function chatSyncUrl() {
   if (location.hash !== target) history.replaceState(null, '', target);
 }
 
-async function chatLoadHistory(threadId) {
+async function chatLoadHistory(threadId, { attach = true } = {}) {
   chatRenderMessages();
   try {
     const msgs = await activeBackend().loadMessages(threadId);
     if (threadId !== S.threadId) return; // switched away while loading
-    S.messages = msgs.map(m => ({ role: m.role, content: m.content, ts: null, streaming: false }));
+    S.messages = msgs.map(m => ({ role: m.role, content: m.content, ts: m.ts || null, streaming: false }));
   } catch (e) {
     consolePush('error', 'Gagal memuat riwayat: ' + e.message);
   }
   chatRenderMessages();
+  // A question without an answer on a thread flagged "running" means the run is
+  // still going on the server (page refreshed, or another operator started it).
+  const last = S.messages[S.messages.length - 1];
+  const t = S.threads.find(x => x.id === threadId);
+  // Not awaited: it lasts as long as the run, and screenChat() still has to bind the UI.
+  if (attach && t?.running && last?.role === 'user') chatAttach(threadId);
+}
+
+// Re-attaches to a run that is already in progress on the server.
+async function chatAttach(threadId) {
+  const backend = activeBackend();
+  if (!backend.resume || S.chatState !== 'idle' || threadId !== S.threadId) return;
+  const lastUser = [...S.messages].reverse().find(m => m.role === 'user');
+  S.activeQuery = lastUser ? lastUser.content : '';
+  S.messages.push({ role: 'agent', content: '', ts: new Date(), streaming: true });
+  chatResetTools();
+  chatStartElapsed();
+  _requestStartTs = Date.now();
+  _lastEventTs = null;
+  S.chatState = 'streaming';
+  consolePush('note', 'Tersambung ke proses yang sedang berjalan di server.');
+  chatRenderMessages(); chatUpdateUI();
+  try { await backend.resume(threadId, chatHandleEvent); }
+  catch (e) { chatHandleEvent({ type: 'error', text: e.message || 'Connection failed' }); }
+  chatFinish();
+  // The server stored the final answer; show that copy and refresh the thread list.
+  if (threadId === S.threadId) {
+    try {
+      S.threads = (await backend.listThreads()).map(threadFromSummary);
+      chatRenderThreads();
+    } catch { /* next poll */ }
+    await chatLoadHistory(threadId, { attach: false });
+  }
 }
 
 function chatBindEvents() {
@@ -444,16 +494,38 @@ function chatUserMsg(m) {
   </div>`;
 }
 
+// Status line shown for as long as the agent is working, not only before the
+// first token: a delegated sub-agent can run for minutes without emitting anything.
+function workingStatus() {
+  const running = [...S.tools].reverse().find(t => t.state === 'running');
+  const done = S.tools.filter(t => t.state !== 'running').length;
+  if (running) return `Menjalankan ${running.name}…`;
+  if (S.elapsed >= 20) return done ? `${done} tool selesai — menunggu agent / sub-agent (delegasi bisa 1–3 menit)…` : 'Menunggu agent / sub-agent bekerja (bisa 1–3 menit)…';
+  return done ? `${done} tool selesai — agent menyusun langkah berikutnya…` : 'Agent sedang memproses…';
+}
+
+function fmtElapsed(sec) {
+  return `${String(Math.floor(sec / 60)).padStart(2, '0')}:${String(sec % 60).padStart(2, '0')}`;
+}
+
 function chatAgentMsg(m) {
-  const typing = m.streaming && !m.content ? `<div class="flex items-center gap-1 mt-2">
-    <div class="w-2 h-2 bg-secondary rounded-full bouncing-dot"></div>
-    <div class="w-2 h-2 bg-secondary rounded-full bouncing-dot"></div>
-    <div class="w-2 h-2 bg-secondary rounded-full bouncing-dot"></div></div>` : '';
+  const typing = m.streaming ? `<div class="flex items-center gap-2 ${m.content ? 'mt-3 pt-3 border-t border-outline-variant' : 'mt-2'}">
+    <div class="flex items-center gap-1">
+      <div class="w-2 h-2 bg-secondary rounded-full bouncing-dot"></div>
+      <div class="w-2 h-2 bg-secondary rounded-full bouncing-dot"></div>
+      <div class="w-2 h-2 bg-secondary rounded-full bouncing-dot"></div>
+    </div>
+    <span class="text-[11px] text-on-surface-variant">${esc(workingStatus())}</span>
+    <span data-work-elapsed class="text-[11px] text-outline tabular-nums">${fmtElapsed(S.elapsed || 0)}</span></div>` : '';
   const txt = m.content ? `<div class="md text-body-md text-on-surface leading-relaxed">${renderMarkdown(m.content)}</div>` : '';
+  // Copy only once the answer is complete (a streaming re-render would also reset the button's feedback).
+  const copy = m.content && !m.streaming
+    ? `<button data-copy-msg="${S.messages.indexOf(m)}" title="Salin jawaban" aria-label="Salin jawaban" class="ml-1 text-on-surface-variant hover:text-primary transition-colors"><span class="material-symbols-outlined text-[16px]">content_copy</span></button>`
+    : '';
   return `<div class="flex flex-col items-start max-w-[90%] self-start">
     <div class="flex items-center gap-2 mb-1">
       <span class="bg-secondary text-white px-2 py-0.5 rounded text-[10px] font-bold tracking-wider">AGENT</span>
-      <span class="text-[10px] text-outline tabular-nums">${m.ts ? fmtTime(m.ts) : ''}</span>
+      <span class="text-[10px] text-outline tabular-nums">${m.ts ? fmtTime(m.ts) : ''}</span>${copy}
     </div>
     <div class="bg-surface-container-lowest p-4 rounded-xl rounded-tl-none border border-outline-variant shadow-sm w-full">
       ${txt}${typing}
@@ -567,6 +639,7 @@ function chatRenderThreads() {
       <p data-title-el class="${a ? 'font-bold text-primary' : 'font-medium text-on-surface-variant'} text-xs truncate">${esc(t.title)}</p>
       ${preview}
       <p class="text-[10px] ${a ? 'text-primary/60' : 'text-outline'} mt-0.5 tabular-nums">${fmtTime(t.ts)} &middot; dibuat ${esc(fmtShortDate(t.createdAt))}</p>
+      ${t.owner || t.running ? `<p class="text-[10px] text-outline mt-0.5 truncate flex items-center gap-1" title="Pemilik thread">${t.running ? '<span class="w-1.5 h-1.5 rounded-full bg-green-500 pulse-green shrink-0" title="Sedang diproses"></span>' : ''}${esc(t.owner)}${t.running ? ' &middot; berjalan' : ''}</p>` : ''}
     </div>`;
   }).join('');
 }
@@ -705,7 +778,9 @@ function chatStartElapsed() {
   _elapsedIv = setInterval(() => {
     S.elapsed = Math.floor((Date.now() - st) / 1000);
     const el = $('elapsed-display');
-    if (el) { const mm = String(Math.floor(S.elapsed / 60)).padStart(2, '0'), ss = String(S.elapsed % 60).padStart(2, '0'); el.textContent = `⏱ ${mm}:${ss}`; }
+    if (el) el.textContent = `⏱ ${fmtElapsed(S.elapsed)}`;
+    document.querySelectorAll('[data-work-elapsed]').forEach(n => { n.textContent = fmtElapsed(S.elapsed); });
+    if (S.elapsed === 20) chatRenderMessages(); // switch the status line to the long-wait hint
   }, 1000);
 }
 
@@ -726,4 +801,28 @@ function chatUpdateUI() {
   }
 }
 
-export function chatUnmount() { chatStopElapsed(); }
+// Refreshes the shared thread list (and the open thread when someone else
+// added to it) while the operator is idle on this screen.
+function chatStartThreadPoll() {
+  chatStopThreadPoll();
+  const backend = activeBackend();
+  if (!backend.capabilities.serverThreads) return;
+  _threadsIv = setInterval(async () => {
+    if (document.hidden || S.chatState !== 'idle') return;
+    try {
+      const fresh = (await backend.listThreads()).map(threadFromSummary);
+      if (S.screen !== 'chat' || backend.id !== activeBackend().id || S.chatState !== 'idle') return;
+      const cur = S.threads.find(t => t.id === S.threadId);
+      const now = fresh.find(t => t.id === S.threadId);
+      const changed = cur && now && now.ts.getTime() !== cur.ts.getTime();
+      const keep = S.threads.filter(t => !fresh.some(f => f.id === t.id) && t.id === S.threadId && !now && t.lastMessage === '');
+      S.threads = [...fresh, ...keep];
+      chatRenderThreads();
+      if (changed) await chatLoadHistory(S.threadId);
+    } catch { /* transient — try again on the next tick */ }
+  }, 5000);
+}
+
+function chatStopThreadPoll() { if (_threadsIv) { clearInterval(_threadsIv); _threadsIv = null; } }
+
+export function chatUnmount() { chatStopElapsed(); chatStopThreadPoll(); }

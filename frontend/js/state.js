@@ -1,4 +1,5 @@
 export const S = {
+  user: null,           // logged-in operator's username
   screen: location.hash.slice(1) || 'dashboard',
   threadId: null,
   threads: [],

@@ -11,8 +11,12 @@ export const NAV_ITEMS = [
   { id:'chat',      label:'AI Chat',    icon:'chat_bubble' },
   { id:'nodes',     label:'Nodes',      icon:'dns',        group:'Infrastructure' },
   { id:'skills',    label:'Skills',     icon:'psychology', group:'Agent Platform' },
-  { id:'agents',    label:'Agents',     icon:'smart_toy',  group:'Agent Platform' },
-  { id:'backups',   label:'Backups',    icon:'backup',     group:'Insights', unavailable:true },
-  { id:'metrics',   label:'Metrics',    icon:'insights',   group:'Insights', unavailable:true },
+  // Agents (screens/agents.js) hidden for now: no use case yet. Uncomment to bring it back;
+  // while absent, #agents redirects to the dashboard.
+  // { id:'agents',    label:'Agents',     icon:'smart_toy',  group:'Agent Platform' },
+  // Backups and Metrics (Insights) hidden for now, same as Agents.
+  // { id:'backups',   label:'Backups',    icon:'backup',     group:'Insights', unavailable:true },
+  // { id:'metrics',   label:'Metrics',    icon:'insights',   group:'Insights', unavailable:true },
   { id:'settings',  label:'Settings',   icon:'settings' },
+  { id:'about',     label:'About',      icon:'info' },
 ];

@@ -2,6 +2,7 @@ import { S } from './state.js';
 import { $, esc } from './utils.js';
 import { NAV_ITEMS } from './config.js';
 import { activeBackend } from './backends/index.js';
+import { mgr } from './manager.js';
 
 export function renderShell() {
   $('app').innerHTML = `
@@ -10,13 +11,19 @@ export function renderShell() {
       <img src="/assets/llmnetops-logo-formal.png" alt="LLMNetOps" class="h-9 brightness-0 invert">
     </div>
     <nav id="sidebar-nav" class="flex-1 px-3 space-y-1 sidebar-scroll overflow-y-auto"></nav>
+    <div class="sidebar-mascot shrink-0" aria-hidden="true">
+      <img src="/assets/llmnetops-mascot-sidebar.png" alt="" class="mascot-img" draggable="false">
+    </div>
     <div class="px-6 pt-4 border-t border-white/10 mt-4">
       <div class="flex items-center gap-3">
-        <div class="w-8 h-8 rounded-full bg-secondary-container flex items-center justify-center text-on-secondary-container font-bold text-xs">OP</div>
-        <div class="overflow-hidden">
-          <p class="text-white text-xs font-bold truncate">Operator</p>
+        <div class="w-8 h-8 shrink-0 rounded-full bg-secondary-container flex items-center justify-center text-on-secondary-container font-bold text-xs">${esc((S.user || '?').slice(0, 2).toUpperCase())}</div>
+        <div class="overflow-hidden flex-1">
+          <p class="text-white text-xs font-bold truncate">${esc(S.user || '')}</p>
           <p class="text-white/50 text-[10px] truncate">Network Admin</p>
         </div>
+        <button id="logout-btn" title="Keluar" aria-label="Keluar" class="text-white/60 hover:text-white transition-colors">
+          <span class="material-symbols-outlined text-[20px]">logout</span>
+        </button>
       </div>
     </div>
   </aside>
@@ -33,11 +40,21 @@ export function renderShell() {
       </div>
     </div>
   </header>
-  <main class="ml-[240px] pt-[56px] min-h-screen bg-background">
-    <div id="screen-container"></div>
+  <main class="ml-[240px] pt-[56px] min-h-screen bg-background flex flex-col">
+    <div id="screen-container" class="flex-1"></div>
+    <footer id="app-footer" class="px-6 py-2 text-[11px] text-on-surface-variant flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-outline-variant">
+      <span>LLMNetOps &middot; hibah <a href="#about" class="text-primary hover:underline">ISIF Asia</a></span>
+      <a href="https://llmnetops.github.io/" target="_blank" rel="noopener noreferrer" class="text-primary hover:underline">llmnetops.github.io</a>
+      <a href="https://apnic.foundation/projects/llmnetops/" target="_blank" rel="noopener noreferrer" class="text-primary hover:underline">apnic.foundation</a>
+      <span>Kontak: <a href="mailto:llmnetops@ub.ac.id" class="text-primary hover:underline">llmnetops@ub.ac.id</a></span>
+    </footer>
   </main>`;
   renderNav();
   renderBackendIndicator();
+  $('logout-btn').onclick = async () => {
+    try { await mgr('/auth/logout', { method: 'POST' }); } catch { /* the cookie is cleared server-side; reload either way */ }
+    location.reload();
+  };
   window.addEventListener('backend-changed', renderBackendIndicator);
 }
 

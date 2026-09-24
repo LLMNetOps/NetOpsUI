@@ -1,6 +1,7 @@
 import { $, esc, badge, pageHeader, confirmDialog } from '../utils.js';
 import { BACKENDS, activeBackend, setActiveBackend } from '../backends/index.js';
 import { mgr } from '../manager.js';
+import { S } from '../state.js';
 import { renderLlm } from './settings-llm.js';
 
 const CAPABILITY_LABELS = [
@@ -15,17 +16,14 @@ export async function screenSettings(c) {
   c.innerHTML = `<div class="p-container_gutter max-w-[1100px] mx-auto">
     ${pageHeader('Settings', 'Pilih backend agent yang dipakai UI dan lihat konfigurasinya.')}
     <div id="settings-tabs" class="border-b border-outline-variant mb-6 flex gap-8">
-      ${tab('backend', 'Backend', true)}${tab('llm', 'LLM Provider', false)}${tab('files', 'File Konfigurasi', false)}
+      ${tab('backend', 'Backend', true)}${tab('llm', 'LLM Provider', false)}${tab('files', 'File Konfigurasi', false)}${tab('account', 'Akun', false)}
     </div>
     <div id="pane-backend">
       <div id="backend-cards" class="grid grid-cols-1 md:grid-cols-2 gap-6"></div>
-      <p class="text-[11px] text-on-surface-variant mt-6">
-        UI memanggil backend lewat proxy <span class="font-data-mono-sm">/backend/&lt;id&gt;/</span> (nginx).
-        Alamat backend dan API key Hermes diatur di environment container frontend, bukan di browser — lihat README.
-      </p>
     </div>
     <div id="pane-llm" class="hidden"></div>
     <div id="pane-files" class="hidden"></div>
+    <div id="pane-account" class="hidden"></div>
   </div>`;
 
   $('settings-tabs').onclick = e => {
@@ -38,12 +36,37 @@ export async function screenSettings(c) {
     $('pane-backend').classList.toggle('hidden', b.dataset.tab !== 'backend');
     $('pane-llm').classList.toggle('hidden', b.dataset.tab !== 'llm');
     $('pane-files').classList.toggle('hidden', b.dataset.tab !== 'files');
+    $('pane-account').classList.toggle('hidden', b.dataset.tab !== 'account');
+    if (b.dataset.tab === 'account') renderAccount($('pane-account'));
     if (b.dataset.tab === 'llm') renderLlm($('pane-llm'));
     if (b.dataset.tab === 'files') renderFiles();
   };
 
   renderCards();
   Object.keys(BACKENDS).forEach(probe);
+}
+
+// Password change for the logged-in operator. Other sessions of the same user end.
+function renderAccount(el) {
+  const field = (id, label, auto) => `<label class="block text-label-caps font-label-caps text-on-surface-variant mb-1" for="${id}">${label}</label>
+    <input id="${id}" type="password" autocomplete="${auto}" required maxlength="256" class="w-full mb-4 px-3 py-2 border border-outline-variant rounded-lg text-body-md">`;
+  el.innerHTML = `<form id="pw-form" class="max-w-[420px] bg-surface-container-lowest border border-outline-variant rounded-lg p-6">
+    <p class="text-body-sm text-on-surface-variant mb-4">Masuk sebagai <b>${esc(S.user)}</b>. Mengganti password mengeluarkan perangkat lain.</p>
+    ${field('pw-current', 'PASSWORD SAAT INI', 'current-password')}${field('pw-new', 'PASSWORD BARU (MIN. 10 KARAKTER)', 'new-password')}${field('pw-confirm', 'ULANGI PASSWORD BARU', 'new-password')}
+    <p id="pw-msg" class="text-body-sm mb-4 hidden"></p>
+    <button class="px-4 py-2 bg-primary text-on-primary rounded-lg text-body-sm font-medium hover:bg-primary-container transition-colors">Ganti password</button>
+  </form>`;
+  $('pw-form').onsubmit = async e => {
+    e.preventDefault();
+    const msg = $('pw-msg');
+    const show = (t, ok) => { msg.textContent = t; msg.className = `text-body-sm mb-4 ${ok ? 'text-green-700' : 'text-error'}`; };
+    if ($('pw-new').value !== $('pw-confirm').value) return show('Password baru tidak sama.', false);
+    try {
+      await mgr('/auth/password', { method: 'POST', body: { current: $('pw-current').value, new: $('pw-new').value } });
+      e.target.reset();
+      show('Password diganti.', true);
+    } catch (ex) { show(ex.message, false); }
+  };
 }
 
 // Read-only view of the active backend's config files, served by the NetOpsUI

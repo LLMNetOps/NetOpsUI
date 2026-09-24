@@ -13,6 +13,8 @@ export async function mgr(path, { method = 'GET', body } = {}) {
   const text = await r.text();
   let data = null;
   try { data = text ? JSON.parse(text) : null; } catch { /* non-JSON error page from the proxy */ }
+  // Session ended (expired, or the user was reset). The /auth/ calls report their own 401.
+  if (r.status === 401 && !path.startsWith('/auth/')) window.dispatchEvent(new Event('auth-expired'));
   if (!r.ok) {
     const detail = data?.detail;
     const msg = typeof detail === 'string' ? detail : Array.isArray(detail) ? detail.map(d => d.msg).join('; ')
