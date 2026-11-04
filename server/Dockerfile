@@ -5,6 +5,7 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY *.py ./
+RUN chmod -R a+rX /app
 
 ENV DATA_DIR=/data/netopsui \
     NETOPS_AGENT_HOME=/data/netops \
