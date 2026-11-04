@@ -9,6 +9,7 @@ COPY js/ /usr/share/nginx/html/js/
 COPY assets/ /usr/share/nginx/html/assets/
 COPY fonts/ /usr/share/nginx/html/fonts/
 COPY nginx.conf.template /etc/nginx/templates/default.conf.template
+RUN chmod -R a+rX /usr/share/nginx/html /etc/nginx/templates
 
 # Only these are substituted; nginx's own $uri/$host etc. are left alone.
 ENV NGINX_ENVSUBST_FILTER="^(UI_PORT|NETOPS_AGENT_URL|HERMES_URL|MANAGER_URL)$" \
