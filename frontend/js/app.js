@@ -1,5 +1,5 @@
 import { S } from './state.js';
-import { renderShell, renderNav } from './shell.js';
+import { renderShell, renderNav, claimActivityLogs } from './shell.js';
 import { $ } from './utils.js';
 import { NAV_ITEMS } from './config.js';
 import { mgr } from './manager.js';
@@ -62,6 +62,7 @@ function onHash() {
 
 function startApp(user) {
   S.user = user.username;
+  claimActivityLogs(user.username); // before any screen reads the stored logs
   renderShell();
   onHash();
   window.addEventListener('hashchange', onHash);

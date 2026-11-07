@@ -23,6 +23,17 @@ const CONSOLE_MAX_ENTRIES = 500;
 const CONSOLE_MAX_THREADS = 30;
 
 let _consoleStore = {};
+let _logsCleared = false; // set on logout: stop persisting until the page reloads
+
+// Logout, or a different operator logging in on this browser: drop what was
+// hydrated at module load, so it is neither shown nor written back.
+window.addEventListener('activity-logs-cleared', e => {
+  _consoleStore = {};
+  _toolStore = {};
+  S.console = [];
+  S.tools = []; S.toolsQuery = ''; S.toolsPartial = false;
+  if (e.detail?.final) _logsCleared = true;
+});
 
 (function consoleHydrate() {
   try {
@@ -37,6 +48,7 @@ let _consoleStore = {};
 })();
 
 function consoleSave() {
+  if (_logsCleared) return;
   try {
     localStorage.setItem(CONSOLE_STORAGE_KEY, JSON.stringify(_consoleStore));
   } catch { /* storage full/unavailable — degrade to in-memory only */ }
@@ -54,6 +66,66 @@ function consoleForThread(threadId) {
     _consoleStore[key] = [];
   }
   return _consoleStore[key];
+}
+
+// ── Tool activity persistence — the last turn of each thread ──────────────────
+// Kept per thread so switching threads, starting a new one or stopping a run
+// does not wipe the commands an operator may want to review afterwards. Only the
+// latest turn is kept; a new send/re-attach replaces it. S.tools references
+// _toolStore[key].tools, so it is mutated in place like S.console.
+const TOOLS_STORAGE_KEY = 'llmnetops-tools-v1';
+const TOOLS_MAX_THREADS = 30;
+
+let _toolStore = {};
+
+(function toolsHydrate() {
+  try {
+    const raw = localStorage.getItem(TOOLS_STORAGE_KEY);
+    if (!raw) return;
+    for (const [key, turn] of Object.entries(JSON.parse(raw))) {
+      if (!turn || !Array.isArray(turn.tools)) continue;
+      // A call still "running" when the page went away has no known outcome any more.
+      const cut = turn.tools.some(t => t.state === 'running');
+      turn.tools.forEach(t => { if (t.state === 'running') t.state = 'untracked'; });
+      _toolStore[key] = { query: turn.query || '', tools: turn.tools, partial: !!turn.partial || cut };
+    }
+  } catch { /* corrupt or unavailable — start empty */ }
+})();
+
+function toolsSave() {
+  if (_logsCleared) return;
+  try {
+    localStorage.setItem(TOOLS_STORAGE_KEY, JSON.stringify(_toolStore));
+  } catch { /* storage full/unavailable — degrade to in-memory only */ }
+}
+
+function toolsForThread(threadId) {
+  const key = consoleKey(threadId);
+  if (!_toolStore[key]) {
+    const keys = Object.keys(_toolStore);
+    if (keys.length >= TOOLS_MAX_THREADS) delete _toolStore[keys[0]];
+    _toolStore[key] = { query: '', tools: [], partial: false };
+  }
+  return _toolStore[key];
+}
+
+// Points S.tools at the stored last turn of the current thread.
+function chatLoadTools() {
+  const turn = S.threadId ? toolsForThread(S.threadId) : { query: '', tools: [], partial: false };
+  S.tools = turn.tools;
+  S.toolsQuery = turn.query;
+  S.toolsPartial = turn.partial;
+  chatRenderTools();
+}
+
+// Leaving a run that keeps going on the server: later calls are not recorded here
+// (re-attaching while it still runs replays them all), so mark the list as cut off.
+function chatMarkToolsUntracked() {
+  if (!S.threadId) return;
+  const turn = toolsForThread(S.threadId);
+  if (turn.tools.some(t => t.state === 'running')) turn.tools.forEach(t => { if (t.state === 'running') t.state = 'untracked'; });
+  turn.partial = true;
+  toolsSave();
 }
 
 function threadFromSummary(t) {
@@ -103,6 +175,7 @@ export async function screenChat(c, threadIdParam) {
   const threadChanged = targetThreadId !== S.threadId;
   S.threadId = targetThreadId || null;
   S.console = S.threadId ? consoleForThread(S.threadId) : [];
+  if (threadChanged || S.chatState === 'idle') chatLoadTools();
   chatSyncUrl();
 
   c.innerHTML = `
@@ -246,7 +319,7 @@ async function chatAttach(threadId) {
   const lastUser = [...S.messages].reverse().find(m => m.role === 'user');
   S.activeQuery = lastUser ? lastUser.content : '';
   S.messages.push({ role: 'agent', content: '', ts: new Date(), streaming: true });
-  chatResetTools();
+  chatResetTools(S.activeQuery);
   chatStartElapsed();
   _requestStartTs = Date.now();
   _lastEventTs = null;
@@ -281,7 +354,7 @@ function chatBindEvents() {
     S.activeQuery = text;
     S.messages.push({ role: 'user', content: text, ts: new Date() });
     S.messages.push({ role: 'agent', content: '', ts: new Date(), streaming: true });
-    chatResetTools();
+    chatResetTools(text);
     chatStartElapsed();
     _requestStartTs = Date.now();
     _lastEventTs = null;
@@ -323,6 +396,7 @@ function chatBindEvents() {
     S.console = consoleForThread(S.threadId);
     chatSyncUrl();
     chatClear();
+    chatLoadTools();
     consoleRender();
   };
   btnL.onclick = async () => {
@@ -371,7 +445,7 @@ function chatHandleEvent(ev) {
       break;
     case 'tool_start':
       S.tools.push({ name: ev.name, detail: ev.detail, state: 'running', durationMs: null });
-      S.toolCount++;
+      toolsSave();
       consolePush('tool_call', `${ev.name}${ev.detail ? ' ' + ev.detail : ''}`);
       chatRenderTools();
       break;
@@ -380,7 +454,8 @@ function chatHandleEvent(ev) {
       const running = [...S.tools].reverse().find(t => t.name === ev.name && t.state === 'running');
       const state = ev.error ? 'failed' : 'done';
       if (running) Object.assign(running, { state, durationMs: ev.durationMs });
-      else { S.tools.push({ name: ev.name, detail: ev.detail, source: ev.source, state, durationMs: ev.durationMs }); S.toolCount++; }
+      else S.tools.push({ name: ev.name, detail: ev.detail, source: ev.source, state, durationMs: ev.durationMs });
+      toolsSave();
       consolePush(ev.error ? 'error' : 'tool_result',
         `${ev.name} (${fmtDelta(ev.durationMs || 0).slice(1)})${ev.detail ? ' → ' + ev.detail : ''}`);
       chatRenderTools();
@@ -428,21 +503,30 @@ function chatFinish() {
     consolePush('timing', `Total durasi: ${fmtDelta(Date.now() - _requestStartTs)}`);
     _requestStartTs = null;
   }
-  S.tools.forEach(t => { if (t.state === 'running') t.state = 'done'; });
+  // chatUpdateUI() clears stopRequested below, so it still tells a stop from a normal end here.
+  const endState = S.stopRequested ? 'stopped' : 'done';
+  S.tools.forEach(t => { if (t.state === 'running') t.state = endState; });
+  toolsSave();
   chatHideApproval();
   chatRenderMessages(); chatRenderTools(); chatUpdateUI();
 }
 
 function chatClear() {
   S.messages = []; S.activeQuery = ''; S.chatState = 'idle';
-  chatResetTools();
   chatStopElapsed();
   chatRenderMessages(); chatRenderThreads(); chatUpdateUI();
 }
 
-function chatResetTools() {
-  S.tools = [];
-  S.toolCount = 0;
+// Starts a new turn on the current thread, replacing its stored tool activity.
+function chatResetTools(query) {
+  const turn = S.threadId ? toolsForThread(S.threadId) : { query: '', tools: [], partial: false };
+  turn.tools.length = 0; // in place — keeps the _toolStore reference S.tools points at
+  turn.query = query || '';
+  turn.partial = false;
+  S.tools = turn.tools;
+  S.toolsQuery = turn.query;
+  S.toolsPartial = false;
+  toolsSave();
   chatRenderTools();
 }
 
@@ -468,17 +552,24 @@ function toolFull(detail) {
 
 function chatRenderTools() {
   const el = $('tool-panel'); if (!el) return;
-  const cnt = $('tool-count'); if (cnt) cnt.textContent = S.toolCount ? `${S.toolCount} call` : '';
+  const cnt = $('tool-count'); if (cnt) cnt.textContent = S.tools.length ? `${S.tools.length} call` : '';
+  // Outside a run the list is the thread's last turn, so say which question it belonged to.
+  const caption = S.chatState !== 'streaming' && S.toolsQuery
+    ? `<p class="text-[10px] text-on-surface-variant px-1 truncate" title="${esc(S.toolsQuery)}">Giliran terakhir: <span class="text-primary">${esc(S.toolsQuery)}</span></p>`
+      + (S.toolsPartial ? '<p class="text-[10px] text-amber-700 px-1">Tidak lengkap: thread ditinggalkan saat proses masih berjalan.</p>' : '')
+    : '';
   if (!S.tools.length) {
-    el.innerHTML = `<p class="text-[11px] text-on-surface-variant px-1">${S.chatState === 'streaming' ? 'Menunggu tool call...' : 'Belum ada tool call pada giliran ini.'}</p>`;
+    el.innerHTML = caption + `<p class="text-[11px] text-on-surface-variant px-1">${S.chatState === 'streaming' ? 'Menunggu tool call...' : 'Belum ada tool call pada giliran ini.'}</p>`;
     return;
   }
   const styles = {
     running: { dot: 'bg-green-500 pulse-green', text: 'text-green-700', label: 'RUNNING', bl: 'border-l-[3px] border-l-green-500' },
     done:    { dot: 'bg-gray-400', text: 'text-on-surface-variant', label: 'DONE', bl: '' },
     failed:  { dot: 'bg-red-500', text: 'text-red-700', label: 'FAILED', bl: 'border-l-[3px] border-l-red-500' },
+    stopped: { dot: 'bg-amber-500', text: 'text-amber-700', label: 'STOPPED', bl: 'border-l-[3px] border-l-amber-500' },
+    untracked: { dot: 'bg-gray-300', text: 'text-outline', label: 'TERPUTUS', bl: '' },
   };
-  el.innerHTML = S.tools.map(t => {
+  el.innerHTML = caption + S.tools.map(t => {
     const st = styles[t.state] || styles.done;
     const summary = toolSummary(t.detail);
     const child = t.source && t.source !== 'main' ? t.source.replace(/^child:/, '') : '';
@@ -736,6 +827,8 @@ async function chatDeleteThread(threadId, event) {
   S.threads = S.threads.filter(x => x.id !== threadId);
   delete _consoleStore[consoleKey(threadId)];
   consoleSave();
+  delete _toolStore[consoleKey(threadId)];
+  toolsSave();
 
   if (threadId !== S.threadId) {
     chatRenderThreads();
@@ -749,6 +842,7 @@ async function chatDeleteThread(threadId, event) {
     S.console = S.threadId ? consoleForThread(S.threadId) : [];
     chatSyncUrl();
     chatClear();
+    chatLoadTools();
     consoleRender();
   }
 }
@@ -761,6 +855,7 @@ async function chatSwitchThread(threadId) {
     // server and stop following it; coming back re-attaches while it still runs.
     const backend = activeBackend();
     if (!backend.detach) return;
+    chatMarkToolsUntracked();
     backend.detach(S.threadId);
     S.chatState = 'idle';
     S.pendingApproval = null;
@@ -772,7 +867,7 @@ async function chatSwitchThread(threadId) {
   chatSyncUrl();
   S.activeQuery = '';
   S.chatState = 'idle';
-  chatResetTools();
+  chatLoadTools();
   chatStopElapsed();
   chatRenderThreads();
   chatUpdateUI();
