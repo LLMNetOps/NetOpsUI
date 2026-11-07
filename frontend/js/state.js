@@ -9,8 +9,9 @@ export const S = {
   stopRequested: false, // true after operator clicks Stop, until run actually ends
   pendingApproval: null,
   activeQuery: '',
-  tools: [],            // tool activity of the current turn: { name, detail, state, durationMs }
-  toolCount: 0,
+  tools: [],            // tool activity of the thread's last turn: { name, detail, state, durationMs }
+  toolsQuery: '',       // question that turn answered, shown above the list for review
+  toolsPartial: false,  // the turn was left while running, so later calls are missing
   elapsed: 0,
   console: [],          // persistent process log — survives across turns/threads
   consoleOpen: true,

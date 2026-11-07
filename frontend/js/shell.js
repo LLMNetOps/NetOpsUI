@@ -53,9 +53,37 @@ export function renderShell() {
   renderBackendIndicator();
   $('logout-btn').onclick = async () => {
     try { await mgr('/auth/logout', { method: 'POST' }); } catch { /* the cookie is cleared server-side; reload either way */ }
+    clearActivityLogs({ final: true });
     location.reload();
   };
   window.addEventListener('backend-changed', renderBackendIndicator);
+}
+
+// Process console and tool activity hold the commands sent to routers (tool
+// arguments verbatim), so they must not outlive the operator's session on a shared
+// browser. Settings (backend, client name, profile) are kept.
+const ACTIVITY_LOG_KEYS = ['llmnetops-console-v3', 'llmnetops-console-v2', 'llmnetops-tools-v1'];
+const ACTIVITY_OWNER_KEY = 'llmnetops-activity-owner'; // username the stored logs belong to
+
+// `final` (logout): the page is about to reload, so the chat screen also stops
+// persisting — a run still streaming must not write the logs back.
+function clearActivityLogs({ final = false } = {}) {
+  window.dispatchEvent(new CustomEvent('activity-logs-cleared', { detail: { final } }));
+  for (const key of [...ACTIVITY_LOG_KEYS, ACTIVITY_OWNER_KEY]) {
+    try { localStorage.removeItem(key); } catch { /* storage unavailable — nothing persisted */ }
+  }
+}
+
+// Called after login and on boot with a live session. A session that expired
+// skips the logout button, so the logs of whoever used this browser before are
+// still here: keep them only for that same operator. Logs with no recorded owner
+// (written before owners were tracked) are treated as someone else's.
+export function claimActivityLogs(username) {
+  let owner = null;
+  try { owner = localStorage.getItem(ACTIVITY_OWNER_KEY); } catch { /* treat as unknown */ }
+  if (owner === username) return;
+  clearActivityLogs();
+  try { localStorage.setItem(ACTIVITY_OWNER_KEY, username); } catch { /* in-memory only */ }
 }
 
 // Header pill: active backend + reachability. Health is re-probed on every
